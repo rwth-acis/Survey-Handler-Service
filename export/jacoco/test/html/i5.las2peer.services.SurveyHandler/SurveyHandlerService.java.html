@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SurveyHandlerService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Survey-Handler-Service</a> &gt; <a href="index.source.html" class="el_package">i5.las2peer.services.SurveyHandler</a> &gt; <span class="el_source">SurveyHandlerService.java</span></div><h1>SurveyHandlerService.java</h1><pre class="source lang-java linenums">package i5.las2peer.services.SurveyHandler;
+
+import i5.las2peer.connectors.webConnector.client.ClientResponse;
+import i5.las2peer.connectors.webConnector.client.MiniClient;
+import i5.las2peer.connectors.webConnector.WebConnector;
+
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import net.minidev.json.JSONObject;
+import net.minidev.json.JSONArray;
+import net.minidev.json.parser.JSONParser;
+import net.minidev.json.parser.ParseException;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.Consumes;
+
+import i5.las2peer.api.Context;
+import i5.las2peer.api.security.UserAgent;
+import i5.las2peer.restMapper.RESTService;
+import i5.las2peer.restMapper.annotations.ServicePath;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import io.swagger.annotations.Contact;
+import io.swagger.annotations.Info;
+import io.swagger.annotations.License;
+import io.swagger.annotations.SwaggerDefinition;
+import org.json.XML;
+import org.junit.Assert;
+import org.junit.Test;
+
+// TODO Describe your own service
+
+
+/**
+ * SurveyHandlerService
+ *
+ * A service to conduct surveys with a chatbot created with the SBF.
+ *
+ */
+
+
+
+
+// TODO Adjust the following configuration
+@Api
+@SwaggerDefinition(
+		info = @Info(
+				title = &quot;las2peer Template Service&quot;,
+				version = &quot;1.0.0&quot;,
+				description = &quot;A las2peer Survey Service.&quot;,
+				termsOfService = &quot;http://your-terms-of-service-url.com&quot;,
+				contact = @Contact(
+						name = &quot;John Doe&quot;,
+						url = &quot;provider.com&quot;,
+						email = &quot;john.doe@provider.com&quot;),
+				license = @License(
+						name = &quot;your software license name&quot;,
+						url = &quot;http://your-software-license-url.com&quot;)))
+@ServicePath(&quot;/SurveyHandler&quot;)
+// TODO Your own service class
+<span class="fc" id="L73">public class SurveyHandlerService extends RESTService {</span>
+	//to store if survey has been fetched from limesurvey
+<span class="fc" id="L75">	private static HashMap&lt;String, Boolean&gt; surveyFetched = new HashMap&lt;String, Boolean&gt;();</span>
+	//to store if a participant has been contacted to start the survey
+<span class="fc" id="L77">	private static HashMap&lt;String, Boolean&gt; participantContacted = new HashMap&lt;String, Boolean&gt;();</span>
+	//url from limesurvey
+<span class="fc" id="L79">	String LSURL = &quot;https://limesurvey.tech4comp.dbis.rwth-aachen.de/&quot;;</span>
+
+
+
+
+	/**
+	 * Template of a get function.
+	 *
+	 * @return Returns an HTTP response with the username as string content.
+	 */
+	@GET
+	@Path(&quot;/get&quot;)
+	@Produces(MediaType.TEXT_PLAIN)
+	@ApiOperation(
+			value = &quot;REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME&quot;,
+			notes = &quot;REPLACE THIS WITH YOUR NOTES TO THE FUNCTION&quot;)
+	@ApiResponses(
+			value = { @ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = &quot;REPLACE THIS WITH YOUR OK MESSAGE&quot;) })
+	public Response getTemplate() {
+<span class="nc" id="L100">		UserAgent userAgent = (UserAgent) Context.getCurrent().getMainAgent();</span>
+<span class="nc" id="L101">		String name = userAgent.getLoginName();</span>
+<span class="nc" id="L102">		return Response.ok().entity(name).build();</span>
+	}
+
+	/**
+	 * Template of a post function.
+	 *
+	 * @param myInput The post input the user will provide.
+	 * @return Returns an HTTP response with plain text string content derived from the path input param.
+	 */
+	@POST
+	@Path(&quot;/post/{input}&quot;)
+	@Produces(MediaType.TEXT_PLAIN)
+	@ApiResponses(
+			value = { @ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = &quot;REPLACE THIS WITH YOUR OK MESSAGE&quot;) })
+	@ApiOperation(
+			value = &quot;REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME&quot;,
+			notes = &quot;Example method that returns a phrase containing the received input.&quot;)
+	public Response postTemplate(@PathParam(&quot;input&quot;) String myInput) {
+<span class="nc" id="L122">		String returnString = &quot;&quot;;</span>
+<span class="nc" id="L123">		returnString += &quot;Input &quot; + myInput;</span>
+<span class="nc" id="L124">		return Response.ok().entity(returnString).build();</span>
+	}
+
+	// TODO your own service methods, e. g. for RMI
+	/*
+	@POST
+	@Path(&quot;/Limesurvey&quot;)
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiResponses(
+			value = { @ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = &quot;REPLACE THIS WITH YOUR OK MESSAGE&quot;) })
+	@ApiOperation(
+			value = &quot;REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME&quot;,
+			notes = &quot;Example method that returns a phrase containing the received input.&quot;)
+	public Response survey(String body){
+		return Response.ok().entity(&quot;error&quot;).build();
+	}
+	 */
+
+	public JSONObject getJSONObject(String jsonString) throws ParseException {
+<span class="nc" id="L146">		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);</span>
+<span class="nc" id="L147">		JSONObject bodyJson = (JSONObject) p.parse(jsonString);</span>
+<span class="nc" id="L148">		return bodyJson;</span>
+	}
+
+	public String getJSONString(String xmlString){
+<span class="nc" id="L152">		org.json.JSONObject e = XML.toJSONObject(xmlString);</span>
+<span class="nc" id="L153">		String joString = e.toString(4);</span>
+<span class="nc" id="L154">		String joStringg = e.toString();</span>
+<span class="nc" id="L155">		return joString;</span>
+	}
+
+	public String getSurveyID(JSONObject body){
+<span class="nc" id="L159">		String surveyID = body.getAsString(&quot;sid&quot;);</span>
+<span class="nc" id="L160">		return surveyID;</span>
+	}
+
+	public JSONObject getQuestions(JSONObject body){
+<span class="nc" id="L164">		JSONObject questions = (JSONObject) body.get(&quot;questions&quot;);</span>
+<span class="nc" id="L165">		return questions;</span>
+	}
+
+
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.6.202009150832</span></div></body></html>
