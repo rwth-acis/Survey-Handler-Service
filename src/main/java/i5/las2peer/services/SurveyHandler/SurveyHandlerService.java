@@ -71,10 +71,10 @@ import org.junit.Test;
 @ServicePath("/SurveyHandler")
 // TODO Your own service class
 public class SurveyHandlerService extends RESTService {
-	//to store if survey has been fetched from limesurvey
-	private static HashMap<String, Boolean> surveyFetched = new HashMap<String, Boolean>();
 	//to store if a participant has been contacted to start the survey
 	private static HashMap<String, Boolean> participantContacted = new HashMap<String, Boolean>();
+	//
+	private static HashMap<String, Boolean> surveySetUp = new HashMap<String, Boolean>();
 	//url from limesurvey
 	String LSURL = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/";
 
@@ -125,9 +125,8 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	// TODO your own service methods, e. g. for RMI
-	/*
 	@POST
-	@Path("/Limesurvey")
+	@Path("/survey")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiResponses(
@@ -137,32 +136,91 @@ public class SurveyHandlerService extends RESTService {
 	@ApiOperation(
 			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
 			notes = "Example method that returns a phrase containing the received input.")
-	public Response survey(String body){
-		return Response.ok().entity("error").build();
-	}
-	 */
-
-	public JSONObject getJSONObject(String jsonString) throws ParseException {
+	public Response survey(String body) {
+		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
-		JSONObject bodyJson = (JSONObject) p.parse(jsonString);
-		return bodyJson;
+		HashMap<String, String> surveyInfos = new HashMap<>();
+		try{
+			JSONObject tbody = (JSONObject) p.parse(body);
+			String username = tbody.getAsString("username");
+			String password = tbody.getAsString("password");
+			String surveyIDString = tbody.getAsString("surveyID");
+			int surveyID = (int) tbody.getAsNumber("surveyID");
+			String uri = tbody.getAsString("uri");
+			JSONArray questions = new JSONArray();
+
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint(uri);
+			HashMap<String, String> head = new HashMap<String, String>();
+
+			ClientResponse minires = mini.sendRequest("POST", uri, ("{\"method\": \"get_session_key\", \"params\": [ \""+username+"\", \"" +password+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject minire = (JSONObject) p.parse(minires.getResponse());
+			String sessionKeyString = minire.getAsString("result");
+
+			if(!(surveySetUp.containsKey(surveyIDString))){
+				ClientResponse mini2 = mini.sendRequest("POST", uri, ("{\"method\": \"list_questions\", \"params\": [ \""+sessionKeyString+"\", \"" +surveyID+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+				JSONObject minire2 = (JSONObject) p.parse(mini2.getResponse());
+				JSONArray ql = (JSONArray) minire2.get("result");
+
+				for(int i=1; i<ql.size(); i++){
+					ClientResponse mini3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_question_properties\", \"params\": [ \""+sessionKeyString+"\", \"" +i+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+					JSONObject minire3 = (JSONObject) p.parse(mini3.getResponse());
+
+					JSONObject z = (JSONObject) minire3.get("result");
+					questions.add(i-1,z);
+
+					if(z.getAsString("parent_qid").equals("0")){
+						surveyInfos.put("Question" + i, z.getAsString("question"));
+					}
+				}
+				ClientResponse mini4 = mini.sendRequest("POST", uri, ("{\"method\": \"list_surveys\", \"params\": [ \""+sessionKeyString+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+				JSONObject minire4 = (JSONObject) p.parse(mini4.getResponse());
+				JSONArray sl = (JSONArray) minire4.get("result");
+				for(Object i : sl){
+					if(((JSONObject) i).getAsString("sid").equals(surveyIDString)){
+						surveyInfos.put("surveyTitle", ((JSONObject) i).getAsString("surveyls_title"));
+					}
+				}
+
+				surveySetUp.put(surveyIDString, true);
+			}
+
+			/*
+			if(this.participantContacted.get("") == null){
+				participantContacted.put("", true);
+				response.put("text", "Would you like to start the survey " + surveyInfos.get("surveyTitle") + " ?");
+				return Response.ok().entity(response).build();
+			}
+			*/
+			String intent = "";
+			if(questions != null){
+				return Response.ok().entity(continueQuestioning(questions, surveyInfos, tbody, intent)).build();
+			}
+			else{
+				response.put("text", "There are no questions in this survey");
+				return Response.ok().entity(response).build();
+			}
+
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
+
+	response.put("text", "try block broken");
+	return Response.ok().entity(response).build();
+
 	}
 
-	public String getJSONString(String xmlString){
-		org.json.JSONObject e = XML.toJSONObject(xmlString);
-		String joString = e.toString(4);
-		String joStringg = e.toString();
-		return joString;
-	}
 
-	public String getSurveyID(JSONObject body){
-		String surveyID = body.getAsString("sid");
-		return surveyID;
-	}
+	private JSONObject continueQuestioning(JSONArray questions, HashMap<String,String> surveyInfos, JSONObject tbody, String intent){
+		JSONObject response = new JSONObject();
+		String answer ="";
+		if(intent.equals("skip")){
 
-	public JSONObject getQuestions(JSONObject body){
-		JSONObject questions = (JSONObject) body.get("questions");
-		return questions;
+		}
+		answer = "Thank you for answering";
+		response.put("text", answer);
+		return response;
 	}
 
 

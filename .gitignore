@@ -1,0 +1,37 @@
+/template_project/output/
+/template_project/export/
+/node-storage/
+/.las2peer/
+/tmp/
+/log/
+/template_project/log/
+/lib/
+/etc/ivy/ivy.jar
+/service/
+/out/
+/.idea/
+*.iml
+.DS_Store
+/.settings/
+/junitvmwatcher*.properties
+/junit*.properties
+/etc/startup/
+*.secret
+archiva_credentials.xml
+.classpath
+.project
+.settings
+gradle/
+export/
+gradlew
+gradlew.bat
+settings.gradle
+build.gradle
+gradle.properties
+.github/
+
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build
