@@ -4,6 +4,7 @@ import i5.las2peer.connectors.webConnector.client.ClientResponse;
 import i5.las2peer.connectors.webConnector.client.MiniClient;
 import i5.las2peer.connectors.webConnector.WebConnector;
 
+import java.awt.image.MemoryImageSource;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
@@ -73,11 +74,12 @@ import org.junit.Test;
 public class SurveyHandlerService extends RESTService {
 	//to store if a participant has been contacted to start the survey
 	private static HashMap<String, Boolean> participantContacted = new HashMap<String, Boolean>();
-	//
 	private static HashMap<String, Boolean> surveySetUp = new HashMap<String, Boolean>();
-	//url from limesurvey
-	String LSURL = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/";
-
+	private static JSONArray questions = new JSONArray();
+	private static ArrayList<String> questionText = new ArrayList<>();
+	private static Integer questionNr = 0;
+	private static Boolean surveyCompleted = false;
+	private static ArrayList<String> answers = new ArrayList<>();
 
 
 
@@ -119,10 +121,28 @@ public class SurveyHandlerService extends RESTService {
 			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
 			notes = "Example method that returns a phrase containing the received input.")
 	public Response postTemplate(@PathParam("input") String myInput) {
-		String returnString = "";
-		returnString += "Input " + myInput;
-		return Response.ok().entity(returnString).build();
+		JSONObject r = new JSONObject();
+		r.put("text", myInput);
+		return Response.ok().entity(r).build();
 	}
+
+	@POST
+	@Path("/posti/{input}")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiResponses(
+			value = { @ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "REPLACE THIS WITH YOUR OK MESSAGE") })
+	@ApiOperation(
+			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
+			notes = "Example method that returns a phrase containing the received input.")
+	public Response posti(JSONObject myInput) {
+		JSONObject r = new JSONObject();
+		r.put("text", myInput);
+		return Response.ok().entity(r).build();
+	}
+
 
 	// TODO your own service methods, e. g. for RMI
 	@POST
@@ -162,7 +182,7 @@ public class SurveyHandlerService extends RESTService {
 				JSONObject minire2 = (JSONObject) p.parse(mini2.getResponse());
 				JSONArray ql = (JSONArray) minire2.get("result");
 
-				for(int i=1; i<ql.size(); i++){
+				for(int i=1; i<=ql.size(); i++){
 					ClientResponse mini3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_question_properties\", \"params\": [ \""+sessionKeyString+"\", \"" +i+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire3 = (JSONObject) p.parse(mini3.getResponse());
 
@@ -185,13 +205,6 @@ public class SurveyHandlerService extends RESTService {
 				surveySetUp.put(surveyIDString, true);
 			}
 
-			/*
-			if(this.participantContacted.get("") == null){
-				participantContacted.put("", true);
-				response.put("text", "Would you like to start the survey " + surveyInfos.get("surveyTitle") + " ?");
-				return Response.ok().entity(response).build();
-			}
-			*/
 			String intent = "";
 			if(questions != null){
 				return Response.ok().entity(continueQuestioning(questions, surveyInfos, tbody, intent)).build();
@@ -224,6 +237,116 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 
+	@POST
+	@Path("/surveyGet")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
+			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+	@ApiResponses(
+			value = { @ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "REPLACE THIS WITH YOUR OK MESSAGE") })
+	public Response surveyGet(String input) {
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+		HashMap<String, String> surveyInfos = new HashMap<>();
 
+		if(questions.size()==0) {
+			try{
+				String username = "";
+				String password = "";
+				String surveyIDString = "";
+				int surveyID =0;
+				String uri = "";
+
+				MiniClient mini = new MiniClient();
+				mini.setConnectorEndpoint(uri);
+				HashMap<String, String> head = new HashMap<String, String>();
+
+				ClientResponse minires = mini.sendRequest("POST", uri, ("{\"method\": \"get_session_key\", \"params\": [ \""+username+"\", \"" +password+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+				JSONObject minire = (JSONObject) p.parse(minires.getResponse());
+				String sessionKeyString = minire.getAsString("result");
+
+				if(!(surveySetUp.containsKey(surveyIDString))){
+					ClientResponse mini2 = mini.sendRequest("POST", uri, ("{\"method\": \"list_questions\", \"params\": [ \""+sessionKeyString+"\", \"" +surveyID+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+					JSONObject minire2 = (JSONObject) p.parse(mini2.getResponse());
+					JSONArray ql = (JSONArray) minire2.get("result");
+
+					for(int i=1; i<=ql.size(); i++){
+						ClientResponse mini3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_question_properties\", \"params\": [ \""+sessionKeyString+"\", \"" +i+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+						JSONObject minire3 = (JSONObject) p.parse(mini3.getResponse());
+
+						JSONObject z = (JSONObject) minire3.get("result");
+						questions.add(i-1,z);
+						JSONObject help = new JSONObject();
+						questionText.add(i-1, z.getAsString("question"));
+
+						if(z.getAsString("parent_qid").equals("0")){
+							surveyInfos.put("Question" + i, z.getAsString("question"));
+						}
+					}
+					ClientResponse mini4 = mini.sendRequest("POST", uri, ("{\"method\": \"list_surveys\", \"params\": [ \""+sessionKeyString+"\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+					JSONObject minire4 = (JSONObject) p.parse(mini4.getResponse());
+					JSONArray sl = (JSONArray) minire4.get("result");
+					for(Object i : sl){
+						if(((JSONObject) i).getAsString("sid").equals(surveyIDString)){
+							surveyInfos.put("surveyTitle", ((JSONObject) i).getAsString("surveyls_title"));
+						}
+					}
+
+					surveySetUp.put(surveyIDString, true);
+
+					//ask participant to start survey
+					response.put("text", "Would you like to start the survey " + surveyInfos.get("surveyTitle") + " ?");
+					return Response.ok().entity(response).build();
+
+				}
+
+				if(questions.size() == 0){
+					response.put("text", "There are no questions in this survey.");
+					return Response.ok().entity(response).build();
+				}
+
+			}
+			catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+		else{
+			if(surveyCompleted == true){
+				//to check if answers have been stored correcty
+				String allanswers = answers.toString();
+				//response.put("text", "You already completed the survey.");
+				response.put("text", allanswers);
+				return Response.ok().entity(response).build();
+			}
+			else {
+				try{
+					JSONObject parsed = (JSONObject) p.parse(input);
+					String msg = parsed.getAsString("msg");
+					answers.add(msg);
+				}
+				catch(Exception e){
+					response.put("text", "message could not be read into answerarray");
+					return Response.ok().entity(response).build();
+				}
+				if(questionNr+1>questions.size()){
+					surveyCompleted = true;
+					response.put("text", "Thank you for completing this survey.");
+					return Response.ok().entity(response).build();
+				}
+				else{
+					response.put("text", questionText.get(questionNr));
+					questionNr++;
+					return Response.ok().entity(response).build();
+				}
+			}
+
+		}
+		response.put("text", "try block broken");
+		return Response.ok().entity(response).build();
+	}
 
 }

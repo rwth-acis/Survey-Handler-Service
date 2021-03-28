@@ -29,6 +29,7 @@ settings.gradle
 build.gradle
 gradle.properties
 .github/
+etc/launcher-configuration.ini
 
 # Ignore Gradle project-specific cache directory
 .gradle
