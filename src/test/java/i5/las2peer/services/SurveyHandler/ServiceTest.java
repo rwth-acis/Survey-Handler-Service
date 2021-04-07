@@ -2,7 +2,16 @@ package i5.las2peer.services.SurveyHandler;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.net.HttpURLConnection;
+import java.util.ArrayList;
+import java.util.HashMap;
 
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
+import net.minidev.json.parser.JSONParser;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -16,6 +25,13 @@ import i5.las2peer.p2p.LocalNode;
 import i5.las2peer.p2p.LocalNodeManager;
 import i5.las2peer.security.UserAgentImpl;
 import i5.las2peer.testing.MockAgentFactory;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 
 /**
@@ -33,6 +49,15 @@ public class ServiceTest {
 	private static final String testPass = "adamspass";
 
 	private static final String mainPath = "SurveyHandler/";
+
+	private static HashMap<String, Boolean> participantContacted = new HashMap<String, Boolean>();
+	private static HashMap<String, Boolean> surveySetUp = new HashMap<String, Boolean>();
+	private static JSONArray questions = new JSONArray();
+	private static ArrayList<String> questionText = new ArrayList<>();
+	private static HashMap<Integer, String> questionTextSub = new HashMap<Integer, String>();
+	private static Integer questionNr = 0;
+	private static Boolean surveyCompleted = false;
+	private static ArrayList<String> answers = new ArrayList<>();
 
 	/**
 	 * Called before a test starts.
@@ -92,6 +117,44 @@ public class ServiceTest {
 		}
 	}
 
+	@Test
+	public void testPost() {
+		try {
+			MiniClient client = new MiniClient();
+			client.setConnectorEndpoint(connector.getHttpEndpoint());
+			client.setLogin(testAgent.getIdentifier(), testPass);
+
+			// testInput is the pathParam
+			ClientResponse result = client.sendRequest("POST", mainPath + "post/testInput", "");
+			Assert.assertEquals(200, result.getHttpCode());
+			// "testInput" name is part of response
+			Assert.assertTrue(result.getResponse().trim().contains("testInput"));
+			System.out.println("Result of 'testPost': " + result.getResponse().trim());
+		} catch (Exception e) {
+			e.printStackTrace();
+			Assert.fail(e.toString());
+		}
+	}
+/*
+	@Test
+	public void testGet() {
+		try {
+			MiniClient client = new MiniClient();
+			client.setConnectorEndpoint(connector.getHttpEndpoint());
+			client.setLogin(testAgent.getIdentifier(), testPass);
+
+			ClientResponse result = client.sendRequest("POST", mainPath + "survey", "");
+			Assert.assertEquals(200, result.getHttpCode());
+			Assert.assertEquals("adam", result.getResponse().trim());// YOUR RESULT VALUE HERE
+			System.out.println("Result of 'testGet': " + result.getResponse().trim());
+		} catch (Exception e) {
+			e.printStackTrace();
+			Assert.fail(e.toString());
+		}
+	}
+
+ */
+
 
 /*
 	@Test
@@ -110,7 +173,18 @@ public class ServiceTest {
 			Assert.fail(e.toString());
 		}
 	}
-*/
+
+ */
+
+
+
+
+
+
+
 
 
 }
+
+
+
