@@ -135,7 +135,7 @@ public class ServiceTest {
 			Assert.fail(e.toString());
 		}
 	}
-/*
+
 	@Test
 	public void testGet() {
 		try {
@@ -143,7 +143,7 @@ public class ServiceTest {
 			client.setConnectorEndpoint(connector.getHttpEndpoint());
 			client.setLogin(testAgent.getIdentifier(), testPass);
 
-			ClientResponse result = client.sendRequest("POST", mainPath + "survey", "");
+			ClientResponse result = client.sendRequest("GET", mainPath + "get", "");
 			Assert.assertEquals(200, result.getHttpCode());
 			Assert.assertEquals("adam", result.getResponse().trim());// YOUR RESULT VALUE HERE
 			System.out.println("Result of 'testGet': " + result.getResponse().trim());
@@ -153,18 +153,18 @@ public class ServiceTest {
 		}
 	}
 
- */
 
 
 /*
+
 	@Test
-	public void testLimesurvey() {
+	public void testSendResultsToLimesurvey() {
 		try {
 			MiniClient client = new MiniClient();
 			client.setConnectorEndpoint(connector.getHttpEndpoint());
 			client.setLogin(testAgent.getIdentifier(), testPass);
 
-			ClientResponse result = client.sendRequest("POST", mainPath + "sGet", "");
+			ClientResponse result = client.sendRequest("POST", mainPath + "sendResultsToLimesurvey", "");
 			Assert.assertEquals(200, result.getHttpCode());
 			Assert.assertEquals("adam", result.getResponse().trim());// YOUR RESULT VALUE HERE
 			System.out.println("Result of 'testGet': " + result.getResponse().trim());
@@ -174,7 +174,16 @@ public class ServiceTest {
 		}
 	}
 
+
+
+
+
+
+
+
  */
+
+
 
 
 
