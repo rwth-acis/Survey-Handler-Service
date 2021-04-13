@@ -4,6 +4,8 @@ import i5.las2peer.connectors.webConnector.client.ClientResponse;
 import i5.las2peer.connectors.webConnector.client.MiniClient;
 
 import java.net.HttpURLConnection;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import net.minidev.json.JSONObject;
@@ -65,20 +67,6 @@ import io.swagger.annotations.SwaggerDefinition;
 // TODO Your own service class
 public class SurveyHandlerService extends RESTService {
 	private static Survey surveyGlobal;
-
-
-
-	private static ArrayList<String> surveySetUp = new ArrayList<>();
-
-	private static HashMap<String, String> surveyInfos = new HashMap<>();
-	private static HashMap<String, String> questions = new HashMap<String, String>();
-	private static ArrayList<String> questionIDs = new ArrayList<>();
-	private static ArrayList<String> questionIDsOrdered = new ArrayList<>();
-	private static HashMap<String, String> questionOrder = new HashMap<>();
-	private static HashMap<String, ArrayList<String>> questionGroupID = new HashMap<String, ArrayList<String>>();
-	private static ArrayList<String> questionsWithSub = new ArrayList<>();
-	private static ArrayList<String> questionsWithSubOrdered = new ArrayList<>();
-	private static HashMap<String, ArrayList<String>> subquestions = new HashMap<String, ArrayList<String>>();
 	private static boolean firstStartUp = true;
 
 
@@ -137,36 +125,35 @@ public class SurveyHandlerService extends RESTService {
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
 		try{
+			LocalDateTime now = LocalDateTime.now();
+			System.out.println(now);
+
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String intent = bodyInput.getAsString("intent");
 
 			// Check if survey is set up already
-			if (Objects.isNull(this.surveyGlobal)){
+			if (Objects.isNull(surveyGlobal)){
 				response.put("text", "Please wait for the survey to be initialized.");
 				return Response.ok().entity(response).build();
 			}
-			/*
-			if (!(surveySetUp.contains(bodyInput.getAsString("surveyIDString")))) {
-				setUpSurvey(input);
-				if (questions.size() == 0) {
-					response.put("text", "There are no questions in this survey.");
-					return Response.ok().entity(response).build();
-				}
-				System.out.println("Survey is set-up.");
-			}
-			*/
+
 
 			// Check if message was sent by someone known
 			String senderEmail = bodyInput.getAsString("email");
-			if (Objects.isNull(this.surveyGlobal.findParticipant(senderEmail))){
+			if (Objects.isNull(surveyGlobal.findParticipant(senderEmail))){
 				// participant does not exist, create a new one
 				Participant newParticipant = new Participant(senderEmail);
-				this.surveyGlobal.addParticipant(newParticipant);
+				surveyGlobal.addParticipant(newParticipant);
 			}
 
 			// Get the existing participant
-			Participant currParticipant = this.surveyGlobal.findParticipant(senderEmail);
+			Participant currParticipant = surveyGlobal.findParticipant(senderEmail);
 			String message = bodyInput.getAsString("msg");
+
+			//Set the time the participant answered to check later if needed to be reminded to finish survey
+			currParticipant.setLastTimeActive(LocalDateTime.now());
+
+			// Get the next action
 			return currParticipant.calculateNextAction(intent, message);
 
 
@@ -216,7 +203,6 @@ public class SurveyHandlerService extends RESTService {
 			JSONArray sl = (JSONArray) minire4.get("result");
 			for (Object i : sl) {
 				if (((JSONObject) i).getAsString("sid").equals(surveyIDString)) {
-					//surveyInfos.put("surveyTitle", ((JSONObject) i).getAsString("surveyls_title"));
 					newSurvey.addTitle( ((JSONObject) i).getAsString("surveyls_title"));
 					break;
 				}
@@ -227,7 +213,7 @@ public class SurveyHandlerService extends RESTService {
 				System.out.println("Failed to add title. Aborting survey creation...");
 			} else {
 				System.out.println(newSurvey.getTitle());
-				this.surveyGlobal = newSurvey;
+				surveyGlobal = newSurvey;
 				System.out.println("Survey successfully initialized.");
 			}
 
@@ -237,86 +223,6 @@ public class SurveyHandlerService extends RESTService {
 		} catch(Exception e){
 			e.printStackTrace();
 		}
-
-			/*
-			if (!(surveySetUp.contains(surveyIDString))) {
-				ClientResponse mini2 = mini.sendRequest("POST", uri, ("{\"method\": \"list_questions\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-				JSONObject minire2 = (JSONObject) p.parse(mini2.getResponse());
-				JSONArray ql = (JSONArray) minire2.get("result");
-
-				for (Object jo : ql) {
-					JSONObject j = (JSONObject) jo;
-
-					if (j.getAsString("parent_qid").equals("0")) {
-						questions.put(j.getAsString("qid"), j.getAsString("question"));
-						questionIDs.add(j.getAsString("qid"));
-
-						questionOrder.put(j.getAsString("qid"), (j.getAsString("gid")) + "#" + j.getAsString("question_order"));
-						if (questionGroupID.containsKey(j.getAsString("gid"))) {
-							questionGroupID.get(j.getAsString("gid")).add(j.getAsString("qid"));
-						} else {
-							questionGroupID.computeIfAbsent(j.getAsString("gid"),
-									k -> {
-										ArrayList<String> h = new ArrayList<String>();
-										h.add(j.getAsString("qid"));
-										return h;
-									});
-						}
-					} else {
-
-						if (!(questionsWithSub.contains(j.getAsString("parent_qid")))) {
-							questionsWithSub.add(j.getAsString("parent_qid"));
-						}
-
-						if (subquestions.containsKey(j.getAsString("parent_qid"))) {
-							subquestions.get(j.getAsString("parent_qid")).add(j.getAsString("question"));
-						} else {
-							subquestions.computeIfAbsent(j.getAsString("parent_qid"),
-									k -> {
-										ArrayList<String> h = new ArrayList<String>();
-										h.add(j.getAsString("question"));
-										return h;
-									});
-						}
-
-					}
-
-				}
-
-				//order the questionIDs and questionsWithSUbIDs
-
-
-				for(String entry : questionGroupID.keySet()){
-					for(String id : questionOrder.keySet()){
-						qO = questionOrder.get(id);
-						groupid = qO.split("#")[0];
-						order = qO.split("#")[1];
-						if(questionGroupID.get(entry).equals(groupid)){
-
-						}
-						for(int i = 0; i < questionGroupID.get(entry).size(); i++){
-					}
-				}
-
-
-				surveyInfos.put("numberOfQuestions", String.valueOf(questions.size()));
-
-				ClientResponse mini4 = mini.sendRequest("POST", uri, ("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-				JSONObject minire4 = (JSONObject) p.parse(mini4.getResponse());
-				JSONArray sl = (JSONArray) minire4.get("result");
-				for (Object i : sl) {
-					if (((JSONObject) i).getAsString("sid").equals(surveyIDString)) {
-						surveyInfos.put("surveyTitle", ((JSONObject) i).getAsString("surveyls_title"));
-					}
-				}
-
-				surveySetUp.add(surveyIDString);
-
-			}
-
-		} catch (Exception e) {
-			e.printStackTrace();
-		}*/
 	}
 
 
@@ -341,18 +247,17 @@ public class SurveyHandlerService extends RESTService {
 		try {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			//set up survey, if not yet done
-			//if (Objects.isNull(surveyGlobal)) {
-			if(this.firstStartUp){
-				this.firstStartUp = false;
+
+			if(firstStartUp){
+				firstStartUp = false;
 				setUpSurvey(input);
-				if (this.surveyGlobal.getSortedQuestionIds().size() == 0) {
+				if (surveyGlobal.getSortedQuestionIds().size() == 0) {
 					response.put("text", "There are no questions in this survey.");
 					return Response.ok().entity(response).build();
 				}
 				System.out.println("Survey is set-up.");
 			}
 
-			//}
 
 			//TODO: check if rocket chat passes on email of user
 			if (!(bodyInput.getAsString("adminmail").equals(bodyInput.getAsString("email")))) {
@@ -363,7 +268,7 @@ public class SurveyHandlerService extends RESTService {
 			if (intent.equals("add_participant")) {
 				Participant newParticipant = new Participant(bodyInput.getAsString("msg"));
 				boolean added = surveyGlobal.addParticipant(newParticipant);
-				response.put("text", "Adding participant " +surveyGlobal.getParticipantsEmails() + ", got result: " + added);
+				response.put("text", "Adding participant " + newParticipant.getEmail() + ", got result: " + added);
 				//response.put("text", "Adding participant " +surveyGlobal.getParticipantsEmails() + ", got result: " + added);
 				System.out.println(surveyGlobal.getParticipants().toString());
 				System.out.println(surveyGlobal.getParticipants().size());
@@ -383,14 +288,15 @@ public class SurveyHandlerService extends RESTService {
 			}
 			*/
 			else if (intent.equals("get_participants")) {
-				System.out.println(surveyGlobal.getParticipants().toString());
-				System.out.println(surveyGlobal.getParticipants());
-				System.out.println(surveyGlobal.getParticipants().size());
-				response.put("text", surveyGlobal.getParticipantsEmails());
+				//System.out.println(surveyGlobal.getParticipants().toString());
+				//System.out.println(surveyGlobal.getParticipants());
+				//System.out.println(surveyGlobal.getParticipants().size());
+				response.put("text", surveyGlobal.getParticipantsEmails() + ". Currently there are " + surveyGlobal.getParticipants().size() + "participants in this survey");
 				return Response.ok().entity(response).build();
 			}
 			else if (intent.equals("get_answers")) {
-				response.put("text", surveyGlobal.getAnswers().toString());
+				System.out.println(surveyGlobal.getAnswersStringFromAllParticipants());
+				response.put("text", surveyGlobal.getAnswersStringFromAllParticipants());
 				return Response.ok().entity(response).build();
 			}
 			else if(intent.equals("start_survey")){
@@ -403,15 +309,17 @@ public class SurveyHandlerService extends RESTService {
 				}
 				if(emails.length() > 0){
 					emails.substring(0, emails.length() -1); //remove last separator, only if there are participants
-				}
-				else{
-					response.put("start", "Please add participants to start the survey.");
+
+					System.out.println(emails);
+					response.put("text", "Would you like to start the survey \"" + surveyGlobal.getTitle() + "\"?");
+					response.put("contactList", emails);
 					return Response.ok().entity(response).build();
 				}
-				System.out.println(emails);
-				response.put("text", "Would you like to start the survey \"" + surveyInfos.get("surveyTitle") + "\"?");
-				response.put("start", emails);
-				return Response.ok().entity(response).build();
+				else{
+					response.put("text", "Please add participants to start the survey.");
+					return Response.ok().entity(response).build();
+				}
+
 			}
 			else {
 				response.put("text", "intent not recognized");
@@ -443,8 +351,13 @@ public class SurveyHandlerService extends RESTService {
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
 		try {
-			setUpSurvey(input);
-			surveyGlobal.addParticipant(par);
+
+			if(firstStartUp){
+				response.put("text", "Survey is not yet initialized.");
+				return Response.ok().entity(response).build();
+			}
+
+
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 
 			String username = bodyInput.getAsString("NameOfUser");
@@ -461,68 +374,142 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject minire = (JSONObject) p.parse(minires.getResponse());
 			String sessionKeyString = minire.getAsString("result");
 
-
-			String content = "";//"{\"133653X1X1\":\"t\",\"133653X1X2SQ001\":\"tes2t\", \"133653X1X2SQ002\":\"test\"}";
-			String separator = "X";//
-			String base = surveyIDString + separator;
-
-			/////////////////////////////
-
 			/*
-			ArrayList<String> emptyList1 = new ArrayList<>();
-			ArrayList<String> emptyList2 = new ArrayList<>();
-			HashMap<String, String> emptyHash = new HashMap<>();
-			Participant newParticipant = new Participant("testmail", false, false, emptyList1, emptyList2, emptyHash);
-			participants.add(0, newParticipant);
-			for(String id : questionIDs){
-				newParticipant.addUnaskedQuestion(id);
-			}
-			newParticipant.addAnswer("1", "testanswer");
-
+			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyIDString + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
+			String response3 = minire3.getAsString("result");
 			 */
 
-			//maybe with getAnswers
-			for(Participant pa : surveyGlobal.getParticipants()){
-				for(String qid : questionIDs){
-					if(pa.hasAnswer(qid)) {
-						for(String id : questionGroupID.keySet()) {
-							if (questionGroupID.get(id).contains(qid)) {
-								if(questionsWithSub.contains(qid)){
-									for(int i = 0; i<subquestions.get(qid).size(); i++){
-										String subcode = "";
-										String s = id + separator + qid + subcode;
-										String a = pa.getAnswer(qid);
-										content += "\"" + base + s + "\":\"" + a + "\",";
-									}
-								}
-								else{
-									String s = id + separator + qid;
-									String a = pa.getAnswer(qid);
-									content += "\"" + base + s + "\":\"" + a + "\",";
-								}
 
-							}
-						}
+			for(Participant pa : surveyGlobal.getParticipants()) {
+				String surveyResponseID;
 
-					}
+				String content = pa.getAnswersString();
+				System.out.println(content);
+
+				// If part of response already at LimeSurvey, update response
+				if(pa.getSurveyResponseID() != null){
+					surveyResponseID = pa.getSurveyResponseID();
+					System.out.println(surveyResponseID);
+					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\",\"id\":\"" + surveyResponseID + "\"}";
+					System.out.println(contentFilled);
+					String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyIDString + "\"," + contentFilled + "], \"id\": 1}";
+					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
+					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
+					String response2 = minire2.getAsString("result");
+					System.out.println(response2);
+				} else{ // If new response, add new response and return ID
+					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\"}";
+					System.out.println(contentFilled);
+					String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyIDString + "\"," + contentFilled + "], \"id\": 1}";
+					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
+					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
+					surveyResponseID = minire2.getAsString("result");
+					pa.setSurveyResponseID(surveyResponseID);
+					System.out.println(surveyResponseID);
 				}
 
-				String contentFilled = "{" + content + "\"token\":\"" + pa.getEmail() + "\"}";
-				String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyIDString + "\"," + contentFilled + "], \"id\": 1}"; // \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + a + "\"], \"id\": 1}";
-				ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
-				JSONObject minire2 = (JSONObject) p.parse(minires.getResponse());
-				String result = minire.getAsString("result");
-				System.out.println(result);
+
 			}
+
+
+			response.put("text", "Passed back results to LimeSurvey.");
+			return Response.ok().entity(response).build();
+
 
 		}
 		catch(Exception e){
 			e.printStackTrace();
 		}
 
-		response.put("text", "passed back results");
+		response.put("text", "Something went wrong in sendResultsBackToLimesurvey try block.");
 		return Response.ok().entity(response).build();
 
 
 	}
+
+
+
+	@POST
+	@Path("/reminderRoutine")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
+			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
+	public Response reminderRoutine(String input) {
+		JSONObject response = new JSONObject();
+		response.put("contactList", "");
+		response.put("contactText", "");
+
+		String separator = "";
+
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+
+		// Get all participants that have not answered for 3 days
+		for(Participant pa : surveyGlobal.getParticipants()){
+
+			// Only if participant has not already completed the survey
+			if(!pa.getCompletedSurvey()){
+
+				// Participant has not started survey
+				System.out.println(pa.getUnaskedQuestions().size());
+				Integer unSize = pa.getUnaskedQuestions().size();
+				Integer unansweredQuetsions = unSize + 1;
+				Integer allSize = surveyGlobal.getSortedQuestionIds().size();
+				System.out.println(surveyGlobal.getSortedQuestionIds().size());
+				if(unSize.equals(allSize)){
+					response.put("contactList", response.get("contactList") + separator + pa.getEmail());
+					response.put("contactText", response.get("contactText") + separator + "Hello again, it would be nice if you would start the survey. :)");
+					separator = ",";
+				} else {
+					LocalDateTime lastDT = pa.getLastTimeActive();
+					long hoursDifference = ChronoUnit.HOURS.between(lastDT, LocalDateTime.now());
+
+					//seconds for testing, TODO delete later
+					long secsDifference = ChronoUnit.SECONDS.between(lastDT, LocalDateTime.now());
+					if(hoursDifference > 72 || secsDifference > 15){
+						response.put("contactList", response.get("contactList") + separator + pa.getEmail());
+						response.put("contactText", response.get("contactText") + separator + "Hello again, please continue with your survey. There are only " + unansweredQuetsions + " questions left! :)");
+						separator = ",";
+					}
+				}
+
+			}
+
+		}
+
+		System.out.println(response.toString());
+
+		response.put("text", "Participants have been reminded.");
+		return Response.ok().entity(response).build();
+
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }

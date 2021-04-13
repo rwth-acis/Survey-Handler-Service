@@ -3,6 +3,7 @@ package i5.las2peer.services.SurveyHandler;
 import net.minidev.json.JSONObject;
 
 import javax.ws.rs.core.Response;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -17,6 +18,8 @@ public class Participant {
     private HashMap<String, String> answers = new HashMap<>();
     private String lastQuestion;
     private Survey currentSurvey = null;
+    private LocalDateTime lastTimeActive;
+    private String surveyResponseId;
 
     public Participant(String email){
         this.addEmail(email);
@@ -45,7 +48,12 @@ public class Participant {
         if(intent.equals("skip")){
             this.skippedQuestions.add(this.lastQuestion);
         } else{
-            this.answers.put(this.lastQuestion, message);
+            //TODO check for confirmation to start survey
+            if(this.lastQuestion == null){
+                //do not add confirmatino to start survey to answers
+            } else{
+                this.addAnswer(this.lastQuestion, message);
+            }
         }
 
         // Calculate next question to ask
@@ -106,6 +114,10 @@ public class Participant {
         return this.participantContacted;
     }
 
+    public String getSurveyResponseID(){
+        return this.surveyResponseId;
+    }
+
     public boolean getCompletedSurvey(){ return this.completedSurvey;}
 
     public ArrayList<String> getUnaskedQuestions() {
@@ -116,8 +128,24 @@ public class Participant {
         return this.skippedQuestions;
     }
 
-    public String getAnswers() {
-        return this.answers.toString();
+    public HashMap<String, String> getAnswers() {
+        return this.answers;
+    }
+
+    public LocalDateTime getLastTimeActive(){
+        return this.lastTimeActive;
+    }
+
+    public String getAnswersString(){
+        String returnValue = "";
+        for(String s : this.answers.keySet()){
+            returnValue += "\"" + s + "\":\"" + this.answers.get(s) + "\",";
+        }
+        // Only delete comma if there are answers
+        if(returnValue.length() > 1){
+            return returnValue.substring(0, returnValue.length() - 1);
+        }
+        return returnValue;
     }
 
     public String getAnswer(String questionID) {
@@ -132,7 +160,15 @@ public class Participant {
         return this.lastQuestion;
     }
 
+    public void setLastTimeActive(LocalDateTime localDateTime){
+        this.lastTimeActive = localDateTime;
+    }
+
     public void setParticipantContacted(){ this.participantContacted = true; }
+
+    public void setSurveyResponseID(String responseID){
+        this.surveyResponseId = responseID;
+    }
 
     public void setCompletedSurvey(){ this.completedSurvey = true; }
 
@@ -163,7 +199,9 @@ public class Participant {
     }
 
     public void addAnswer(String questionID, String answer){
-        this.answers.put(questionID, answer);
+        HashMap<String, String> subQs = new HashMap<>();
+        Question currQuestion = this.currentSurvey.getQuestionByQid(questionID);
+        this.answers.putAll(currQuestion.createAnswerHashMap(answer));
     }
 
     public void removeAnswer(String questionID){

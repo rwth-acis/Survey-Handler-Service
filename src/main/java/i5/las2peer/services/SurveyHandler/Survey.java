@@ -75,22 +75,22 @@ public class Survey {
             int q2qo = Integer.parseInt(q2.getQuestionOrder());
 
             if (q1gid > q2gid) {
-                System.out.println(q1.getQid() + " question1 > question2 " + q2.getQid());
+                //System.out.println(q1.getQid() + " question1 > question2 " + q2.getQid());
                 return 1;
             } else if (q2gid > q1gid){
-                System.out.println(q2.getQid() + " question2 > question1 " + q1.getQid());
+                //System.out.println(q2.getQid() + " question2 > question1 " + q1.getQid());
                 return -1;
             } else {
                 // group ids are equal
-                System.out.println("group ids are equal");
+                //System.out.println("group ids are equal");
                 if (q1qo > q2qo) {
-                    System.out.println(q1.getQuestionOrder() + " qo1 > qo2 " + q2.getQuestionOrder());
+                    //System.out.println(q1.getQuestionOrder() + " qo1 > qo2 " + q2.getQuestionOrder());
                     return 1;
                 } else if (q2qo > q1qo) {
-                    System.out.println(q2.getQuestionOrder() + " qo2 > qo1 " + q1.getQuestionOrder());
+                    //System.out.println(q2.getQuestionOrder() + " qo2 > qo1 " + q1.getQuestionOrder());
                     return -1;
                 } else {
-                    System.out.println("ERROR: question order and group id are equal");
+                    //System.out.println("ERROR: question order and group id are equal");
                     return 0;
                 }
             }
@@ -113,6 +113,10 @@ public class Survey {
         return this.title;
     }
 
+    public String getID() {
+        return this.id;
+    }
+
     public ArrayList<Participant> getParticipants() {
         return this.participants;
     }
@@ -122,7 +126,9 @@ public class Survey {
         for(Participant p : this.participants){
             response += p.getEmail()+",";
         }
-        response.substring(0,response.length()-1);
+        if(response.length() > 1){
+            response = response.substring(0,response.length()-1);
+        }
         response+= "]";
         return response;
     }
@@ -153,6 +159,13 @@ public class Survey {
         return null;
     }
 
+    public String getAnswersStringFromAllParticipants(){
+        String returnValue = "";
+        for(Participant p : this.participants){
+            returnValue += p.getAnswersString();
+        }
+        return returnValue;
+    }
 
     public HashMap<String, HashMap<String, String>> getAnswers(){
         // return Participant email : [question1 : answer1, ...]
@@ -185,6 +198,16 @@ public class Survey {
 
     Question getQuestionByQid(String qid){
         return questionsHM.get(qid);
+    }
+
+    ArrayList<Question> getQuestionByGid(String gid){
+        ArrayList<Question> questionsByGid = new ArrayList<>();
+        for(Question q : questionAL){
+            if (q.getGid().equals(gid)) {
+                questionsByGid.add(q);
+            }
+        }
+        return questionsByGid;
     }
 
 }
