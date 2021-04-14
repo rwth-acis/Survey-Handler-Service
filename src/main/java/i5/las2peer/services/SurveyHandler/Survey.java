@@ -14,6 +14,7 @@ public class Survey {
     private ArrayList<Question> questionAL = new ArrayList<>();
     private String title;
     private ArrayList<Participant> participants = new ArrayList<>();
+    private String expires;
 
     public Survey(String id, JSONArray allQuestions) {
         
@@ -111,6 +112,14 @@ public class Survey {
 
     public String getTitle() {
         return this.title;
+    }
+
+    public void setExpires(String expires) {
+        this.expires = expires;
+    }
+
+    public String getExpires() {
+        return this.expires;
     }
 
     public String getID() {

@@ -41,6 +41,8 @@ public class Participant {
 
         // Participant has completed the survey
         if(this.completedSurvey) {
+            //TODO option to change answers
+            response.put("text", "You already completed the survey.");
             return Response.ok().entity(response).build();
         }
 
@@ -50,7 +52,7 @@ public class Participant {
         } else{
             //TODO check for confirmation to start survey
             if(this.lastQuestion == null){
-                //do not add confirmatino to start survey to answers
+                //do not add confirmation to start survey to answers
             } else{
                 this.addAnswer(this.lastQuestion, message);
             }
@@ -75,6 +77,8 @@ public class Participant {
     private Response AskNextQuestion(){
 
         JSONObject response = new JSONObject();
+        // Check if logic applies to next question
+
         // Normal questions available
         if (this.unaskedQuestions.size() >0){
             String nextId = this.unaskedQuestions.get(0);
@@ -88,7 +92,7 @@ public class Participant {
         // Skipped questions available
         if (this.skippedQuestions.size() >0){
             String nextId = this.skippedQuestions.get(0);
-            this.unaskedQuestions.remove(0);
+            this.skippedQuestions.remove(0);
             this.lastQuestion = nextId;
             String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString();
             messageText = "This question was skipped by you, you can answer now or skip again: \n"+ messageText;

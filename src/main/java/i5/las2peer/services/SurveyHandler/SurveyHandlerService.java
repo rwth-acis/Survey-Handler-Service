@@ -128,6 +128,17 @@ public class SurveyHandlerService extends RESTService {
 			LocalDateTime now = LocalDateTime.now();
 			System.out.println(now);
 
+			// Check if survey has expired
+			/*
+			String expireDate = surveyGlobal.getExpires();
+			String expireTime = surveyGlobal.getExpires();
+			if(){
+				response.put("text", "The survey is no longer active.");
+				return Response.ok().entity(response).build();
+			}
+
+			 */
+
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String intent = bodyInput.getAsString("intent");
 
@@ -162,7 +173,7 @@ public class SurveyHandlerService extends RESTService {
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
-		response.put("text", "survey taking block broken");
+		response.put("text", "Something went wrong in takingSurvey try block.");
 		return Response.ok().entity(response).build();
 	}
 
@@ -190,20 +201,33 @@ public class SurveyHandlerService extends RESTService {
 			String sessionKeyString = minire.getAsString("result");
 
 			// Get questions from limesurvey
-			ClientResponse mini2 = mini.sendRequest("POST", uri, ("{\"method\": \"list_questions\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-			JSONObject minire2 = (JSONObject) p.parse(mini2.getResponse());
+			ClientResponse minires2 = mini.sendRequest("POST", uri, ("{\"method\": \"list_questions\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 			JSONArray ql = (JSONArray) minire2.get("result");
 
+
+			// Get question properties (includes answeroptions, logics and questiontype)
+			JSONArray qlProperties = new JSONArray();
+			for(Object jo : ql){
+				String qid = ((JSONObject) jo).getAsString("qid");
+				ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_question_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + qid + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+				JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
+				JSONObject qProperties = (JSONObject) minire3.get("result");
+				qlProperties.add(qProperties);
+			}
+
+
 			// Create a new survey object
-			Survey newSurvey = new Survey(surveyIDString, ql);
+			Survey newSurvey = new Survey(surveyIDString, qlProperties);
 
 			// Get survey title and add to survey
-			ClientResponse mini4 = mini.sendRequest("POST", uri, ("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-			JSONObject minire4 = (JSONObject) p.parse(mini4.getResponse());
+			ClientResponse minires4 = mini.sendRequest("POST", uri, ("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject minire4 = (JSONObject) p.parse(minires4.getResponse());
 			JSONArray sl = (JSONArray) minire4.get("result");
 			for (Object i : sl) {
 				if (((JSONObject) i).getAsString("sid").equals(surveyIDString)) {
 					newSurvey.addTitle( ((JSONObject) i).getAsString("surveyls_title"));
+					newSurvey.setExpires( ((JSONObject) i).getAsString("expires"));
 					break;
 				}
 			}
@@ -246,8 +270,8 @@ public class SurveyHandlerService extends RESTService {
 
 		try {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
-			//set up survey, if not yet done
 
+			//set up survey, if not yet done
 			if(firstStartUp){
 				firstStartUp = false;
 				setUpSurvey(input);
@@ -266,32 +290,34 @@ public class SurveyHandlerService extends RESTService {
 			}
 			String intent = bodyInput.getAsString("intent");
 			if (intent.equals("add_participant")) {
-				Participant newParticipant = new Participant(bodyInput.getAsString("msg"));
-				boolean added = surveyGlobal.addParticipant(newParticipant);
-				response.put("text", "Adding participant " + newParticipant.getEmail() + ", got result: " + added);
+				boolean added = true;
+				// Check if it is a list of emails, then add all of them
+				if(bodyInput.getAsString("msg").contains(",")){
+					for(String s : bodyInput.getAsString("msg").split(",")){
+						Participant newParticipant = new Participant(s);
+						boolean thisAdded = surveyGlobal.addParticipant(newParticipant);
+						if(!thisAdded){
+							added = false;
+						}
+					}
+				} else{
+					// Only one participant is added
+					Participant newParticipant = new Participant(bodyInput.getAsString("msg"));
+					added = surveyGlobal.addParticipant(newParticipant);
+					System.out.println(surveyGlobal.findParticipant(newParticipant.getEmail()));
+				}
+
+				response.put("text", "Adding participant(s), got result: " + added);
 				//response.put("text", "Adding participant " +surveyGlobal.getParticipantsEmails() + ", got result: " + added);
 				System.out.println(surveyGlobal.getParticipants().toString());
 				System.out.println(surveyGlobal.getParticipants().size());
-				System.out.println(surveyGlobal.findParticipant(newParticipant.getEmail()));
 				return Response.ok().entity(response).build();
 			}
-			/*
-			else if(intent.equals("add_participants")){
-				ArrayList<String> paEmails = new ArrayList<>();
-				if(bodyInput.getAsString("msg").contains(",")){
-					for(String s : bodyInput.getAsString("msg").split(",")){
-						paEmails.add(s);
-					}
-				}
-				response.put("text", "");
-				return Response.ok().entity(response).build();
-			}
-			*/
 			else if (intent.equals("get_participants")) {
 				//System.out.println(surveyGlobal.getParticipants().toString());
 				//System.out.println(surveyGlobal.getParticipants());
 				//System.out.println(surveyGlobal.getParticipants().size());
-				response.put("text", surveyGlobal.getParticipantsEmails() + ". Currently there are " + surveyGlobal.getParticipants().size() + "participants in this survey");
+				response.put("text", surveyGlobal.getParticipantsEmails() + ". Currently there are " + surveyGlobal.getParticipants().size() + " participants in this survey");
 				return Response.ok().entity(response).build();
 			}
 			else if (intent.equals("get_answers")) {
@@ -308,7 +334,7 @@ public class SurveyHandlerService extends RESTService {
 					}
 				}
 				if(emails.length() > 0){
-					emails.substring(0, emails.length() -1); //remove last separator, only if there are participants
+					emails.substring(0, emails.length() -1); //remove last separator, only if there are several participants
 
 					System.out.println(emails);
 					response.put("text", "Would you like to start the survey \"" + surveyGlobal.getTitle() + "\"?");
@@ -328,7 +354,7 @@ public class SurveyHandlerService extends RESTService {
 
 		} catch (Exception e) {
 			e.printStackTrace();
-			response.put("text", "admin block broken");
+			response.put("text", "Something went wrong in adminSurvey try block.");
 			return Response.ok().entity(response).build();
 		}
 	}
@@ -375,6 +401,7 @@ public class SurveyHandlerService extends RESTService {
 			String sessionKeyString = minire.getAsString("result");
 
 			/*
+			// Export the responses
 			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyIDString + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 			JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
 			String response3 = minire3.getAsString("result");
@@ -465,7 +492,7 @@ public class SurveyHandlerService extends RESTService {
 				System.out.println(surveyGlobal.getSortedQuestionIds().size());
 				if(unSize.equals(allSize)){
 					response.put("contactList", response.get("contactList") + separator + pa.getEmail());
-					response.put("contactText", response.get("contactText") + separator + "Hello again, it would be nice if you would start the survey. :)");
+					response.put("contactText", response.get("contactText") + separator + "Hello again! It would be nice if you would start the survey. :)");
 					separator = ",";
 				} else {
 					LocalDateTime lastDT = pa.getLastTimeActive();
@@ -475,7 +502,7 @@ public class SurveyHandlerService extends RESTService {
 					long secsDifference = ChronoUnit.SECONDS.between(lastDT, LocalDateTime.now());
 					if(hoursDifference > 72 || secsDifference > 15){
 						response.put("contactList", response.get("contactList") + separator + pa.getEmail());
-						response.put("contactText", response.get("contactText") + separator + "Hello again, please continue with your survey. There are only " + unansweredQuetsions + " questions left! :)");
+						response.put("contactText", response.get("contactText") + separator + "Hello again! Please continue with your survey. There are only " + unansweredQuetsions + " questions left. :)");
 						separator = ",";
 					}
 				}

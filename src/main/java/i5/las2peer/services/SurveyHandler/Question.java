@@ -1,10 +1,12 @@
 package i5.las2peer.services.SurveyHandler;
 
+import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 public class Question{
 
@@ -15,6 +17,11 @@ public class Question{
     private String question_text;
     private String sid;
     private String help;
+    private String type;
+    private String relevance;
+    private JSONObject answeroptions = new JSONObject();
+    // Integer order starts at 1
+    private HashMap<Integer, String> answerOptionsStringAl = new HashMap<>();
     private ArrayList<Question> subquestionAl = new ArrayList<>();
     private boolean isSubquestion = false;
 
@@ -28,7 +35,15 @@ public class Question{
         this.question_text = q.getAsString("question");
         this.sid = q.getAsString("sid");
         this.help = q.getAsString("help");
-
+        this.type = q.getAsString("type");
+        this.relevance = q.getAsString("relevance");
+        if(!q.getAsString("answeroptions").contains("options")){
+            this.answeroptions = (JSONObject) q.get("answeroptions");
+            for(String s : this.answeroptions.keySet()){
+                JSONObject temp = (JSONObject) this.answeroptions.get(s);
+                this.answerOptionsStringAl.put(Integer.parseInt(temp.getAsString("order")), temp.getAsString("answer"));
+            }
+        }
         if (Integer.parseInt(this.parent_qid )> 0){
             this.isSubquestion = true;
         }
@@ -55,6 +70,10 @@ public class Question{
         return this.gid;
     }
 
+    public String getType() {
+        return this.type;
+    }
+
     public String getQuestionOrder() {
         return this.question_order;
     }
@@ -78,16 +97,65 @@ public class Question{
         String resString = "";
         resString += this.question_text;
         int index = 1;
+
+        System.out.println(this.type);
+
+        // Switch case to check if question type is mask question (their answer options are not saved in question)
+        // The question code is from LimeSurvey
+        switch(this.type){
+            case "D":
+                System.out.println("Date/Time");
+                resString += "Please enter a date in the format dd.mm.jjjj.";
+                break;
+            case "|":
+                System.out.println("File upload");
+                resString += " Please send a file.";
+                break;
+            case "G":
+                System.out.println("Gender");
+                resString += " Please enter your gender.";
+                break;
+            case "N":
+                System.out.println("Numerical input");
+                resString += " Please respond with a number.";
+                break;
+            case "X":
+                System.out.println("Text display");
+                break;
+            case "Y":
+                System.out.println("Yes/No");
+                resString += " Please answer with Yes, No oder No answer.";
+                break;
+            case "5":
+                System.out.println("5 point choice");
+                resString += " Please rate on a scale of 1 to 5.";
+                break;
+        }
+
+        // Check if multiple choice question
         if (this.subquestionAl.size() > 0) {
-            resString += ". Please choose from the following options: \n";
+            resString += " Please choose all that apply from the following options by the corresponding number: \n";
             for (Question subq : this.subquestionAl) {
                 resString += "\n" + index + ": ";
                 index ++;
                 resString += subq.encodeJsonBodyAsString();
             }
         }
-        if(this.help.length() > 0){
-            resString += "\n This is the help: " + this.help + "";
+
+        //check if single choice question
+        if(this.answerOptionsStringAl.size() > 0) {
+            if(!(this.type == "R" && this.type == "K")){
+                resString += " Please choose one from the following options by the corresponding number: \n";
+                for(int i = 1; i < answerOptionsStringAl.size() + 1; i++){
+                    resString += "\n" + index + ": " + answerOptionsStringAl.get(i);
+                    index++;
+                }
+            }
+        }
+        if(!this.isSubquestion){
+            if(this.help.length() > 0){
+                resString += "\n This is the help: " + this.help + "";
+            }
         }
         return resString;
     }
