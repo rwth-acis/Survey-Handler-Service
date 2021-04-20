@@ -1,36 +1,111 @@
 package i5.las2peer.services.SurveyHandler;
+import i5.las2peer.services.SurveyHandler.database.SQLDatabase;
+import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Set;
 
 
 public class Survey {
 
-    private String id;
-    private HashMap<String, Question> questionsHM = new HashMap<>();
-    private ArrayList<Question> questionAL = new ArrayList<>();
-    private String title;
-    private ArrayList<Participant> participants = new ArrayList<>();
+    // Database model identifier
+    private String sid;
+    private String adminmail;
+    private String botname;
     private String expires;
+    private String title;
+    SQLDatabase database;
+    // end Database model identifier
 
-    public Survey(String id, JSONArray allQuestions) {
-        
+
+    // hashmap contains ALL questions (sub and parent questions)
+    private HashMap<String, Question> questionsHM = new HashMap<>();
+    // questionAL only contains parent questions, should be sorted
+    private ArrayList<Question> questionAL = new ArrayList<>();
+
+    private ArrayList<Participant> participants = new ArrayList<>();
+
+    public String getAdminmail() {
+        return adminmail;
+    }
+
+    public void setAdminmail(String adminmail) {
+        this.adminmail = adminmail;
+    }
+
+    public String getBotname() {
+        return botname;
+    }
+
+    public void setBotname(String botname) {
+        this.botname = botname;
+    }
+
+    public SQLDatabase getDatabase() {
+        return database;
+    }
+
+    public void setDatabase(SQLDatabase database) {
+        this.database = database;
+    }
+
+    public String getSid() {
+        return sid;
+    }
+
+    public void setSid(String sid) {
+        this.sid = sid;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+
+    public Survey(String sid) {
+        this.sid = sid;
+    }
+
+    public HashMap<String, Question> getQuestionsHM() {
+        return questionsHM;
+    }
+
+    public ArrayList<Question> getQuestionAL() {
+        return questionAL;
+    }
+
+    public void setQuestionsHM(HashMap<String, Question> questionsHM) {
+        this.questionsHM = questionsHM;
+    }
+
+    public void setQuestionAL(ArrayList<Question> questionAL) {
+        this.questionAL = questionAL;
+    }
+
+    public void setParticipants(ArrayList<Participant> participants) {
+        this.participants = participants;
+    }
+
+    // Initialize data structues when given a JSONArray from limesurvey
+    public void initData(JSONArray allQuestions){
         ArrayList<Question> tempQuestionAl = new ArrayList<>();
-
         // Add questions to survey
         for (Object jo : allQuestions) {
             JSONObject j = (JSONObject) jo;
             try {
-                Question newQuestion = new Question(j);
+                Question newQuestion = new Question();
+                newQuestion.initData(j);
+                // put all questions into hashmap
+                this.questionsHM.put(newQuestion.getQid(), newQuestion);
                 if (newQuestion.isSubquestion()) {
                     // put subquestions into temp list to handle later
                     tempQuestionAl.add(newQuestion);
                 } else {
-                    // put non-subquestions into hashmap
-                    this.questionsHM.put(newQuestion.getQid(), newQuestion);
+
                     // put non-subquestions into arraylist
                     this.questionAL.add(newQuestion);
                 }
@@ -49,31 +124,140 @@ public class Survey {
             parentQuestion.addSubquestion(q);
         }
 
+        for(Question q : this.questionAL){
+            q.getSubquestionAl();
+            this.sortQuestionsAl(q.getSubquestionAl());
+        }
 
         System.out.println("before sorting...");
         System.out.println(this.getSortedQuestionIds().toString());
         // Create correct question order
-        this.sortQuestionsAl();
+        this.sortQuestionsAl(this.questionAL);
         System.out.println("after sorting...");
         System.out.println(this.getSortedQuestionIds().toString());
+    }
 
-        this.id = id;
+    // Initialize data structues when given an ArrayList from database
+    public void initQuestionsFromDB(ArrayList<Question> QuestionAl){
+
+
+        //System.out.println(sur.getTitle());
+        // this is the question list for the survey, all questions in here ( also subquestions)
+        //ArrayList<Question> QuestionAl = SurveyHandlerServiceQueries.getSurveyQuestionsFromDB(sur.getSid(), database);
+
+        //System.out.println(QuestionAl.toString());
+        ArrayList<Question> noSubQuestionAl = new ArrayList<>();
+        ArrayList<Question> subQuestionAl = new ArrayList<>();
+        HashMap<String, Question> questionsHM = new HashMap<>();
+        for (Question teQ : QuestionAl) {
+            questionsHM.put(teQ.getQid(), teQ);
+            if(teQ.isSubquestion()){
+                subQuestionAl.add(teQ);
+                continue;
+            }
+            noSubQuestionAl.add(teQ);
+
+        }
+
+        // set the datastructures, handle subquestions afterwards
+        this.setQuestionsHM(questionsHM);
+        this.setQuestionAL(noSubQuestionAl);
+
+        // iterate through subquestions and add to correct question object in subquestion list
+        for (Question tempQ : subQuestionAl) {
+            // get parent question, this should exist because we parsed all (parent) questions before
+            Question parentQ = this.getQuestionByQid(tempQ.getParentQid());
+            parentQ.addSubquestion(tempQ);
+        }
+
+        // sort all questions
+        this.sortQuestionsAl(this.getQuestionAL());
+        this.sortSubquestions();
+    }
+
+    public void initParticipantsFromDB(ArrayList<Participant> ParticipantAl){
+        for (Participant p : ParticipantAl){
+            p.setCurrentSurvey(this);
+            this.participants.add(p);
+        }
+    }
+
+    public void initAnswersForParticipantFromDB(Participant p, ArrayList<Answer> answerAlFromDB){
+        // get all possible questions ( these should be ordered already)
+        ArrayList<Question> possibleQs = this.getQuestionAL();
+        // calculate which questions are still left unanswered
+        ArrayList<Question> unaskedQuestions = new ArrayList<>();
+
+
+        // Add answers directly, then compute unasked questions
+        for (Answer a: answerAlFromDB){
+            System.out.println("Adding answer "+ a + " to participant "+ p);
+            p.addAnswerFromDb(a);
+        }
+        System.out.println("reached");
+        // Compare to be asked questions for this survey to given answers, to find unanswered questions
+        for (Question tempQ : this.getQuestionAL()){
+            boolean answered = false;
+            for (Answer tempA : answerAlFromDB){
+                Question questionToAnswer = this.getQuestionsHM().get(tempA.getQid());
+                // check if the question is a subquestion
+                String correspondingQid;
+                if (questionToAnswer.isSubquestion()){
+                    // we always compare with parentQids
+                    correspondingQid = questionToAnswer.getParentqid();
+                } else {
+                    correspondingQid = questionToAnswer.getQid();
+                }
+                // check if corresponding answer qid equals qid of current question, if yes question was already answered or skipped
+                if (tempQ.getQid().equals(correspondingQid)){
+                    // already answered or skipped, continue loop
+                    answered = true;
+                    break;
+                }
+            }
+            if (!answered){
+                // No answer for this question, so add it to unasked questions. Order is correct, if the ArrayList was sorted beforehand
+                // exclude question with qid of lastquestion, because it was already asked
+                System.out.println("No answer found for question "+ tempQ.getQid());
+                if(!p.getLastquestion().equals(tempQ.getQid())) {
+                    p.addUnaskedQuestion(tempQ.getQid(), false);
+                } else {
+                    System.out.println("Not adding lastquestion to unasked questions.");
+                }
+            }
+        }
+
 
     }
+
+    public void safeQuestionsToDB(SQLDatabase database){
+        for(Question q : questionsHM.values()){
+            SurveyHandlerServiceQueries.addQuestionToDB(q, database);
+        }
+    }
+
 
     private void addQuestion(Question q) {
 
         this.questionsHM.put(q.getQid(), q);
     }
 
-    private void sortQuestionsAl() {
+    // sorts subquestions of all known questions to this survey
+    public void sortSubquestions(){
+        // QuestionAL contains all parent question, each might have subquestions
+        for (Question unsortedQ : this.getQuestionAL()){
+            this.sortQuestionsAl(unsortedQ.getSubquestionAl());
+        }
+    }
+
+    public void sortQuestionsAl(ArrayList<Question> questions) {
 
         // sort arraylist
         Comparator<Question> questionComp = (q1, q2) -> {
             int q1gid = Integer.parseInt(q1.getGid());
-            int q1qo = Integer.parseInt(q1.getQuestionOrder());
+            int q1qo = Integer.parseInt(q1.getQorder());
             int q2gid = Integer.parseInt(q2.getGid());
-            int q2qo = Integer.parseInt(q2.getQuestionOrder());
+            int q2qo = Integer.parseInt(q2.getQorder());
 
             if (q1gid > q2gid) {
                 //System.out.println(q1.getQid() + " question1 > question2 " + q2.getQid());
@@ -103,7 +287,7 @@ public class Survey {
             //return 0;
         };
 
-        this.questionAL.sort(questionComp);
+        questions.sort(questionComp);
     }
 
     public void addTitle(String t) {
@@ -120,10 +304,6 @@ public class Survey {
 
     public String getExpires() {
         return this.expires;
-    }
-
-    public String getID() {
-        return this.id;
     }
 
     public ArrayList<Participant> getParticipants() {
@@ -159,9 +339,20 @@ public class Survey {
         return true;
     }
 
+
+
     public Participant findParticipant(String email){
         for(Participant p : this.participants){
             if(p.getEmail().equals(email)){
+                return p;
+            }
+        }
+        return null;
+    }
+
+    public Participant findParticipantByChannel(String channel){
+        for(Participant p : this.participants){
+            if(p.getChannel().equals(channel)){
                 return p;
             }
         }
@@ -205,7 +396,7 @@ public class Survey {
         return this.questionAL;
     }
 
-    Question getQuestionByQid(String qid){
+    public Question getQuestionByQid(String qid){
         return questionsHM.get(qid);
     }
 

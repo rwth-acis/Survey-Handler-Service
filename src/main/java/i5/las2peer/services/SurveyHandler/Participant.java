@@ -1,70 +1,107 @@
 package i5.las2peer.services.SurveyHandler;
 
+import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONObject;
+import org.web3j.abi.datatypes.Bool;
 
 import javax.ws.rs.core.Response;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 
 public class Participant {
 
+    // Database model identifier
     private String email;
-    private boolean participantContacted;
-    private boolean completedSurvey;
+    private String pid;
+    private String sid;
+    private String channel;
+    private String lastquestion;
+    private String lasttimeactive;
+    private String surveyresponseid;
+    private boolean participantcontacted;
+    private boolean completedsurvey;
+    // end Database model identifier
 
-    private ArrayList<String> unaskedQuestions;
+    private ArrayList<Answer> givenAnswersAl = new ArrayList<>();
+    private ArrayList<String> unaskedQuestions = new ArrayList<>();
     private ArrayList<String> skippedQuestions = new ArrayList<>();
+    // first string: qid; second string: answer text
+    // TODO refactor everything to use arraylist<Answer> instead
     private HashMap<String, String> answers = new HashMap<>();
-    private String lastQuestion;
+
     private Survey currentSurvey = null;
-    private LocalDateTime lastTimeActive;
-    private String surveyResponseId;
+
+
 
     public Participant(String email){
         this.addEmail(email);
+        this.setPid(email);
     }
 
     // Based on the intent, decide what is sent back to the participant
     public Response calculateNextAction(String intent, String message){
-        String welcomeString = "Would you like to start the survey \"" + currentSurvey.getTitle() + "\"?";
-
+        int questionsInSUrvey = this.currentSurvey.getSortedQuestions().size();
+        String welcomeString = "Would you like to start the survey \"" + currentSurvey.getTitle() + "\"? There are " + questionsInSUrvey + " questions in this survey.";
+        String explanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
+        String completedSurvey = "You already completed the survey.";
+        String surveyDoneString = "Thank you for completing this survey.";
         JSONObject response = new JSONObject();
         Participant currParticipant = this;
-
+        System.out.println("calculating next action...");
         // Participant has not started the survey yet
-        if(!(this.participantContacted)){
-            this.participantContacted = true;
-            response.put("text", welcomeString);
+        if(!(this.participantcontacted)){
+            System.out.println("participant newly contacted");
+            this.participantcontacted = true;
+            SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
+            response.put("text", welcomeString + explanation);
             return Response.ok().entity(response).build();
         }
 
         // Participant has completed the survey
-        if(this.completedSurvey) {
+        if(this.completedsurvey) {
             //TODO option to change answers
-            response.put("text", "You already completed the survey.");
+            response.put("text", completedSurvey);
             return Response.ok().entity(response).build();
         }
 
-        // Participant wants to skip a question
-        if(intent.equals("skip")){
-            this.skippedQuestions.add(this.lastQuestion);
-        } else{
-            //TODO check for confirmation to start survey
-            if(this.lastQuestion == null){
-                //do not add confirmation to start survey to answers
+        System.out.println("last question is: " + this.lastquestion);
+
+        if(this.lastquestion != null){
+
+            System.out.println("last question is not null recognized");
+            Answer newAnswer = new Answer();
+            newAnswer.setGid(this.currentSurvey.getQuestionByQid(this.lastquestion).getGid());
+            newAnswer.setPid(this.getPid());
+            newAnswer.setSid(this.getSid());
+            newAnswer.setSkipped(true);
+            newAnswer.setQid(this.lastquestion);
+            // Participant wants to skip a question
+            if(intent.equals("skip")){
+                this.skippedQuestions.add(this.lastquestion);
             } else{
-                this.addAnswer(this.lastQuestion, message);
+                Question lQuestion = this.currentSurvey.getQuestionByQid(this.lastquestion);
+                // String qType = lQuestion.getType();
+                this.addAnswer(this.lastquestion, message);
+                newAnswer.setSkipped(false);
+                newAnswer.setText(message);
             }
+            System.out.println("saving new answer to database");
+            SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
+        } else{
+            // This is the first response after question to start the survey was sent
+            // do not add confirmation to start survey to answers
+            // TODO check for confirmation to start survey
         }
+
 
         // Calculate next question to ask
 
         // Check if survey is completed
         if (this.unaskedQuestions.size() == 0 && this.skippedQuestions.size() == 0){
             // No questions remaining, survey done.
-            String surveyDoneString = "Thank you for completing this survey.";
-            this.completedSurvey = true;
+            this.completedsurvey = true;
+            SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
             response.put("text",surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
             return Response.ok().entity(response).build();
         }
@@ -81,11 +118,22 @@ public class Participant {
 
         // Normal questions available
         if (this.unaskedQuestions.size() >0){
+            System.out.println("Found unasked questions. Next one is: " + this.unaskedQuestions.get(0));
             String nextId = this.unaskedQuestions.get(0);
             this.unaskedQuestions.remove(0);
-            this.lastQuestion = nextId;
+            this.lastquestion = nextId;
+            System.out.println("setting last question to new question id");
+            // update last question in database
+            SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
             String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString();
-            response.put("text", messageText);
+
+            // If it is starting with "[" it is a block question
+            if(Character.toString(messageText.charAt(0)).equals("[")){
+                response.put("blocks", messageText);
+            } // If it is a normal text message
+            else{
+                response.put("text", messageText);
+            }
             return Response.ok().entity(response).build();
         }
 
@@ -93,7 +141,8 @@ public class Participant {
         if (this.skippedQuestions.size() >0){
             String nextId = this.skippedQuestions.get(0);
             this.skippedQuestions.remove(0);
-            this.lastQuestion = nextId;
+            this.lastquestion = nextId;
+            SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
             String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString();
             messageText = "This question was skipped by you, you can answer now or skip again: \n"+ messageText;
             response.put("text", messageText);
@@ -105,24 +154,80 @@ public class Participant {
     }
     public void setCurrentSurvey(Survey s){
         this.currentSurvey = s;
+        this.sid = s.getSid();
     }
     public void setUnaskedQuestions(ArrayList<String> orderedQuestionList){
         this.unaskedQuestions = new ArrayList<>(orderedQuestionList);
+    }
+
+
+    public boolean isParticipantcontacted() {
+        return this.participantcontacted;
+    }
+
+    public boolean isCompletedsurvey() {
+        return this.completedsurvey;
+    }
+
+    public void setLastquestion(String lastquestion) {
+        this.lastquestion = lastquestion;
+    }
+
+    public String getSurveyresponseid() {
+        return surveyresponseid;
+    }
+
+    public void setSurveyresponseid(String surveyresponseid) {
+        this.surveyresponseid = surveyresponseid;
+    }
+
+    public void setParticipantcontacted(boolean participantcontacted) {
+        this.participantcontacted = participantcontacted;
+    }
+
+    public void setCompletedsurvey(boolean completedsurvey) {
+        this.completedsurvey = completedsurvey;
     }
 
     public String getEmail(){
         return this.email;
     }
 
-    public boolean getParticipantContacted(){
-        return this.participantContacted;
-    }
-
     public String getSurveyResponseID(){
-        return this.surveyResponseId;
+        return this.surveyresponseid;
     }
 
-    public boolean getCompletedSurvey(){ return this.completedSurvey;}
+    public String getChannel(){
+        return this.channel;
+    }
+
+    public void setChannel(String channel){
+        this.channel = channel;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPid() {
+        return pid;
+    }
+
+    public void setPid(String pid) {
+        this.pid = pid;
+    }
+
+    public String getSid() {
+        return sid;
+    }
+
+    public void setSid(String sid) {
+        this.sid = sid;
+    }
+
+    public ArrayList<Answer> getGivenAnswersAl() {
+        return givenAnswersAl;
+    }
 
     public ArrayList<String> getUnaskedQuestions() {
         return this.unaskedQuestions;
@@ -136,8 +241,8 @@ public class Participant {
         return this.answers;
     }
 
-    public LocalDateTime getLastTimeActive(){
-        return this.lastTimeActive;
+    public String getLasttimeactive(){
+        return this.lasttimeactive;
     }
 
     public String getAnswersString(){
@@ -160,21 +265,17 @@ public class Participant {
         return this.answers.containsKey(questionID);
     }
 
-    public String getLastQuestion(){
-        return this.lastQuestion;
+    public String getLastquestion(){
+        return this.lastquestion;
     }
 
-    public void setLastTimeActive(LocalDateTime localDateTime){
-        this.lastTimeActive = localDateTime;
+    public void setLasttimeactive(String localDateTime){
+        this.lasttimeactive = localDateTime;
     }
-
-    public void setParticipantContacted(){ this.participantContacted = true; }
 
     public void setSurveyResponseID(String responseID){
-        this.surveyResponseId = responseID;
+        this.surveyresponseid = responseID;
     }
-
-    public void setCompletedSurvey(){ this.completedSurvey = true; }
 
     public void addEmail(String email){
         //slack adds this mailto part when messaging an email
@@ -187,7 +288,15 @@ public class Participant {
     }
 
     public void addUnaskedQuestion(String questionID){
-        this.unaskedQuestions.add(0, questionID);
+        addUnaskedQuestion(questionID, true);
+    }
+    public void addUnaskedQuestion(String questionID, boolean insertInFront){
+        System.out.println(questionID);
+        if (insertInFront) {
+            this.unaskedQuestions.add(0, questionID);
+        } else{
+            this.unaskedQuestions.add(questionID);
+        }
     }
 
     public void removeUnaskedQuestion(String questionID){
@@ -203,7 +312,7 @@ public class Participant {
     }
 
     public void addAnswer(String questionID, String answer){
-        HashMap<String, String> subQs = new HashMap<>();
+        //HashMap<String, String> subQs = new HashMap<>();
         Question currQuestion = this.currentSurvey.getQuestionByQid(questionID);
         this.answers.putAll(currQuestion.createAnswerHashMap(answer));
     }
@@ -213,8 +322,24 @@ public class Participant {
     }
 
     public void addLastQuestion(String questionID){
-        this.lastQuestion = questionID;
+        this.lastquestion = questionID;
     }
+
+    public void addAnswer(Answer a){
+        this.getGivenAnswersAl().add(a);
+    }
+
+    public void addAnswerFromDb(Answer a){
+        // check if the answer was skipped
+        if (a.isSkipped()){
+            this.addSkippedQuestion(a.getQid());
+        } else {
+            this.addAnswer(a);
+            this.addAnswer(a.getQid(),a.getText());
+        }
+    }
+
+    //public HashMap<String, String> formatAnswer(String qid, )
 
     @Override
     public String toString() {

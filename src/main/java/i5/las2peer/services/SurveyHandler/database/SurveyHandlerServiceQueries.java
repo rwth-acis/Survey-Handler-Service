@@ -1,6 +1,7 @@
 package i5.las2peer.services.SurveyHandler.database;
 
 import com.google.common.collect.Lists;
+import i5.las2peer.services.SurveyHandler.Answer;
 import i5.las2peer.services.SurveyHandler.Participant;
 import i5.las2peer.services.SurveyHandler.Question;
 import i5.las2peer.services.SurveyHandler.Survey;
@@ -87,8 +88,8 @@ public class SurveyHandlerServiceQueries {
                 case "surveys":
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "adminmail VARCHAR(50) NOT NULL,";
-                    query += "botname VARCHAR(50) NOT NULL,";
-                    query += "expires VARCHAR(50) NOT NULL,";
+                    query += "botname VARCHAR(256) NOT NULL,";
+                    query += "expires VARCHAR(50),";
                     query += "title VARCHAR(50) NOT NULL";
                     break;
                 case "questions":
@@ -98,21 +99,28 @@ public class SurveyHandlerServiceQueries {
                     query += "parentqid VARCHAR(50),";
                     query += "gid VARCHAR(50) NOT NULL,";
                     query += "qorder VARCHAR(50) NOT NULL,";
-                    query += "sid VARCHAR(50) NOT NULL";
+                    query += "sid VARCHAR(50) NOT NULL,";
+                    query += "help VARCHAR(50),";
+                    query += "relevance VARCHAR(50) NOT NULL";
                     break;
                 case "participants":
-                    query += "pid VARCHAR(50) NOT NULL,";
-                    query += "email VARCHAR(50) NOT NULL,";
+                    query += "pid VARCHAR(256) NOT NULL,";
+                    query += "email VARCHAR(256) NOT NULL,";
                     query += "channel VARCHAR(50),";
-                    query += "sid VARCHAR(50) NOT NULL";
+                    query += "sid VARCHAR(50) NOT NULL,";
+                    query += "lastquestion VARCHAR(50),";
+                    query += "lasttimeactive VARCHAR(50),";
+                    query += "surveyresponseid VARCHAR(50),";
+                    query += "participantcontacted BOOL,";
+                    query += "completedsurvey BOOL";
                     break;
                 case "answers":
-                    query += "pid VARCHAR(50) NOT NULL,";
+                    query += "pid VARCHAR(256) NOT NULL,";
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "qid VARCHAR(50) NOT NULL,";
                     query += "gid VARCHAR(50) NOT NULL,";
                     query += "text VARCHAR(500),"; // Huge free text is answer option by limesurvey
-                    query += "isAnswered BOOL";
+                    query += "isskipped BOOL";
                     break;
 
                 default:
@@ -146,17 +154,7 @@ public class SurveyHandlerServiceQueries {
     public static String getParticipantModel(){
         return "select ";
     }
-/*
-    public static ArrayList<Participant> getParticipantsOfSurvey(String sid, SQLDatabase database){
 
-    }
-
-
-
-    public static void initAllDataFromDB(SQLDatabase database){
-
-    }
- */
 
     // database collection access
     public static ArrayList<Question> getSurveyQuestionsFromDB(String sid, SQLDatabase database){
@@ -210,7 +208,7 @@ public class SurveyHandlerServiceQueries {
                 System.out.println("No survey found in database.");
                 ps.close();
                 con.close();
-                return null;
+                return new ArrayList<>();
             } else{
                 System.out.println("Found surveys in database.");
             }
@@ -233,7 +231,44 @@ public class SurveyHandlerServiceQueries {
 
         return null;
     }
+    public static ArrayList<Participant> getSurveyParticipantsFromDB(String sid, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
 
+            String query = "SELECT * FROM participants WHERE sid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, sid);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (!rs.first()){
+                System.out.println("No participants found for survey " + sid);
+                ps.close();
+                con.close();
+                return new ArrayList<>();
+            } else{
+                System.out.println("Found participants in database.");
+            }
+
+            ArrayList<Participant> allP = new ArrayList<>();
+            while(!rs.isAfterLast()){
+                Participant tempP = SurveyHandlerServiceQueries.castToParticipant(rs);
+                allP.add(tempP);
+                System.out.println("Found and added participant with id: " + tempP.getPid());
+                rs.next();
+            }
+
+            ps.close();
+            con.close();
+            return allP;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
     public static Survey getSurveyFromDB(String sid, SQLDatabase database){
         try{
             Connection con = database.getDataSource().getConnection();
@@ -263,6 +298,45 @@ public class SurveyHandlerServiceQueries {
         return null;
 
     }
+    public static ArrayList<Answer> getAnswersForParticipantFromDB(String sid, String pid, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM answers WHERE sid = ? AND pid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, sid);
+            ps.setString(2,pid);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (!rs.first()){
+                System.out.println("No answers found for participant " + pid + " and survey " + sid);
+                ps.close();
+                con.close();
+                return new ArrayList<>();
+            } else{
+                System.out.println("Found answers in database.");
+            }
+
+            ArrayList<Answer> allA = new ArrayList<>();
+            while(!rs.isAfterLast()){
+                Answer tempA = SurveyHandlerServiceQueries.castToAnswer(rs);
+                allA.add(tempA);
+                System.out.println("Found and added answer for participant with id: " + tempA.getPid());
+                rs.next();
+            }
+
+            ps.close();
+            con.close();
+            return allA;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
 
     // getting objects from database
     public static Survey castToSurvey(ResultSet rs){
@@ -275,8 +349,8 @@ public class SurveyHandlerServiceQueries {
 
 
             Survey res = new Survey(sid);
-            res.setAdminMail(adminmail);
-            res.setBotName(botname);
+            res.setAdminmail(adminmail);
+            res.setBotname(botname);
             res.setExpires(expires);
             res.setTitle(title);
 
@@ -296,6 +370,8 @@ public class SurveyHandlerServiceQueries {
             String type = rs.getString("type");
             String qorder = rs.getString("qorder");
             String sid = rs.getString("sid");
+            String help = rs.getString("help");
+            String relevance = rs.getString("relevance");
 
             Question res = new Question();
             res.setQid(qid);
@@ -305,6 +381,8 @@ public class SurveyHandlerServiceQueries {
             res.setType(type);
             res.setQorder(qorder);
             res.setSid(sid);
+            res.setHelp(help);
+            res.setRelevance(relevance);
             return res;
 
         } catch (Exception e){
@@ -318,12 +396,45 @@ public class SurveyHandlerServiceQueries {
             String sid = rs.getString("sid");
             String email = rs.getString("email");
             String channel = rs.getString("channel");
+            String lastquestion = rs.getString("lastquestion");
+            String lasttimeactive = rs.getString("lasttimeactive");
+            String surveyresponseid = rs.getString("surveyresponseid");
+            boolean participantcontacted = rs.getBoolean("participantcontacted");
+            boolean completedsurvey = rs.getBoolean("completedsurvey");
 
             Participant res = new Participant(email);
             res.setPid(pid);
             res.setSid(sid);
             res.setChannel(channel);
+            res.setLastquestion(lastquestion);
+            res.setLasttimeactive(lasttimeactive);
+            res.setSurveyresponseid(surveyresponseid);
+            res.setParticipantcontacted(participantcontacted);
+            res.setCompletedsurvey(completedsurvey);
 
+            return res;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            return null;
+        }
+    }
+    public static Answer castToAnswer(ResultSet rs){
+        try{
+            String pid = rs.getString("pid");
+            String sid = rs.getString("sid");
+            String qid = rs.getString("qid");
+            String gid = rs.getString("gid");
+            String text = rs.getString("text");
+            boolean isskipped = rs.getBoolean("isskipped");
+
+            Answer res = new Answer();
+            res.setPid(pid);
+            res.setSid(sid);
+            res.setQid(qid);
+            res.setGid(gid);
+            res.setText(text);
+            res.setSkipped(isskipped);
             return res;
 
         } catch (Exception e){
@@ -340,9 +451,9 @@ public class SurveyHandlerServiceQueries {
 
             String query = "INSERT INTO surveys(sid, adminmail, botname, expires, title) VALUES (?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
-            ps.setString(1, s.getID());
-            ps.setString(2, s.getAdminMail());
-            ps.setString(3,s.getBotName());
+            ps.setString(1, s.getSid());
+            ps.setString(2, s.getAdminmail());
+            ps.setString(3,s.getBotname());
             ps.setString(4,s.getExpires());
             ps.setString(5,s.getTitle());
             int rs = ps.executeUpdate();
@@ -368,7 +479,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, sid) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, sid, help, relevance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, q.getQid());
             ps.setString(2, q.getText());
@@ -377,6 +488,8 @@ public class SurveyHandlerServiceQueries {
             ps.setString(5, q.getGid());
             ps.setString(6, q.getQorder());
             ps.setString(7, q.getSid());
+            ps.setString(8, q.getHelp());
+            ps.setString(9, q.getRelevance());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -400,12 +513,18 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO participants(channel, email, pid, sid) VALUES (?, ?, ?, ?)";
+            String query = "INSERT INTO participants(channel, email, pid, sid, lastquestion, lasttimeactive, surveyresponseid, participantcontacted, completedsurvey) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, p.getChannel());
             ps.setString(2, p.getEmail());
             ps.setString(3, p.getPid());
             ps.setString(4, p.getSid());
+            ps.setString(5, p.getLastquestion());
+            ps.setString(6, p.getLasttimeactive());
+            ps.setString(7, p.getSurveyResponseID());
+            ps.setBoolean(8, p.isParticipantcontacted());
+            ps.setBoolean(9, p.isCompletedsurvey());
+
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -424,18 +543,19 @@ public class SurveyHandlerServiceQueries {
         }
     }
 
-    public static boolean addAnswerToDB(String pid, String sid, String qid, String gid, String text, SQLDatabase database){
+    public static boolean addAnswerToDB(Answer answer, SQLDatabase database){
         try{
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO answers(pid, sid, qid, gid, text) VALUES (?, ?, ?, ?, ?)";
+            String query = "INSERT INTO answers(pid, sid, qid, gid, text, isskipped) VALUES (?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
-            ps.setString(1, pid);
-            ps.setString(2, sid);
-            ps.setString(3, qid);
-            ps.setString(4, gid);
-            ps.setString(5, text);
+            ps.setString(1, answer.getPid());
+            ps.setString(2, answer.getSid());
+            ps.setString(3, answer.getQid());
+            ps.setString(4, answer.getGid());
+            ps.setString(5, answer.getText());
+            ps.setBoolean(6, answer.isSkipped());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -454,6 +574,51 @@ public class SurveyHandlerServiceQueries {
         }
     }
 
+    public static boolean updateParticipantInDB(Participant p, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM participants WHERE pid = ? AND sid = ?";
+             ps = con.prepareStatement(query);
+            ps.setString(1, p.getPid());
+            ps.setString(2, p.getSid());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the participant, so update the entry
+                ps.close();
+                ps = con.prepareStatement("UPDATE participants SET channel = ?, email = ?, pid = ?, sid = ?, lastquestion = ?, lasttimeactive = ?, surveyresponseid = ?, participantcontacted = ?, completedsurvey = ? WHERE sid = ? AND pid = ?");
+                ps.setString(1, p.getChannel());
+                ps.setString(2, p.getEmail());
+                ps.setString(3, p.getPid());
+                ps.setString(4, p.getSid());
+                ps.setString(5, p.getLastquestion());
+                ps.setString(6, p.getLasttimeactive());
+                ps.setString(7, p.getSurveyResponseID());
+                ps.setBoolean(8, p.isParticipantcontacted());
+                ps.setBoolean(9, p.isCompletedsurvey());
+                // where clause
+                ps.setString(10, p.getSid());
+                ps.setString(11,p.getPid());
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find participant in database. Could not update.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not add question.");
+            return false;
+        }
+    }
 
     // helper functions to initialize objects
 
