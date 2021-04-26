@@ -6,12 +6,15 @@ import i5.las2peer.restMapper.RESTService;
 import i5.las2peer.connectors.webConnector.client.ClientResponse;
 import i5.las2peer.connectors.webConnector.client.MiniClient;
 
-import java.io.FileInputStream;
+import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -82,40 +85,35 @@ public class SurveyHandlerService extends RESTService {
 	private static Survey surveyGlobal;
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
 	private static boolean firstStartUp = true;
+	private String databaseUser = "";
+	private String databasePassword = "";
+	private String databaseName = "";
+	private String databaseHost = "";
+	private int databaseTypeInt;
+	private int databasePort;
 
 	private static SQLDatabase database; // The database instance to write to.
 
-	// Look through global survey list for botname, which is unique for each survey
-	public static Survey getSurveyByBotname(String botname){
+	// Look through global survey list for surveyID, which is unique for each survey
+	public static Survey getSurveyBySurveyID(String surveyID){
 		for (Survey s : allSurveys){
-			if (s.getBotname().equals(botname)){
+			if (s.getSid().equals(surveyID)){
 				return s;
 			}
 		}
 		return null;
 	}
 
+	public static ArrayList<Survey> getAllSurveys(){
+		return allSurveys;
+	}
+
 	@Override
 	public void onStart() throws ServiceException {
-		// read and set properties values
-		// IF THE SERVICE CLASS NAME IS CHANGED, THE PROPERTIES FILE NAME NEED TO BE CHANGED TOO!
-		setFieldValues();
-
 		// instantiate a database manager to handle database connection pooling and credentials
 		getLogger().log(Level.INFO, "Service started");
 
 		try{
-			// Read properties file
-			Properties tempProp = new Properties();
-			FileInputStream propsFile = new FileInputStream("");
-			tempProp.load(propsFile);
-			String databaseUser = tempProp.getProperty("databaseUser");
-			String databasePassword = tempProp.getProperty("databasePassword");
-			String databaseName = tempProp.getProperty("databaseName");
-			String databaseHost = tempProp.getProperty("databaseHost");
-			int databaseTypeInt = Integer.parseInt(tempProp.getProperty("databaseTypeInt")); // See SQLDatabaseType for more information
-			int databasePort = Integer.parseInt(tempProp.getProperty("databasePort"));
-
 			// Set up database
 			SQLDatabaseType databaseType = SQLDatabaseType.getSQLDatabaseType(databaseTypeInt);
 			System.out.println(databaseType + " " + databaseUser + " " + databasePassword + " "
@@ -177,7 +175,8 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	public SurveyHandlerService(){
-		super();
+		// Read and set properties values
+		setFieldValues();
 	}
 	/**
 	 * Template of a get function.
@@ -234,27 +233,28 @@ public class SurveyHandlerService extends RESTService {
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
 		try{
-			LocalDateTime now = LocalDateTime.now();
-			System.out.println(now);
-
-			// Check if survey has expired
-			/*
-			String expireDate = surveyGlobal.getExpires();
-			String expireTime = surveyGlobal.getExpires();
-			if(){
-				response.put("text", "The survey is no longer active.");
-				return Response.ok().entity(response).build();
-			}
-			 */
+			LocalDate dateNow = LocalDate.now();
+			LocalTime timeNow = LocalTime.now();
 
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
+			String surveyID = bodyInput.getAsString("surveyID");
+			String senderEmail = bodyInput.getAsString("email");
+			String token = bodyInput.getAsString("slackToken");
+			// This intent is needed to check if the message received was send by clicking on a button as an answer
+			String buttonIntent = bodyInput.getAsString("buttonIntent");
+			System.out.println("buttonIntent: " + buttonIntent);
 
-			String botname = bodyInput.getAsString("botName");
+			// check if senderEmail is actual email or userid
+			System.out.println("senderEMail: " + senderEmail);
+			if(!senderEmail.contains("@")){
+				System.out.println("sender email is user id");
+				senderEmail = getSlackEmailBySlackId(senderEmail, token);
+			}
 
 			// find correct survey
-			Survey currSurvey = getSurveyByBotname(botname);
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			System.out.println(currSurvey);
 
@@ -264,9 +264,21 @@ public class SurveyHandlerService extends RESTService {
 				return Response.ok().entity(response).build();
 			}
 
+			// Check if survey has expiration date and if survey has expired
+			if(currSurvey.getExpires() != null){
+				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+				String expireDate = currSurvey.getExpires().split("\\s")[0];
+				String expireTime = currSurvey.getExpires().split("\\s")[1];
+				System.out.println(expireDate + " and expires at " + dateNow);
+				System.out.println(expireTime + " and expires at " + timeNow);
+				if(dateNow.isAfter(LocalDate.parse(expireDate))){
+					if(timeNow.isAfter(LocalTime.parse(expireTime)))
+						response.put("text", "The survey is no longer active.");
+					return Response.ok().entity(response).build();
+				}
+			}
 
 			// Check if message was sent by someone known
-			String senderEmail = bodyInput.getAsString("email");
 			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
 				// participant does not exist, create a new one
 				Participant newParticipant = new Participant(senderEmail);
@@ -289,7 +301,7 @@ public class SurveyHandlerService extends RESTService {
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message);
+			return currParticipant.calculateNextAction(intent, message, buttonIntent);
 
 
 		} catch (ParseException e) {
@@ -310,11 +322,9 @@ public class SurveyHandlerService extends RESTService {
 
 			String username = bodyInput.getAsString("NameOfUser");
 			String password = bodyInput.getAsString("Password");
-			String surveyIDString = bodyInput.getAsString("surveyIDString");
-			int surveyID = Integer.parseInt(surveyIDString);
+			String surveyID = bodyInput.getAsString("surveyID");
 			String uri = bodyInput.getAsString("uri");
 			String adminmail = bodyInput.getAsString("adminmail");
-			String botname = bodyInput.getAsString("botName");
 
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
@@ -342,8 +352,7 @@ public class SurveyHandlerService extends RESTService {
 
 
 			// Create a new survey object
-			Survey newSurvey = new Survey(surveyIDString);
-			newSurvey.setBotname(botname);
+			Survey newSurvey = new Survey(surveyID);
 			newSurvey.setAdminmail(adminmail);
 			newSurvey.initData(qlProperties);
 
@@ -352,7 +361,7 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject minire4 = (JSONObject) p.parse(minires4.getResponse());
 			JSONArray sl = (JSONArray) minire4.get("result");
 			for (Object i : sl) {
-				if (((JSONObject) i).getAsString("sid").equals(surveyIDString)) {
+				if (((JSONObject) i).getAsString("sid").equals(surveyID)) {
 					newSurvey.addTitle( ((JSONObject) i).getAsString("surveyls_title"));
 					newSurvey.setExpires( ((JSONObject) i).getAsString("expires"));
 					break;
@@ -378,93 +387,6 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	@POST
-	@Path("/slackAttachment")
-	@Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-	@Produces(MediaType.APPLICATION_JSON)
-	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
-	@ApiResponses(
-			value = {@ApiResponse(
-					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
-	public Response attachment(String input) {
-		System.out.println(input);
-		JSONObject response = new JSONObject();
-		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
-
-		try {
-			String result = java.net.URLDecoder.decode(input, StandardCharsets.UTF_8.name());
-			System.out.println(result);
-
-			//slack adds payload= in front of the result, so deleting that to parse it to json
-			result = result.substring(8);
-			System.out.println(result);
-
-			JSONObject bodyInput = (JSONObject) p.parse(result);
-			System.out.println(bodyInput);
-
-			String channelString = bodyInput.getAsString("channel");
-			JSONObject channelJSON = (JSONObject) p.parse(channelString);
-			String channel = channelJSON.getAsString("id");
-			System.out.println(channel);
-
-			String actionString = bodyInput.getAsString("actions");
-			System.out.println(actionString);
-			JSONArray actionJSON = (JSONArray) p.parse(actionString);
-
-			// The actions array has only one entry when it is only possible to click one button
-			JSONObject first = (JSONObject) actionJSON.get(0);
-			String message = "";
-			if(first.getAsString("type").equals("button")){
-				String textString = first.getAsString("text");
-				JSONObject textJson = (JSONObject) p.parse(textString);
-				message = textJson.getAsString("text");
-				System.out.println(message);
-			}
-
-			else if (first.getAsString("type").equals("checkboxes")){
-				String selectedOptions = first.getAsString("selected_options");
-				JSONArray textJsonArray = (JSONArray) p.parse(selectedOptions);
-				for(Object o : textJsonArray){
-					JSONObject jo = (JSONObject) o;
-					String textString = jo.getAsString("text");
-					JSONObject textJson = (JSONObject) p.parse(textString);
-					message += textJson.getAsString("text") + ",";
-					System.out.println(message);
-				}
-
-				// Remove last ,
-				message.substring(0, message.length() - 1);
-				System.out.println(message);
-			}
-
-			// TODO submit button
-
-			String intent = "";
-
-
-			// Get the existing participant
-			Participant currParticipant = surveyGlobal.findParticipantByChannel(channel);
-			System.out.println(currParticipant.getChannel());
-
-			//Set the time the participant answered to check later if needed to be reminded to finish survey
-			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
-
-			// Get the next action
-			return currParticipant.calculateNextAction(intent, message);
-
-		} catch(Exception e){
-			e.printStackTrace();
-		}
-
-		response.put("text", "Something went wrong in slackAttachments try block.");
-		return Response.ok().entity(response).build();
-
-	}
-
-
-	@POST
 	@Path("/adminSurvey")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
@@ -483,15 +405,21 @@ public class SurveyHandlerService extends RESTService {
 		try {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String intent = bodyInput.getAsString("intent");
-			String botname = bodyInput.getAsString("botName");
-			Survey currSurvey = getSurveyByBotname(botname);
-			//set up survey, if not yet done
+			String surveyID = bodyInput.getAsString("surveyID");
+			String token = bodyInput.getAsString("slackToken");
+			String msg = bodyInput.getAsString("msg");
+			System.out.println("token is: " + token);
 
+			// find correct survey
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
+
+
+			//set up survey, if not yet done
 			if(Objects.isNull(currSurvey)){
-				System.out.println("No survey exists for bot "+ botname + ". Creating...");
+				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
 				setUpSurvey(input);
 				// See if survey is set up now
-				currSurvey = getSurveyByBotname(botname);
+				currSurvey = getSurveyBySurveyID(surveyID);
 				if (Objects.isNull(currSurvey)){
 					System.out.println("ERROR: Could not set up survey, still null.");
 					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
@@ -508,16 +436,27 @@ public class SurveyHandlerService extends RESTService {
 
 			//TODO: check if rocket chat passes on email of user
 			if (!(bodyInput.getAsString("adminmail").equals(bodyInput.getAsString("email")))) {
-				response.put("text", "only admin is allowed to do that");
-				return Response.ok().entity(response).build();
+				Response res = takingSurvey(input);
+				return res;
 			}
 
 			if (intent.equals("add_participant")) {
 				boolean added = true;
-				// Check if it is a list of emails, then add all of them
-				if(bodyInput.getAsString("msg").contains(",")){
-					for(String s : bodyInput.getAsString("msg").split(",")){
-						Participant newParticipant = new Participant(s);
+
+				if(msg.contains(" ")){
+					// remove all spaces
+					msg.replaceAll(" ","");
+				}
+
+				// Check if it is a list of userids or emails, then add all of them
+				if(msg.contains(",")){
+					for(String email : msg.split(",")){
+						// Check if it is a slack userid
+						if(email.contains("<")){
+							email = getSlackEmailBySlackId(msg, token);
+						}
+						System.out.println("email thats going to be added: " + email);
+						Participant newParticipant = new Participant(email);
 						boolean thisAdded = currSurvey.addParticipant(newParticipant);
 						SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
 						if(!thisAdded){
@@ -526,7 +465,13 @@ public class SurveyHandlerService extends RESTService {
 					}
 				} else{
 					// Only one participant is added
-					Participant newParticipant = new Participant(bodyInput.getAsString("msg"));
+
+					// Check if it is a slack userid
+					if(msg.contains("<")){
+						msg = getSlackEmailBySlackId(msg, token);
+					}
+
+					Participant newParticipant = new Participant(msg);
 					added = currSurvey.addParticipant(newParticipant);
 					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
 					System.out.println(currSurvey.findParticipant(newParticipant.getEmail()));
@@ -545,10 +490,46 @@ public class SurveyHandlerService extends RESTService {
 				response.put("text", "The current answers are: " + currSurvey.getAnswersStringFromAllParticipants());
 				return Response.ok().entity(response).build();
 			}
+			else if(intent.equals("delete_participant")){
+				System.out.println("deleting participant...");
+				// expected form deleteuser: email or userid
+				try{
+					// not the best way to ensure no one gets deleted by accident
+					if(msg.contains("deleteuser: ")){
+						String userIdentificator = msg.split(" ")[1];
+						String email;
+						if(String.valueOf(userIdentificator.charAt(0)).equals("<")){
+							// if its a userID
+							email = getSlackEmailBySlackId(userIdentificator, token);
+						} else{
+							// email
+							email = userIdentificator;
+						}
+						Participant participant = currSurvey.findParticipant(email);
+						if(participant != null){
+							// TODO delete answers in LimeSurvey
+							// TODO delete answers in database (will not be shown if participant is deleted)
+							// remove from database
+							SurveyHandlerServiceQueries.deleteParticipantFromDB(participant, database);
+							currSurvey.deleteParticipant(participant);
+						}
+
+					}
+					response.put("text", "Participant successfully deleted.");
+					return Response.ok().entity(response).build();
+				} catch (Exception exception){
+					exception.printStackTrace();
+					response.put("text", "Deleting participant failed.");
+					return Response.ok().entity(response).build();
+				}
+
+			}
 			else if(intent.equals("start_survey")){
 				String emails = "";
 				for (Participant pa : currSurvey.getParticipants()) {
-					if(!(pa.getEmail().equals("null"))){ //&& !(pa.getParticipantContacted())) {
+					// contact all participants that did not yet get contacted or contacted themselves
+					if(!(pa.isParticipantcontacted())) { //!(pa.getEmail().equals("null") &&
+						System.out.println("inside has email and ");
 						emails += pa.getEmail() + ",";
 						pa.setParticipantcontacted(true);
 					}
@@ -566,7 +547,7 @@ public class SurveyHandlerService extends RESTService {
 					return Response.ok().entity(response).build();
 				}
 				else{
-					response.put("text", "Please add participants to start the survey.");
+					response.put("text", "Please add participants to start the survey. No participants found that have not been contacted yet.");
 					return Response.ok().entity(response).build();
 				}
 
@@ -602,19 +583,33 @@ public class SurveyHandlerService extends RESTService {
 
 		try {
 
-			if(firstStartUp){
-				response.put("text", "Survey is not yet initialized.");
-				return Response.ok().entity(response).build();
-			}
-
-
 			JSONObject bodyInput = (JSONObject) p.parse(input);
-
 			String username = bodyInput.getAsString("NameOfUser");
 			String password = bodyInput.getAsString("Password");
-			String surveyIDString = bodyInput.getAsString("surveyIDString");
-			int surveyID = Integer.parseInt(surveyIDString);
+			String surveyID = bodyInput.getAsString("surveyID");
 			String uri = bodyInput.getAsString("uri");
+
+			// find correct survey
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
+
+			if(Objects.isNull(currSurvey)){
+				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+				setUpSurvey(input);
+				// See if survey is set up now
+				currSurvey = getSurveyBySurveyID(surveyID);
+				if (Objects.isNull(currSurvey)){
+					System.out.println("ERROR: Could not set up survey, still null.");
+					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+					return Response.ok().entity(response).build();
+				}
+
+				if (currSurvey.getSortedQuestionIds().size() == 0) {
+					response.put("text", "There are no questions in this survey.");
+					return Response.ok().entity(response).build();
+				}
+				System.out.println("Survey is set-up.");
+			}
+
 
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
@@ -626,14 +621,12 @@ public class SurveyHandlerService extends RESTService {
 
 			/*
 			// Export the responses
-			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyIDString + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 			JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
 			String response3 = minire3.getAsString("result");
 			 */
-			//TODO: search survey by surveyid or some other unique identifier
-			// Survey currSurvey = getSurveyByBotname()
 
-			for(Participant pa : surveyGlobal.getParticipants()) {
+			for(Participant pa : currSurvey.getParticipants()) {
 				String surveyResponseID;
 
 				String content = pa.getAnswersString();
@@ -645,7 +638,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(surveyResponseID);
 					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\",\"id\":\"" + surveyResponseID + "\"}";
 					System.out.println(contentFilled);
-					String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyIDString + "\"," + contentFilled + "], \"id\": 1}";
+					String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					String response2 = minire2.getAsString("result");
@@ -653,17 +646,15 @@ public class SurveyHandlerService extends RESTService {
 				} else{ // If new response, add new response and return ID
 					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\"}";
 					System.out.println(contentFilled);
-					String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyIDString + "\"," + contentFilled + "], \"id\": 1}";
+					String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					surveyResponseID = minire2.getAsString("result");
 					pa.setSurveyResponseID(surveyResponseID);
+					SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
 					System.out.println(surveyResponseID);
 				}
-
-
 			}
-
 
 			response.put("text", "Passed back results to LimeSurvey.");
 			return Response.ok().entity(response).build();
@@ -703,23 +694,24 @@ public class SurveyHandlerService extends RESTService {
 
 		try{
 			JSONObject bodyInput = (JSONObject) p.parse(input);
+			String surveyID = bodyInput.getAsString("surveyID");
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
 			System.out.println(bodyInput);
 			if(bodyInput.containsKey("reminderAfterHours")){
 				System.out.println("contains Key : " + bodyInput);
 				Integer timeToRemind = Integer.parseInt(bodyInput.getAsString("reminderAfterHours"));
 				System.out.println(timeToRemind);
 				// Get all participants that have not answered for the amount of time
-				for(Participant pa : surveyGlobal.getParticipants()){
+				for(Participant pa : currSurvey.getParticipants()){
 
 					// Only if participant has not already completed the survey
 					if(!pa.isCompletedsurvey()){
-
 						System.out.println(pa.getUnaskedQuestions().size());
 						Integer unSize = pa.getUnaskedQuestions().size();
 						// The last question asked, but not answered is not on the list anymore
 						Integer unansweredQuestions = unSize + 1;
-						Integer allSize = surveyGlobal.getSortedQuestionIds().size();
-						System.out.println(surveyGlobal.getSortedQuestionIds().size());
+						Integer allSize = currSurvey.getSortedQuestionIds().size();
+						System.out.println(currSurvey.getSortedQuestionIds().size());
 
 						LocalDateTime lastDT = LocalDateTime.parse(pa.getLasttimeactive());
 						long hoursDifference = ChronoUnit.HOURS.between(lastDT, LocalDateTime.now());
@@ -727,7 +719,10 @@ public class SurveyHandlerService extends RESTService {
 						//seconds for testing, TODO delete later
 						long secsDifference = ChronoUnit.SECONDS.between(lastDT, LocalDateTime.now());
 						System.out.println("time gone : " + secsDifference + "how long to wait: " + timeToRemind);
-						if(hoursDifference > timeToRemind || secsDifference > timeToRemind){
+						System.out.println("time gone times 2: " + timeToRemind*2);
+						if(hoursDifference > (timeToRemind*2)){
+							// do not remind if already reminded 2 times
+						} else if(hoursDifference > timeToRemind){ // for testing: || secsDifference > timeToRemind
 							// Participant has not started survey
 							if(unSize.equals(allSize)){
 								cList += separator + pa.getEmail();
@@ -765,6 +760,68 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 
+	private String getSlackEmailBySlackId(String userId, String token){
+		System.out.println("inside getSlackEMailbyuserid...");
+		JSONParser p = new JSONParser();
+		System.out.println(userId);
+		//remove <@ and > at the beginning and end
+		if(userId.contains("<")){
+			userId = userId.substring(2, userId.length() - 1);
+		}
+
+		try{
+			// slack api call to get email for user id
+			String urlParameters = "token=" + token + "&user=" + userId;
+			//String urlParameters  = "param1=data1&param2=data2&param3=data3";
+			byte[] postData = urlParameters.getBytes( StandardCharsets.UTF_8 );
+			int postDataLength = postData.length;
+			String request = "https://slack.com/api/users.info";
+			URL url = new URL( request );
+			HttpURLConnection conn= (HttpURLConnection) url.openConnection();
+			conn.setDoOutput(true);
+			conn.setInstanceFollowRedirects(false);
+			conn.setRequestMethod("POST");
+			conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+			conn.setRequestProperty("charset", "utf-8");
+			conn.setRequestProperty("Content-Length", Integer.toString(postDataLength ));
+			conn.setUseCaches(false);
+			try(DataOutputStream wr = new DataOutputStream(conn.getOutputStream())) {
+				wr.write( postData );
+			}
+
+			InputStream stream = conn.getInputStream();
+			BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"), 8);
+			String result = reader.readLine();
+			System.out.println(result);
+
+			/*
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint("https://slack.com/api/users.info");
+			HashMap<String, String> head = new HashMap<String, String>();
+
+			ClientResponse minires = mini.sendRequest("POST", "https://slack.com/api/users.info", "{\"token\":" + token + ", \"user\":" + userId + "}", MediaType.APPLICATION_FORM_URLENCODED, "", head);
+			System.out.println("minires: " + minires.getResponse());
+			String cResult = java.net.URLDecoder.decode(minires.getResponse(), StandardCharsets.UTF_8.name());
+			System.out.println(cResult);
+			 */
+
+			// getting email from json
+			JSONObject resultJ = (JSONObject) p.parse(result);
+			String userS = resultJ.getAsString("user");
+			JSONObject userJson = (JSONObject) p.parse(userS);
+			String profileS = userJson.getAsString("profile");
+			JSONObject profileJson = (JSONObject) p.parse(profileS);
+			String email = profileJson.getAsString("email");
+			System.out.println("email: " + email);
+
+			return email;
+
+		} catch(Exception e){
+			e.printStackTrace();
+			return "";
+		}
+
+	}
 
 
 

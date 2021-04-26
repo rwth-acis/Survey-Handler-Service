@@ -1,10 +1,14 @@
 package i5.las2peer.services.SurveyHandler;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
+import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.StringJoiner;
 
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiResponse;
@@ -12,6 +16,7 @@ import io.swagger.annotations.ApiResponses;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
+import org.glassfish.jersey.server.JSONP;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -50,14 +55,7 @@ public class ServiceTest {
 
 	private static final String mainPath = "SurveyHandler/";
 
-	private static HashMap<String, Boolean> participantContacted = new HashMap<String, Boolean>();
-	private static HashMap<String, Boolean> surveySetUp = new HashMap<String, Boolean>();
-	private static JSONArray questions = new JSONArray();
-	private static ArrayList<String> questionText = new ArrayList<>();
-	private static HashMap<Integer, String> questionTextSub = new HashMap<Integer, String>();
-	private static Integer questionNr = 0;
-	private static Boolean surveyCompleted = false;
-	private static ArrayList<String> answers = new ArrayList<>();
+
 
 	/**
 	 * Called before a test starts.
@@ -154,9 +152,74 @@ public class ServiceTest {
 	}
 
 
+/*
+
+	@Test
+	public void testSendResultsToLimesurvey() {
+		try {
+
+			String urlParameters = "token=xoxb-1627131500899-1875835159892-r288iln4PddzCwPVvRsCyYMj&user=U01JF3ZMPLK";
+			//String urlParameters  = "param1=data1&param2=data2&param3=data3";
+			byte[] postData = urlParameters.getBytes( StandardCharsets.UTF_8 );
+			int postDataLength = postData.length;
+			String request = "https://slack.com/api/users.info";
+			URL url = new URL( request );
+			HttpURLConnection conn= (HttpURLConnection) url.openConnection();
+			conn.setDoOutput(true);
+			conn.setInstanceFollowRedirects(false);
+			conn.setRequestMethod("POST");
+			conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+			conn.setRequestProperty("charset", "utf-8");
+			conn.setRequestProperty("Content-Length", Integer.toString(postDataLength ));
+			conn.setUseCaches(false);
+			try(DataOutputStream wr = new DataOutputStream(conn.getOutputStream())) {
+				wr.write( postData );
+			}
+
+			InputStream stream = conn.getInputStream();
+			BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"), 8);
+			String result = reader.readLine();
+			System.out.println(result);
+
+ */
 
 /*
 
+			JSONParser p = new JSONParser();
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint("https://slack.com/api/users.info");
+			//mini.setLogin(testAgent.getIdentifier(), testPass);
+			HashMap<String, String> head = new HashMap<String, String>();
+			String tok = "\"token\":\"xoxb-1627131500899-1875835159892-r288iln4PddzCwPVvRsCyYMj\"";
+			String u = "\"user\":\"U01JF3ZMPLK\"";
+			System.out.println(tok);
+			System.out.println(u);
+			String contentS ="token=xoxb-1627131500899-1875835159892-r288iln4PddzCwPVvRsCyYMj";
+			System.out.println(contentS);
+			ClientResponse minires = mini.sendRequest("POST", "", contentS, MediaType.APPLICATION_FORM_URLENCODED, MediaType.MEDIA_TYPE_WILDCARD, head);
+			System.out.println("minires: " + minires);
+			String cResult = java.net.URLDecoder.decode(minires.getResponse(), StandardCharsets.UTF_8.name());
+			System.out.println(cResult);
+
+
+			JSONParser p = new JSONParser();
+			JSONObject resultJ = (JSONObject) p.parse(result);
+			String userS = resultJ.getAsString("user");
+			JSONObject userJson = (JSONObject) p.parse(userS);
+			String profileS = userJson.getAsString("profile");
+			JSONObject profileJson = (JSONObject) p.parse(profileS);
+			String email = profileJson.getAsString("email");
+			System.out.println(email);
+		} catch (Exception e) {
+			e.printStackTrace();
+			Assert.fail(e.toString());
+		}
+	}
+
+ */
+
+
+/*
 	@Test
 	public void testSendResultsToLimesurvey() {
 		try {
@@ -164,7 +227,7 @@ public class ServiceTest {
 			client.setConnectorEndpoint(connector.getHttpEndpoint());
 			client.setLogin(testAgent.getIdentifier(), testPass);
 
-			ClientResponse result = client.sendRequest("POST", mainPath + "sendResultsToLimesurvey", "");
+			ClientResponse result = client.sendRequest("POST", mainPath + "takingSurvey", "");
 			Assert.assertEquals(200, result.getHttpCode());
 			Assert.assertEquals("adam", result.getResponse().trim());// YOUR RESULT VALUE HERE
 			System.out.println("Result of 'testGet': " + result.getResponse().trim());
@@ -175,14 +238,24 @@ public class ServiceTest {
 	}
 
 
+ */
+
+/*
+
+	// If its not the admin, the intent was parsed wrong, so pass on to takingSurvey
+	MiniClient mini = new MiniClient();
+				mini.setConnectorEndpoint("SurveyHandler/takingSurvey");
+	HashMap<String, String> head = new HashMap<String, String>();
+
+	ClientResponse miniCR = mini.sendRequest("POST", "", input, MediaType.APPLICATION_JSON, "", head);
+	JSONObject miniJ = (JSONObject) p.parse(miniCR.getResponse());
+	String responseS = miniJ.getAsString("response");
+				response.put("text", responseS);
+				return Response.ok().entity(response).build();
+
 
 
  */
-
-
-
-
-
 
 
 

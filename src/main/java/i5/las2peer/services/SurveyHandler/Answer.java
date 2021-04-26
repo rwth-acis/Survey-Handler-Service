@@ -7,11 +7,12 @@ public class Answer {
     public String qid;
     public String gid;
     public String text;
+    public String comment;
     public boolean skipped;
     // end Database model identifier
 
     public Answer(){
-
+        this.comment = "";
     }
 
     // TODO
@@ -21,6 +22,14 @@ public class Answer {
 
     public boolean isSkipped() {
         return skipped;
+    }
+
+    public String getComment() {
+        return comment;
+    }
+
+    public void setComment(String comment) {
+        this.comment = comment;
     }
 
     public void setSkipped(boolean skipped) {

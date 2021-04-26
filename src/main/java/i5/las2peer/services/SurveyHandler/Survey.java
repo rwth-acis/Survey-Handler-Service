@@ -15,7 +15,6 @@ public class Survey {
     // Database model identifier
     private String sid;
     private String adminmail;
-    private String botname;
     private String expires;
     private String title;
     SQLDatabase database;
@@ -35,14 +34,6 @@ public class Survey {
 
     public void setAdminmail(String adminmail) {
         this.adminmail = adminmail;
-    }
-
-    public String getBotname() {
-        return botname;
-    }
-
-    public void setBotname(String botname) {
-        this.botname = botname;
     }
 
     public SQLDatabase getDatabase() {
@@ -151,6 +142,7 @@ public class Survey {
         HashMap<String, Question> questionsHM = new HashMap<>();
         for (Question teQ : QuestionAl) {
             questionsHM.put(teQ.getQid(), teQ);
+
             if(teQ.isSubquestion()){
                 subQuestionAl.add(teQ);
                 continue;
@@ -219,9 +211,12 @@ public class Survey {
                 // No answer for this question, so add it to unasked questions. Order is correct, if the ArrayList was sorted beforehand
                 // exclude question with qid of lastquestion, because it was already asked
                 System.out.println("No answer found for question "+ tempQ.getQid());
-                if(!p.getLastquestion().equals(tempQ.getQid())) {
+                if(p.getLastquestion() == null) {
                     p.addUnaskedQuestion(tempQ.getQid(), false);
-                } else {
+                } else if(!p.getLastquestion().equals(tempQ.getQid())){
+                    p.addUnaskedQuestion(tempQ.getQid(), false);
+                }
+                else {
                     System.out.println("Not adding lastquestion to unasked questions.");
                 }
             }
@@ -348,6 +343,17 @@ public class Survey {
             }
         }
         return null;
+    }
+
+    public void deleteParticipant(Participant p){
+        try{
+            System.out.println("Removing participant " + p.getEmail() + "...");
+            this.participants.remove(p);
+            System.out.println("Participant removed.");
+        } catch(Exception e){
+            System.out.println("Removing participant failed.");
+        }
+
     }
 
     public Participant findParticipantByChannel(String channel){

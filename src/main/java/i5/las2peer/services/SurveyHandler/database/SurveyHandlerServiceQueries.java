@@ -1,10 +1,7 @@
 package i5.las2peer.services.SurveyHandler.database;
 
 import com.google.common.collect.Lists;
-import i5.las2peer.services.SurveyHandler.Answer;
-import i5.las2peer.services.SurveyHandler.Participant;
-import i5.las2peer.services.SurveyHandler.Question;
-import i5.las2peer.services.SurveyHandler.Survey;
+import i5.las2peer.services.SurveyHandler.*;
 
 import java.sql.Array;
 import java.sql.Connection;
@@ -12,6 +9,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+
 import net.minidev.json.JSONArray;
 
 public class SurveyHandlerServiceQueries {
@@ -19,7 +18,8 @@ public class SurveyHandlerServiceQueries {
     public static final ArrayList<String> requiredTables = new ArrayList<String>(Arrays.asList("surveys",
                                                                                         "questions",
                                                                                         "participants",
-                                                                                        "answers"));
+                                                                                        "answers",
+                                                                                        "answeroptions"));
 
     // utility functions
     public static boolean tablesExist(String tableName, SQLDatabase database){
@@ -88,7 +88,6 @@ public class SurveyHandlerServiceQueries {
                 case "surveys":
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "adminmail VARCHAR(50) NOT NULL,";
-                    query += "botname VARCHAR(256) NOT NULL,";
                     query += "expires VARCHAR(50),";
                     query += "title VARCHAR(50) NOT NULL";
                     break;
@@ -101,6 +100,7 @@ public class SurveyHandlerServiceQueries {
                     query += "qorder VARCHAR(50) NOT NULL,";
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "help VARCHAR(50),";
+                    query += "code VARCHAR(50),";
                     query += "relevance VARCHAR(50) NOT NULL";
                     break;
                 case "participants":
@@ -119,8 +119,15 @@ public class SurveyHandlerServiceQueries {
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "qid VARCHAR(50) NOT NULL,";
                     query += "gid VARCHAR(50) NOT NULL,";
-                    query += "text VARCHAR(500),"; // Huge free text is answer option by limesurvey
+                    query += "text VARCHAR(700),"; // Huge free text is answer option by limesurvey
+                    query += "comment VARCHAR(256),";
                     query += "isskipped BOOL";
+                    break;
+                case "answeroptions":
+                    query += "sid VARCHAR(50) NOT NULL,";
+                    query += "qid VARCHAR(50) NOT NULL,";
+                    query += "indexi INTEGER NOT NULL,";
+                    query += "text VARCHAR(700) NOT NULL";
                     break;
 
                 default:
@@ -151,9 +158,6 @@ public class SurveyHandlerServiceQueries {
             return false;
         }
     }
-    public static String getParticipantModel(){
-        return "select ";
-    }
 
 
     // database collection access
@@ -180,6 +184,9 @@ public class SurveyHandlerServiceQueries {
             ArrayList<Question> allQ = new ArrayList<>();
             while(!rs.isAfterLast()){
                 Question tempQ = SurveyHandlerServiceQueries.castToQuestion(rs);
+                // now initializing all answeroptions from db
+                getAnswerOptionsForQuestionFromDB(tempQ, database);
+
                 allQ.add(tempQ);
                 System.out.println("Found and added question with id: " + tempQ.getQid());
                 rs.next();
@@ -337,20 +344,62 @@ public class SurveyHandlerServiceQueries {
 
         return null;
     }
+    public static void getAnswerOptionsForQuestionFromDB(Question q, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String sid = q.getSid();
+            String qid = q.getQid();
+
+            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, sid);
+            ps.setString(2, qid);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (!rs.first()){
+                System.out.println("No answeroptions found for question " + qid + " and survey " + sid);
+                ps.close();
+                con.close();
+            } else{
+                System.out.println("Found answeroptions in database.");
+            }
+
+            HashMap<Integer, String> answerOptionsHM = new HashMap<>();
+
+            while(!rs.isAfterLast()){
+                String sidDB = rs.getString("sid");
+                String qidDB = rs.getString("qid");
+                Integer indexDB = rs.getInt("indexi");
+                String textDB = rs.getString("text");
+
+                q.getAnswerOptionsStringAl().put(indexDB, textDB);
+
+                System.out.println("Found and added answeroptions for question with id: " + q.getQid());
+                rs.next();
+            }
+
+            ps.close();
+            con.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     // getting objects from database
     public static Survey castToSurvey(ResultSet rs){
         try{
             String sid = rs.getString("sid");
             String adminmail = rs.getString("adminmail");
-            String botname = rs.getString("botname");
             String expires = rs.getString("expires");
             String title = rs.getString("title");
 
 
             Survey res = new Survey(sid);
             res.setAdminmail(adminmail);
-            res.setBotname(botname);
             res.setExpires(expires);
             res.setTitle(title);
 
@@ -371,6 +420,7 @@ public class SurveyHandlerServiceQueries {
             String qorder = rs.getString("qorder");
             String sid = rs.getString("sid");
             String help = rs.getString("help");
+            String code = rs.getString("code");
             String relevance = rs.getString("relevance");
 
             Question res = new Question();
@@ -382,6 +432,7 @@ public class SurveyHandlerServiceQueries {
             res.setQorder(qorder);
             res.setSid(sid);
             res.setHelp(help);
+            res.setCode(code);
             res.setRelevance(relevance);
             return res;
 
@@ -426,6 +477,7 @@ public class SurveyHandlerServiceQueries {
             String qid = rs.getString("qid");
             String gid = rs.getString("gid");
             String text = rs.getString("text");
+            String comment = rs.getString("comment");
             boolean isskipped = rs.getBoolean("isskipped");
 
             Answer res = new Answer();
@@ -434,6 +486,7 @@ public class SurveyHandlerServiceQueries {
             res.setQid(qid);
             res.setGid(gid);
             res.setText(text);
+            res.setComment(comment);
             res.setSkipped(isskipped);
             return res;
 
@@ -449,13 +502,12 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO surveys(sid, adminmail, botname, expires, title) VALUES (?, ?, ?, ?, ?)";
+            String query = "INSERT INTO surveys(sid, adminmail, expires, title) VALUES (?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, s.getSid());
             ps.setString(2, s.getAdminmail());
-            ps.setString(3,s.getBotname());
-            ps.setString(4,s.getExpires());
-            ps.setString(5,s.getTitle());
+            ps.setString(3,s.getExpires());
+            ps.setString(4,s.getTitle());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -479,7 +531,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, sid, help, relevance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, sid, help, code, relevance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, q.getQid());
             ps.setString(2, q.getText());
@@ -489,12 +541,17 @@ public class SurveyHandlerServiceQueries {
             ps.setString(6, q.getQorder());
             ps.setString(7, q.getSid());
             ps.setString(8, q.getHelp());
-            ps.setString(9, q.getRelevance());
+            ps.setString(9, q.getCode());
+            ps.setString(10, q.getRelevance());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
             if (rs > 0){
                 inserted = true;
+            }
+
+            if(q.getAnswerOptionsStringAl().size() > 0){
+                addAnsweroptionsToDB(q, database);
             }
 
             ps.close();
@@ -548,14 +605,15 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO answers(pid, sid, qid, gid, text, isskipped) VALUES (?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO answers(pid, sid, qid, gid, text, comment, isskipped) VALUES (?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, answer.getPid());
             ps.setString(2, answer.getSid());
             ps.setString(3, answer.getQid());
             ps.setString(4, answer.getGid());
             ps.setString(5, answer.getText());
-            ps.setBoolean(6, answer.isSkipped());
+            ps.setString(6, answer.getComment());
+            ps.setBoolean(7, answer.isSkipped());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -570,6 +628,39 @@ public class SurveyHandlerServiceQueries {
         } catch (Exception e){
             e.printStackTrace();
             System.out.println("Could not add question.");
+            return false;
+        }
+    }
+
+    public static boolean addAnsweroptionsToDB(Question q, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+            boolean inserted = false;
+
+            // Integer in answeroptionsstringal starts at 1
+            for(int i = 1; i < q.getAnswerOptionsStringAl().size() + 1; i++){
+                String query = "INSERT INTO answeroptions(sid, qid, indexi, text) VALUES (?, ?, ?, ?)";
+                ps = con.prepareStatement(query);
+                ps.setString(1, q.getSid());
+                ps.setString(2, q.getQid());
+                ps.setInt(3, i);
+                ps.setString(4, q.getAnswerOptions(i));
+
+                int rs = ps.executeUpdate();
+
+                if (rs > 0){
+                    inserted = true;
+                }
+            }
+
+            ps.close();
+            con.close();
+            return inserted;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not add answeroptions for question.");
             return false;
         }
     }
@@ -615,7 +706,7 @@ public class SurveyHandlerServiceQueries {
 
         } catch (Exception e){
             e.printStackTrace();
-            System.out.println("Could not add question.");
+            System.out.println("Could not update participant.");
             return false;
         }
     }
@@ -660,5 +751,45 @@ public class SurveyHandlerServiceQueries {
         }
 
         return null;
+    }
+
+
+    // delete functions
+    public static boolean deleteParticipantFromDB(Participant p, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM participants WHERE pid = ? AND sid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, p.getPid());
+            ps.setString(2, p.getSid());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the participant, so deleting the entry
+                ps.close();
+                ps = con.prepareStatement("DELETE FROM participants WHERE sid = ? AND pid = ?");
+
+                ps.setString(1, p.getSid());
+                ps.setString(2,p.getPid());
+
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find participant in database. Could not delete.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not delete participant.");
+            return false;
+        }
     }
 }

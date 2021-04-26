@@ -60,15 +60,15 @@ Since the las2peersocial-bot-manager-service uses RTM, a classic app, instead of
 
 - Action Type: Service, Function Name: takingSurvey.
   
-    This bot action needs the following action parameters: (all Content Type: String and Parameter Type: body)
+    This bot action needs the following action parameters: (all Content Type: String, Static and Parameter Type: body)
     
     * Name: NameOfUser and Content: the username of your "https://limesurvey.tech4comp.dbis.rwth-aachen.de/" account;   
     * Name: Password and Content: the password of your limesurvey account; 
-    * Name: surveyIDString and Content: The surveyID of the survey you want to conduct. You can find this by logging into your limesurvey account and then clicking on "List surveys". In the survey list you will see on the very left side the Survey ID.
+    * Name: surveyID and Content: The surveyID of the survey you want to conduct. You can find this by logging into your limesurvey account and then clicking on "List surveys". In the survey list you will see on the very left side the Survey ID.
 
--Action Type: Service, Function Name: adminSurvey
+- Action Type: Service, Function Name: adminSurvey
 
-- this bot action enables you as the admin to add participants to the survey, to start the survey and to see all answers from the participants. The bot action needs the following action parameters:
+    This bot action enables you as the admin to add participants to the survey, to start the survey and to see all answers from the participants. The bot action needs the following action parameters:
     * Name: adminmail and Content: the email of the admin user (Content Type: String and Parameter Type: body)
 
 

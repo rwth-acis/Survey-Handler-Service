@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 
+import java.util.regex.*;
+
 public class Participant {
 
     // Database model identifier
@@ -22,6 +24,8 @@ public class Participant {
     private boolean participantcontacted;
     private boolean completedsurvey;
     // end Database model identifier
+
+    String allChosen = "";
 
     private ArrayList<Answer> givenAnswersAl = new ArrayList<>();
     private ArrayList<String> unaskedQuestions = new ArrayList<>();
@@ -40,7 +44,7 @@ public class Participant {
     }
 
     // Based on the intent, decide what is sent back to the participant
-    public Response calculateNextAction(String intent, String message){
+    public Response calculateNextAction(String intent, String message, String buttonIntent){
         int questionsInSUrvey = this.currentSurvey.getSortedQuestions().size();
         String welcomeString = "Would you like to start the survey \"" + currentSurvey.getTitle() + "\"? There are " + questionsInSUrvey + " questions in this survey.";
         String explanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
@@ -48,6 +52,7 @@ public class Participant {
         String surveyDoneString = "Thank you for completing this survey.";
         JSONObject response = new JSONObject();
         Participant currParticipant = this;
+
         System.out.println("calculating next action...");
         // Participant has not started the survey yet
         if(!(this.participantcontacted)){
@@ -68,24 +73,73 @@ public class Participant {
         System.out.println("last question is: " + this.lastquestion);
 
         if(this.lastquestion != null){
-
             System.out.println("last question is not null recognized");
             Answer newAnswer = new Answer();
-            newAnswer.setGid(this.currentSurvey.getQuestionByQid(this.lastquestion).getGid());
+            Question lastQuestion = this.currentSurvey.getQuestionByQid(this.lastquestion);
+            newAnswer.setGid(lastQuestion.getGid());
             newAnswer.setPid(this.getPid());
             newAnswer.setSid(this.getSid());
             newAnswer.setSkipped(true);
             newAnswer.setQid(this.lastquestion);
+
+            System.out.println("intent is: " + intent);
+            System.out.println("buttonintent is: " + buttonIntent);
+            System.out.println("all chosen: " + this.allChosen);
+
             // Participant wants to skip a question
             if(intent.equals("skip")){
                 this.skippedQuestions.add(this.lastquestion);
+            } else if(intent.equals(buttonIntent)){
+                // check if last question was mulitple choice, to wait for all answers
+                if(!(lastQuestion.getSubquestionAl().isEmpty()) && message.equals("Submit")){
+                    // submit button of multiple choice question sent
+                    // add all chosen options to answers
+                    System.out.println("all chosen: " + this.allChosen);
+                    this.addAnswer(this.lastquestion, this.allChosen, false);
+                    newAnswer.setSkipped(false);
+                    newAnswer.setText(this.allChosen);
+
+                } else if(!(lastQuestion.getSubquestionAl().isEmpty())){
+                    // it is an answer to multiple choice question, but submit button was not pressed yet
+                    // adding answer options to allChosen, to save for later
+                    // message contains all currently checked answers
+                    this.allChosen = message;
+                    System.out.println("not an answer, so retuning null to wait for submit button. Current answers: " + this.allChosen);
+                    return null;
+                } else if(lastQuestion.getType().equals(Question.qType.SINGLECHOICECOMMENT.toString())){
+                    System.out.println("inside type single choice comments. Actual type: " + lastQuestion.getType());
+                    // last question was not multiple choice, but single choice and requires a comment
+                    this.allChosen = message;
+                    return null;
+                } else{
+                    // Check if mask question type Gender or Yes/No question
+                    System.out.println("lastQuestionType: " + lastQuestion.getType() + " and message: " + message);
+                    if(lastQuestion.getType().equals("G") || lastQuestion.getType().equals("Y")){
+                        this.addAnswer(this.lastquestion, message.substring(0,1), false);
+                        newAnswer.setSkipped(false);
+                        newAnswer.setText(message.substring(0,1));
+                    }
+                    // adding normal button answer
+                    this.addAnswer(this.lastquestion, message, false);
+                    newAnswer.setSkipped(false);
+                    newAnswer.setText(message);
+                }
             } else{
-                Question lQuestion = this.currentSurvey.getQuestionByQid(this.lastquestion);
-                // String qType = lQuestion.getType();
-                this.addAnswer(this.lastquestion, message);
-                newAnswer.setSkipped(false);
-                newAnswer.setText(message);
+                // Check if a button message needs to be saved as well
+                if(this.allChosen.length() > 0){
+                    this.addAnswer(this.lastquestion, this.allChosen, false);
+                    newAnswer.setComment(message);
+                    newAnswer.setText(this.allChosen);
+                    newAnswer.setSkipped(false);
+                    this.addAnswer(this.lastquestion, message, true);
+                } else{
+                    // adding normal answer
+                    this.addAnswer(this.lastquestion, message, false);
+                    newAnswer.setSkipped(false);
+                    newAnswer.setText(message);
+                }
             }
+
             System.out.println("saving new answer to database");
             SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
         } else{
@@ -93,7 +147,6 @@ public class Participant {
             // do not add confirmation to start survey to answers
             // TODO check for confirmation to start survey
         }
-
 
         // Calculate next question to ask
 
@@ -112,7 +165,7 @@ public class Participant {
     }
 
     private Response AskNextQuestion(){
-
+        boolean newQuestionGroup = false;
         JSONObject response = new JSONObject();
         // Check if logic applies to next question
 
@@ -120,12 +173,22 @@ public class Participant {
         if (this.unaskedQuestions.size() >0){
             System.out.println("Found unasked questions. Next one is: " + this.unaskedQuestions.get(0));
             String nextId = this.unaskedQuestions.get(0);
+
+
+            if(this.lastquestion != null){
+                // Lastquestion is null, because no question was asked yet
+                if(!this.currentSurvey.getQuestionByQid(this.lastquestion).getGid().equals(this.currentSurvey.getQuestionByQid(nextId).getGid())){
+                    System.out.println("new questiongroup");
+                    newQuestionGroup = true;
+                }
+            }
+
             this.unaskedQuestions.remove(0);
             this.lastquestion = nextId;
             System.out.println("setting last question to new question id");
             // update last question in database
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-            String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString();
+            String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString(newQuestionGroup, this);
 
             // If it is starting with "[" it is a block question
             if(Character.toString(messageText.charAt(0)).equals("[")){
@@ -143,7 +206,7 @@ public class Participant {
             this.skippedQuestions.remove(0);
             this.lastquestion = nextId;
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-            String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString();
+            String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString(this);
             messageText = "This question was skipped by you, you can answer now or skip again: \n"+ messageText;
             response.put("text", messageText);
             return Response.ok().entity(response).build();
@@ -311,10 +374,10 @@ public class Participant {
         this.skippedQuestions.remove(questionID);
     }
 
-    public void addAnswer(String questionID, String answer){
+    public void addAnswer(String questionID, String answer, boolean comment){
         //HashMap<String, String> subQs = new HashMap<>();
         Question currQuestion = this.currentSurvey.getQuestionByQid(questionID);
-        this.answers.putAll(currQuestion.createAnswerHashMap(answer));
+        this.answers.putAll(currQuestion.createAnswerHashMap(answer, comment));
     }
 
     public void removeAnswer(String questionID){
@@ -333,13 +396,16 @@ public class Participant {
         // check if the answer was skipped
         if (a.isSkipped()){
             this.addSkippedQuestion(a.getQid());
-        } else {
+        } else if(a.getComment().length() > 0){
             this.addAnswer(a);
-            this.addAnswer(a.getQid(),a.getText());
+            this.addAnswer(a.getQid(), a.getText(), true);
+        } else{
+            this.addAnswer(a);
+            this.addAnswer(a.getQid(),a.getText(), false);
         }
     }
 
-    //public HashMap<String, String> formatAnswer(String qid, )
+
 
     @Override
     public String toString() {
