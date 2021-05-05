@@ -89,17 +89,18 @@ public class SurveyHandlerServiceQueries {
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "adminmail VARCHAR(50) NOT NULL,";
                     query += "expires VARCHAR(50),";
-                    query += "title VARCHAR(50) NOT NULL";
+                    query += "startdt VARCHAR(50),";
+                    query += "title VARCHAR(100) NOT NULL";
                     break;
                 case "questions":
                     query += "qid VARCHAR(50) NOT NULL,";
-                    query += "text VARCHAR(50) NOT NULL,";
+                    query += "text VARCHAR(500) NOT NULL,";
                     query += "type VARCHAR(50) NOT NULL,";
                     query += "parentqid VARCHAR(50),";
                     query += "gid VARCHAR(50) NOT NULL,";
                     query += "qorder VARCHAR(50) NOT NULL,";
                     query += "sid VARCHAR(50) NOT NULL,";
-                    query += "help VARCHAR(50),";
+                    query += "help VARCHAR(500),";
                     query += "code VARCHAR(50),";
                     query += "relevance VARCHAR(50) NOT NULL";
                     break;
@@ -121,6 +122,11 @@ public class SurveyHandlerServiceQueries {
                     query += "gid VARCHAR(50) NOT NULL,";
                     query += "text VARCHAR(700),"; // Huge free text is answer option by limesurvey
                     query += "comment VARCHAR(256),";
+                    query += "dtanswered VARCHAR(50),";
+                    query += "messagets VARCHAR(50),";
+                    query += "prevmessagets VARCHAR(50),";
+                    query += "commentts VARCHAR(50),";
+                    query += "finalized BOOL,";
                     query += "isskipped BOOL";
                     break;
                 case "answeroptions":
@@ -363,6 +369,7 @@ public class SurveyHandlerServiceQueries {
                 System.out.println("No answeroptions found for question " + qid + " and survey " + sid);
                 ps.close();
                 con.close();
+                return;
             } else{
                 System.out.println("Found answeroptions in database.");
             }
@@ -395,12 +402,14 @@ public class SurveyHandlerServiceQueries {
             String sid = rs.getString("sid");
             String adminmail = rs.getString("adminmail");
             String expires = rs.getString("expires");
+            String startdt = rs.getString("startdt");
             String title = rs.getString("title");
 
 
             Survey res = new Survey(sid);
             res.setAdminmail(adminmail);
             res.setExpires(expires);
+            res.setStartDT(startdt);
             res.setTitle(title);
 
             return res;
@@ -426,7 +435,7 @@ public class SurveyHandlerServiceQueries {
             Question res = new Question();
             res.setQid(qid);
             res.setGid(gid);
-            res.setParentqid(parentqid);
+            res.setParentQid(parentqid);
             res.setText(text);
             res.setType(type);
             res.setQorder(qorder);
@@ -478,6 +487,11 @@ public class SurveyHandlerServiceQueries {
             String gid = rs.getString("gid");
             String text = rs.getString("text");
             String comment = rs.getString("comment");
+            String dtanswered = rs.getString("dtanswered");
+            String messagets = rs.getString("messagets");
+            String prevmessagets = rs.getString("prevmessagets");
+            String commentts = rs.getString("commentts");
+            boolean finalized = rs.getBoolean("finalized");
             boolean isskipped = rs.getBoolean("isskipped");
 
             Answer res = new Answer();
@@ -487,6 +501,11 @@ public class SurveyHandlerServiceQueries {
             res.setGid(gid);
             res.setText(text);
             res.setComment(comment);
+            res.setDtanswered(dtanswered);
+            res.setMessageTs(messagets);
+            res.setPrevMessageTs(prevmessagets);
+            res.setCommentTs(commentts);
+            res.setFinalized(finalized);
             res.setSkipped(isskipped);
             return res;
 
@@ -502,12 +521,13 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO surveys(sid, adminmail, expires, title) VALUES (?, ?, ?, ?)";
+            String query = "INSERT INTO surveys(sid, adminmail, expires, startdt, title) VALUES (?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, s.getSid());
             ps.setString(2, s.getAdminmail());
             ps.setString(3,s.getExpires());
-            ps.setString(4,s.getTitle());
+            ps.setString(4,s.getStartDT());
+            ps.setString(5,s.getTitle());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -536,7 +556,7 @@ public class SurveyHandlerServiceQueries {
             ps.setString(1, q.getQid());
             ps.setString(2, q.getText());
             ps.setString(3, q.getType());
-            ps.setString(4, q.getParentqid());
+            ps.setString(4, q.getParentQid());
             ps.setString(5, q.getGid());
             ps.setString(6, q.getQorder());
             ps.setString(7, q.getSid());
@@ -605,7 +625,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO answers(pid, sid, qid, gid, text, comment, isskipped) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO answers(pid, sid, qid, gid, text, comment, dtanswered, messagets, prevmessagets, commentts, finalized, isskipped) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, answer.getPid());
             ps.setString(2, answer.getSid());
@@ -613,7 +633,12 @@ public class SurveyHandlerServiceQueries {
             ps.setString(4, answer.getGid());
             ps.setString(5, answer.getText());
             ps.setString(6, answer.getComment());
-            ps.setBoolean(7, answer.isSkipped());
+            ps.setString(7, answer.getDtanswered());
+            ps.setString(8, answer.getMessageTs());
+            ps.setString(9, answer.getPrevMessageTs());
+            ps.setString(10, answer.getCommentTs());
+            ps.setBoolean(11, answer.isFinalized());
+            ps.setBoolean(12, answer.isSkipped());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -711,6 +736,51 @@ public class SurveyHandlerServiceQueries {
         }
     }
 
+    public static boolean updateAnswerInDB(Answer a, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM answers WHERE messagets = ? AND sid = ? AND qid = ? AND pid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, a.getPrevMessageTs());
+            ps.setString(2, a.getSid());
+            ps.setString(3, a.getQid());
+            ps.setString(4, a.getPid());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the answer, so update the entry
+                ps.close();
+                ps = con.prepareStatement("UPDATE answers SET messagets = ?, text = ?, commentts = ?, comment = ? WHERE messagets = ? AND sid = ? AND qid = ? AND pid = ?");
+                ps.setString(1, a.getMessageTs());
+                ps.setString(2, a.getText());
+                ps.setString(3, a.getCommentTs());
+                ps.setString(4, a.getComment());
+                // where clause
+                ps.setString(5, a.getPrevMessageTs());
+                ps.setString(6, a.getSid());
+                ps.setString(7, a.getQid());
+                ps.setString(8, a.getPid());
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find answer in database. Could not update.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not update answer.");
+            return false;
+        }
+    }
+
     // helper functions to initialize objects
 
     public static ArrayList<String> getSubquestionIds(String qid, String sid, SQLDatabase database){
@@ -789,6 +859,48 @@ public class SurveyHandlerServiceQueries {
         } catch (Exception e){
             e.printStackTrace();
             System.out.println("Could not delete participant.");
+            return false;
+        }
+    }
+
+    public static boolean deleteAnswerFromDB(Answer a, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM answers WHERE sid = ? AND pid = ? AND qid = ? AND finalized = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, a.getSid());
+            ps.setString(2, a.getPid());
+            ps.setString(3, a.getQid());
+            ps.setBoolean(4, a.isFinalized());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the answer, so deleting the entry
+                ps.close();
+                ps = con.prepareStatement("DELETE FROM answers WHERE sid = ? AND pid = ? AND qid = ? AND finalized = ?");
+
+                ps.setString(1, a.getSid());
+                ps.setString(2, a.getPid());
+                ps.setString(3, a.getQid());
+                ps.setBoolean(4, a.isFinalized());
+
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find answer in database. Could not delete.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not delete answer.");
             return false;
         }
     }

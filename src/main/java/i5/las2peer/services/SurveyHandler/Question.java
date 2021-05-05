@@ -3,6 +3,8 @@ package i5.las2peer.services.SurveyHandler;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -22,12 +24,43 @@ public class Question{
     // end Database model identifier
 
     public static enum qType{
-        // TODO use enum for all types
-        SINGLECHOICECOMMENT("O");
+        SINGLECHOICECOMMENT("O"),
+        MULTIPLECHOICENOCOMMENT("M"),
+        MULTIPLECHOICEWITHCOMMENT("P"),
+        LISTDROPDOWN("!"),
+        LISTRADIO("L"),
+        GENDER("G"),
+        YESNO("Y"),
+        DATETIME("D"),
+        TEXTDISPLAY("X"),
+        NUMERICALINPUT("N"),
+        FILEUPLOAD("|"),
+        FIVESCALE("5"),
+        LONGFREETEXT("T"),
+        SHORTFREETEXT("S"),
+        HUGEFREETEXT("U");
 
         private final String name;
+        private final int maxLength;
         private qType(String name){
             this.name= name;
+            // TODO find correct values
+            if(this.name.equals("T")){
+                this.maxLength = 500;
+            }
+            else if(this.name.equals("U")){
+                this.maxLength = 700;
+            }
+            else if(this.name.equals("S")){
+                this.maxLength = 100;
+            }
+            else{
+                this.maxLength = 700;
+            }
+        }
+
+        public int getMaxLength(){
+            return this.maxLength;
         }
 
         @Override
@@ -48,7 +81,7 @@ public class Question{
     public void initData(JSONObject q) throws Exception{
         JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
         this.qid = q.getAsString("qid");
-        this.setParentqid(q.getAsString("parent_qid"));
+        this.setParentQid(q.getAsString("parent_qid"));
         this.gid = q.getAsString("gid");
         this.qorder = q.getAsString("question_order");
         this.text = q.getAsString("question");
@@ -129,11 +162,7 @@ public class Question{
         this.code = code;
     }
 
-    public String getParentqid() {
-        return parentqid;
-    }
-
-    public void setParentqid(String parentqid) {
+    public void setParentQid(String parentqid) {
         this.parentqid = parentqid;
         if (Integer.parseInt(this.parentqid) > 0){
             this.isSubquestion = true;
@@ -203,8 +232,9 @@ public class Question{
         int index = 1;
 
         String questionText = this.text;
+        int questionsLeft = participant.getUnaskedQuestions().size() + 1;
         // +1 because the question that is about to be sent is already removed from the list
-        String newQGroupText = "You completed a question group. There are " + participant.getUnaskedQuestions().size() + 1 + " questions left.\n";
+        String newQGroupText = "You completed a question group. There are " + questionsLeft + " questions left.\n";
         if(newQuestionGroup){
             questionText = newQGroupText + questionText;
         }
@@ -214,7 +244,7 @@ public class Question{
             subString += "{\n" +
                     "\"text\": {\n" +
                     "\"type\": \"plain_text\",\n" +
-                    "\"text\": " + questionText + ",\n" +
+                    "\"text\":\"" + questionText + "\",\n" +
                     "\"emoji\": true\n" +
                     "},\n" +
                     "\"value\": " + this.qid + "\n" +
@@ -323,7 +353,55 @@ public class Question{
                 break;
             case "5":
                 System.out.println("5 point choice");
-                resString += " Please rate on a scale of 1 to 5.";
+                resString = "[\n" +
+                        "\t\t{\n" +
+                        "\t\t\t\"type\": \"section\",\n" +
+                        "\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\"text\":\"" + questionText + "\"\n" +
+                        "\t\t\t}\n" +
+                        "\t\t},\n" +
+                        "\t\t{\n" +
+                        "\t\t\t\"type\": \"actions\",\n" +
+                        "\t\t\t\"elements\": [\n" +
+                        "\t\t\t\t{\n" +
+                        "\t\t\t\t\t\"type\": \"button\",\n" +
+                        "\t\t\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\t\t\"text\": \"1\"\n" +
+                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t},\n" +
+                        "\t\t\t\t{\n" +
+                        "\t\t\t\t\t\"type\": \"button\",\n" +
+                        "\t\t\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\t\t\"text\": \"2\"\n" +
+                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t},\n" +
+                        "\t\t\t\t{\n" +
+                        "\t\t\t\t\t\"type\": \"button\",\n" +
+                        "\t\t\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\t\t\"text\": \"3\"\n" +
+                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t},\n" +
+                        "\t\t\t\t{\n" +
+                        "\t\t\t\t\t\"type\": \"button\",\n" +
+                        "\t\t\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\t\t\"text\": \"4\"\n" +
+                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t},\n" +
+                        "\t\t\t\t{\n" +
+                        "\t\t\t\t\t\"type\": \"button\",\n" +
+                        "\t\t\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\t\t\"text\": \"5\"\n" +
+                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t}\n" +
+                        "\t\t\t]\n" +
+                        "\t\t}\n" +
+                        "\t]";
                 break;
         }
 
@@ -374,14 +452,18 @@ public class Question{
 
 
         //check if single choice question
-        if((this.answerOptionsStringAl.size() > 0 && this.type.equals("!")) || (this.answerOptionsStringAl.size() > 0 && this.type.equals("O"))) {
+        if((this.answerOptionsStringAl.size() > 0 && this.type.equals("L")) || (this.answerOptionsStringAl.size() > 0 && this.type.equals("O")) || this.answerOptionsStringAl.size() > 0 && this.type.equals("!")) {
+            String askForComment = "";
+            if(this.type.equals("O")){
+                askForComment = " Please write a comment for your chosen option.";
+            }
             System.out.println("inside answeroptions with type ! or o");
             resString = "[\n" +
                     "{\n" +
                     "\t\t\t\"type\": \"section\",\n" +
                     "\t\t\t\"text\": {\n" +
                     "\t\t\t\t\"type\": \"plain_text\",\n" +
-                    "\t\t\t\t\"text\": \"" + questionText + "\",\n" +
+                    "\t\t\t\t\"text\": \"" + questionText + askForComment + "\",\n" +
                     "\t\t\t\t\"emoji\": true\n" +
                     "\t\t\t}\n" +
                     "\t\t}," +
@@ -406,7 +488,8 @@ public class Question{
             }
             // remove last comma after the options
             resString = resString.substring(0, resString.length() - 1);
-            resString += "\t\t\t\t\t]" +
+            resString += "\t\t\t\t\t]," +
+                    "\"action_id\": \"" + this.qid + "\"\n" +
                     "\t\t\t\t}\n" +
                     "\t\t\t]\n" +
                     "\t\t}\n" +
@@ -414,7 +497,8 @@ public class Question{
 
             System.out.println("resstring: " + resString);
         }
-        if(this.answerOptionsStringAl.size() > 0 && this.type.equals("L")) {
+        /*
+        if(this.answerOptionsStringAl.size() > 0 && this.type.equals("!")) {
             System.out.println("inside type L");
             resString = "[\n" +
                     "{\n" +
@@ -447,6 +531,7 @@ public class Question{
 
             System.out.println("resstring: " + resString);
         }
+         */
 
 
 
@@ -474,41 +559,197 @@ public class Question{
         return null;
     }
 
-    // gets answer text and creates hashmap of format (sidXgidXqidXsqid, answertext). This format can be used for limesurvey communication directly
-    public HashMap<String, String> createAnswerHashMap(String answer, boolean comment){
+    // gets answer object text and creates string of format ""sidXgidXqidXsqid":"answertext"". This format can be used for limesurvey communication directly
+    public String createAnswerString(Answer answer){
         System.out.println("inside createAnswerHashMap");
-        HashMap<String, String> returnValue = new HashMap<>();
-        if(this.subquestionAl.size() > 0){
-            //has sub questions/is multiple choice
-            String[] parsedIndices = answer.split(",");
-            System.out.println(answer);
-            System.out.println(parsedIndices);
-            for(String s : parsedIndices){
-                System.out.println("answerString: " + s);
-                Question subquestion = this.getSubquestionByText(s);
-                String subQCode = subquestion.getCode();
-                // Lime survey accepts only 5 letter answers
-                returnValue.put(this.createAnswerKey(true, subQCode, comment), "yes");
-            }
-        } else{
-            System.out.println("inside createAnswerHashMap else");
-            returnValue.put(this.createAnswerKey(false, "", comment), answer);
+        boolean hasComment = false;
+        if(answer.getComment().length() > 0){
+            hasComment = true;
         }
+        String answerKey = this.createAnswerKey(this.isSubquestion, this.code, hasComment);
+        String returnValue = "\"" + answerKey + "\":\"" + answer.getText() + "\",";
+
+        if(hasComment){
+            // if the answer has a comment, also get the answer for the main question ( not just the comment text)
+            answerKey = this.createAnswerKey(this.isSubquestion, this.code, false);
+            returnValue += "\"" + answerKey + "\":\"" + answer.getText() + "\",";
+        }
+
         return returnValue;
     }
 
-
     private String createAnswerKey (boolean isSubquestion, String code, boolean comment){
+        System.out.println("inside createAnswerKey. isSubquestion :" + isSubquestion + " code: " + code + " iscomment " + comment + " qid: " + this.qid + " this parentqid: " + this.parentqid);
         String separator = "X";
-        String returnValue = this.sid + separator + this.gid + separator + this.qid;
+        String returnValue = "";
         if(isSubquestion){
-            returnValue += code;
+            returnValue = this.sid + separator + this.gid + separator + this.parentqid + code;
         }
+        else{
+            returnValue = this.sid + separator + this.gid + separator + this.qid;
+        }
+
         if(comment){
             returnValue += "comment";
         }
         System.out.println("create answer function return value: " + returnValue);
         return returnValue;
+    }
+
+    public boolean answerIsPlausible(String textAnswer){
+
+        if(this.type.equals(qType.SINGLECHOICECOMMENT.toString()) || this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString())){
+            System.out.println("Question type singlechoice recognized.");
+            // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
+            for(String s: this.getAnswerOptionsStringAl().values()){
+                if(s.equals(textAnswer)){
+                    System.out.println("Answer is valid.");
+                    return true;
+                }
+            }
+        }
+
+        if(!this.subquestionAl.isEmpty()){
+            System.out.println("Question type multiple choice recognized.");
+            // If it a mulitple choice question, check if textAnswer equals one answer option (which is saves as text from subquestion)
+            for(Question q : this.subquestionAl){
+                System.out.println("calling answer plausible recursively...");
+                if(q.answerIsPlausible(textAnswer)){
+                    System.out.println("Answer is valid.");
+                    return true;
+                }
+            }
+        }
+
+        if(this.isSubquestion){
+            System.out.println("Question type (multiple choice) subquestion recognized.");
+            // if it is an answer to a mulitple choice question answer option, it is exactly that subquestion text
+            if(this.text.equals(textAnswer)){
+                System.out.println("textanswer: " + textAnswer + " text: " + this.text);
+                System.out.println("Answer is valid.");
+                return true;
+            }
+            return false;
+        }
+
+        if(this.type.equals(qType.GENDER.toString())){
+            System.out.println("Question type gender recognized.");
+            // a gender question only has these three options
+            if(textAnswer.equals("Female") || textAnswer.equals("Male") || textAnswer.equals("No Answer")){
+                System.out.println("Answer is valid.");
+                return true;
+            }
+        }
+
+        if(this.type.equals(qType.YESNO.toString())){
+            System.out.println("Question type yesno recognized.");
+            // yes no question has only these three answers
+            if(textAnswer.equals("Yes") || textAnswer.equals("No") || textAnswer.equals("No Answer")){
+                System.out.println("Answer is valid.");
+                return true;
+            }
+        }
+
+        if(this.type.equals(qType.SHORTFREETEXT.toString())){
+            System.out.println("Question type free text recognized.");
+            if(textAnswer.length() < qType.SHORTFREETEXT.getMaxLength()){
+                System.out.println("Answer is valid.");
+                return true;
+            }
+        }
+
+        if(this.type.equals(qType.LONGFREETEXT.toString())){
+            System.out.println("Question type free text recognized.");
+            if(textAnswer.length() < qType.LONGFREETEXT.getMaxLength()){
+                System.out.println("Answer is valid.");
+                return true;
+            }
+        }
+
+        if(this.type.equals(qType.HUGEFREETEXT.toString())){
+            System.out.println("Question type free text recognized.");
+            if(textAnswer.length() < qType.HUGEFREETEXT.getMaxLength()){
+                System.out.println("Answer is valid.");
+                return true;
+            }
+        }
+
+        if(this.type.equals(qType.FIVESCALE.toString())){
+            System.out.println("Question type 5 scale rating recognized.");
+            try{
+                int var = Integer.parseInt(textAnswer);
+                if(var < 6 && 0 < var){
+                    System.out.println("Answer is valid.");
+                    return true;
+                }
+            } catch(Exception e){
+                System.out.println("answer is not plausible");
+                return false;
+            }
+        }
+
+        if(this.type.equals(qType.NUMERICALINPUT.toString())){
+            System.out.println("Question type numerical input recognized.");
+            try{
+                int var = Integer.parseInt(textAnswer);
+                return true;
+            } catch(Exception e){
+                System.out.println("answer is not plausible");
+                return false;
+            }
+        }
+
+        if(this.type.equals(qType.DATETIME.toString())){
+            System.out.println("Question type datetime recognized.");
+            try{
+                // TODO
+                DateFormat sourceFormat = new SimpleDateFormat("dd.MM.yyyy");
+                sourceFormat.parse(textAnswer);
+                return true;
+            } catch(Exception e){
+                System.out.println("answer is not plausible");
+                return false;
+            }
+        }
+
+        System.out.println("answer is not plausible");
+        return false;
+    }
+
+    public String reasonAnswerNotPlausible(String type){
+
+        String reason = "";
+
+        if(type.equals(qType.LISTDROPDOWN.toString()) ||
+           type.equals(qType.LISTRADIO.toString()) ||
+           type.equals(qType.GENDER.toString()) ||
+           type.equals(qType.YESNO.toString())){
+            reason = "Please answer by clicking on one of the displayed buttons.";
+        }
+
+        if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
+            reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
+        }
+
+        if(type.equals(qType.SHORTFREETEXT.toString()) ||
+           type.equals(qType.HUGEFREETEXT.toString()) ||
+           type.equals(qType.LONGFREETEXT.toString())){
+            reason = "Your answer is too long, please shorten it and send again.";
+        }
+
+        if(type.equals(qType.DATETIME.toString())){
+            reason = "Please answer with a date in the format dd.mm.yyyy.";
+        }
+
+        if(type.equals(qType.FIVESCALE.toString())){
+            reason = "Please only answer with a number between 1 and 5.";
+        }
+
+        if(type.equals(qType.NUMERICALINPUT.toString())){
+            reason = "Please answer with a number.";
+        }
+
+        return reason;
     }
 
     public boolean checkIfQidInSubQs(String qid){
@@ -531,5 +772,20 @@ public class Question{
 
     public HashMap<Integer, String> getAnswerOptionsStringAl() {
         return answerOptionsStringAl;
+    }
+
+    public boolean isBlocksQuestion(){
+        if(this.type.equals(qType.SHORTFREETEXT.toString()) ||
+                this.type.equals(qType.LONGFREETEXT.toString()) ||
+                this.type.equals(qType.HUGEFREETEXT.toString()) ||
+                this.type.equals(qType.NUMERICALINPUT.toString()) ||
+                this.type.equals(qType.DATETIME.toString()) ||
+                this.type.equals(qType.FILEUPLOAD.toString()) ||
+                this.type.equals(qType.TEXTDISPLAY.toString())){
+            System.out.println("isblocksquestion false");
+            return false;
+        } else{
+            return true;
+        }
     }
 }

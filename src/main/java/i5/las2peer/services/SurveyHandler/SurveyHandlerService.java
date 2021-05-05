@@ -45,12 +45,12 @@ import io.swagger.annotations.Contact;
 import io.swagger.annotations.Info;
 import io.swagger.annotations.License;
 import io.swagger.annotations.SwaggerDefinition;
+import org.junit.Assert;
 
 import java.util.Properties;
 import java.util.logging.Level;
-// TODO Describe your own service
 
-
+import java.util.concurrent.locks.ReentrantLock;
 /**
  * SurveyHandlerService
  *
@@ -61,28 +61,26 @@ import java.util.logging.Level;
 
 
 
-// TODO Adjust the following configuration
+
 @Api
 @SwaggerDefinition(
 		info = @Info(
-				title = "las2peer Template Service",
+				title = "las2peer Survey Handler Service",
 				version = "1.0.0",
-				description = "A las2peer Survey Service.",
-				termsOfService = "http://your-terms-of-service-url.com",
+				description = "A las2peer Survey Service, that handles the content of surveys.",
+				termsOfService = "",
 				contact = @Contact(
-						name = "John Doe",
-						url = "provider.com",
-						email = "john.doe@provider.com"),
+						name = "Theresa Täuber",
+						url = "",
+						email = "theresa.taeuber@rwth-aachen.de"),
 				license = @License(
-						name = "your software license name",
-						url = "http://your-software-license-url.com")))
+						name = "",
+						url = "")))
 @ServicePath("/SurveyHandler")
 @ManualDeployment
-// TODO Your own service class
+
 public class SurveyHandlerService extends RESTService {
 
-	// TODO change the remaining surveyGlobal
-	private static Survey surveyGlobal;
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
 	private static boolean firstStartUp = true;
 	private String databaseUser = "";
@@ -91,6 +89,9 @@ public class SurveyHandlerService extends RESTService {
 	private String databaseHost = "";
 	private int databaseTypeInt;
 	private int databasePort;
+	private static ArrayList<Integer> testlist= new ArrayList();
+	private ReentrantLock testLock = new ReentrantLock();
+
 
 	private static SQLDatabase database; // The database instance to write to.
 
@@ -178,11 +179,7 @@ public class SurveyHandlerService extends RESTService {
 		// Read and set properties values
 		setFieldValues();
 	}
-	/**
-	 * Template of a get function.
-	 *
-	 * @return Returns an HTTP response with the username as string content.
-	 */
+
 	@GET
 	@Path("/get")
 	@Produces(MediaType.TEXT_PLAIN)
@@ -215,19 +212,17 @@ public class SurveyHandlerService extends RESTService {
 		return Response.ok().entity(returnString).build();
 	}
 
-
-	// TODO your own service methods, e. g. for RMI
 	@POST
 	@Path("/takingSurvey")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+			value = "Return the next question of the survey.",
+			notes = "")
 	@ApiResponses(
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
+					message = "survey taking request handled")})
 	public Response takingSurvey(String input) {
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
@@ -237,11 +232,13 @@ public class SurveyHandlerService extends RESTService {
 			LocalTime timeNow = LocalTime.now();
 
 			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
 			String senderEmail = bodyInput.getAsString("email");
 			String token = bodyInput.getAsString("slackToken");
+			String messageTs = bodyInput.getAsString("ts");
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
 			String buttonIntent = bodyInput.getAsString("buttonIntent");
 			System.out.println("buttonIntent: " + buttonIntent);
@@ -278,6 +275,20 @@ public class SurveyHandlerService extends RESTService {
 				}
 			}
 
+			// Check if survey has expiration date and if survey has expired
+			if(currSurvey.getStartDT() != null){
+				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+				String startDate = currSurvey.getStartDT().split("\\s")[0];
+				String startTime = currSurvey.getStartDT().split("\\s")[1];
+				System.out.println(startDate + " and starts at " + dateNow);
+				System.out.println(startTime + " and starts at " + timeNow);
+				if(dateNow.isBefore(LocalDate.parse(startDate))){
+					if(timeNow.isBefore(LocalTime.parse(startTime)))
+						response.put("text", "The survey is not yet active.");
+					return Response.ok().entity(response).build();
+				}
+			}
+
 			// Check if message was sent by someone known
 			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
 				// participant does not exist, create a new one
@@ -296,12 +307,21 @@ public class SurveyHandlerService extends RESTService {
 			}
 			System.out.println(currParticipant.getChannel());
 			String message = bodyInput.getAsString("msg");
+			System.out.println("ts: " + messageTs);
+			JSONObject currMessage = new JSONObject();
+			JSONObject prevMessage = new JSONObject();
+
+			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
+				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
+				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
+			}
+
 
 			//Set the time the participant answered to check later if needed to be reminded to finish survey
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, buttonIntent);
+			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage);
 
 
 		} catch (ParseException e) {
@@ -313,19 +333,9 @@ public class SurveyHandlerService extends RESTService {
 
 
 
-
-	private void setUpSurvey(String input){
-		JSONObject response = new JSONObject();
-		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
-		try {
-			JSONObject bodyInput = (JSONObject) p.parse(input);
-
-			String username = bodyInput.getAsString("NameOfUser");
-			String password = bodyInput.getAsString("Password");
-			String surveyID = bodyInput.getAsString("surveyID");
-			String uri = bodyInput.getAsString("uri");
-			String adminmail = bodyInput.getAsString("adminmail");
-
+	private void setUpLimeSurvey(String username, String password, String surveyID, String uri, String adminmail){
+		try{
+			JSONParser p = new JSONParser();
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
 			HashMap<String, String> head = new HashMap<String, String>();
@@ -364,6 +374,7 @@ public class SurveyHandlerService extends RESTService {
 				if (((JSONObject) i).getAsString("sid").equals(surveyID)) {
 					newSurvey.addTitle( ((JSONObject) i).getAsString("surveyls_title"));
 					newSurvey.setExpires( ((JSONObject) i).getAsString("expires"));
+					newSurvey.setStartDT(((JSONObject) i).getAsString("startdate"));
 					break;
 				}
 			}
@@ -380,23 +391,48 @@ public class SurveyHandlerService extends RESTService {
 				newSurvey.setDatabase(database);
 				System.out.println("Survey successfully initialized.");
 			}
+		} catch(Exception e){
+			e.printStackTrace();
+			System.out.println("api calls to limesurvey failed.");
+		}
+	}
+
+	private void setUpSurvey(String input){
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+		try {
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+
+			String username = bodyInput.getAsString("NameOfUser");
+			String password = bodyInput.getAsString("Password");
+			String surveyID = bodyInput.getAsString("surveyID");
+			String uri = bodyInput.getAsString("uri");
+			String adminmail = bodyInput.getAsString("adminmail");
+
+			if(bodyInput.containsKey("followupSurveyID")){
+				String followupSurveyID = bodyInput.getAsString("followupSurveyID");
+				setUpLimeSurvey(username, password, followupSurveyID, uri, adminmail);
+			}
+
+			setUpLimeSurvey(username, password, surveyID, uri, adminmail);
 
 		} catch(Exception e){
 			e.printStackTrace();
 		}
 	}
 
+
 	@POST
 	@Path("/adminSurvey")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+			value = "Returns the requested survey info or starts the survey.",
+			notes = "")
 	@ApiResponses(
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
+					message = "admin request handled")})
 	public Response adminSurvey(String input) {
 
 		JSONObject response = new JSONObject();
@@ -433,8 +469,6 @@ public class SurveyHandlerService extends RESTService {
 				System.out.println("Survey is set-up.");
 			}
 
-
-			//TODO: check if rocket chat passes on email of user
 			if (!(bodyInput.getAsString("adminmail").equals(bodyInput.getAsString("email")))) {
 				Response res = takingSurvey(input);
 				return res;
@@ -491,14 +525,19 @@ public class SurveyHandlerService extends RESTService {
 				return Response.ok().entity(response).build();
 			}
 			else if(intent.equals("delete_participant")){
-				System.out.println("deleting participant...");
 				// expected form deleteuser: email or userid
 				try{
 					// not the best way to ensure no one gets deleted by accident
 					if(msg.contains("deleteuser: ")){
+						System.out.println("deleting participant...");
 						String userIdentificator = msg.split(" ")[1];
 						String email;
 						if(String.valueOf(userIdentificator.charAt(0)).equals("<")){
+							if(userIdentificator.contains("<mailto:")){
+								//slack adds this mailto part when messaging an email
+								email = userIdentificator.split("\\|")[1];
+								email = email.split("\\>")[0];
+							}
 							// if its a userID
 							email = getSlackEmailBySlackId(userIdentificator, token);
 						} else{
@@ -507,9 +546,13 @@ public class SurveyHandlerService extends RESTService {
 						}
 						Participant participant = currSurvey.findParticipant(email);
 						if(participant != null){
-							// TODO delete answers in LimeSurvey
-							// TODO delete answers in database (will not be shown if participant is deleted)
-							// remove from database
+							// not possible with limesurvey api to delete response (TODO)
+
+							for(Answer answer : participant.getGivenAnswersAl()){
+								// delete all answers given by the participant
+								SurveyHandlerServiceQueries.deleteAnswerFromDB(answer, database);
+							}
+							// remove participant from database
 							SurveyHandlerServiceQueries.deleteParticipantFromDB(participant, database);
 							currSurvey.deleteParticipant(participant);
 						}
@@ -539,10 +582,11 @@ public class SurveyHandlerService extends RESTService {
 					emails.substring(0, emails.length() -1); //remove last separator, only if there are several participants
 
 					System.out.println(emails);
-					int questionsInSUrvey = currSurvey.getSortedQuestions().size();
-					String welcomeString = "Would you like to start the survey \"" + currSurvey.getTitle() + "\"? There are " + questionsInSUrvey + " questions in this survey.";
-					String explanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
-					response.put("text", welcomeString + explanation);
+					int questionsInSurvey = currSurvey.getSortedQuestions().size();
+					String welcomeString = "Would you like to start the survey \"" + currSurvey.getTitle() + "\"? There are " + questionsInSurvey + " questions in this survey.";
+					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
+					String changeAnswerExplanation = " To change your answer, either click on the 3 points next to you text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+					response.put("text", welcomeString + skipExplanation + changeAnswerExplanation);
 					response.put("contactList", emails);
 					return Response.ok().entity(response).build();
 				}
@@ -550,7 +594,6 @@ public class SurveyHandlerService extends RESTService {
 					response.put("text", "Please add participants to start the survey. No participants found that have not been contacted yet.");
 					return Response.ok().entity(response).build();
 				}
-
 			}
 			else {
 				response.put("text", "intent not recognized");
@@ -570,14 +613,26 @@ public class SurveyHandlerService extends RESTService {
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+			value = "Sends the saved answers to LimeSurvey.",
+			notes = "")
 	@ApiResponses(
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
+					message = "results sent to LimeSurvey")})
 	public Response sendResultsToLimesurvey(String input){
+		/*
+		Integer counter = 0;
+		while(true){
+			testLock.lock();
+			testlist.add(1);
+			testlist.remove(0);
+			testLock.unlock();
+			if (counter > 5) {
+				break;
+			}
+		}
 
+		 */
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
@@ -629,11 +684,11 @@ public class SurveyHandlerService extends RESTService {
 			for(Participant pa : currSurvey.getParticipants()) {
 				String surveyResponseID;
 
-				String content = pa.getAnswersString();
+				String content = pa.getLSAnswersString();
 				System.out.println(content);
 
-				// If part of response already at LimeSurvey, update response
 				if(pa.getSurveyResponseID() != null){
+					// Part of the response is already at LimeSurvey, update response
 					surveyResponseID = pa.getSurveyResponseID();
 					System.out.println(surveyResponseID);
 					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\",\"id\":\"" + surveyResponseID + "\"}";
@@ -643,7 +698,8 @@ public class SurveyHandlerService extends RESTService {
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					String response2 = minire2.getAsString("result");
 					System.out.println(response2);
-				} else{ // If new response, add new response and return ID
+				} else{
+					// New response, add new response and save id at participant
 					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\"}";
 					System.out.println(contentFilled);
 					String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
@@ -678,76 +734,80 @@ public class SurveyHandlerService extends RESTService {
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+			value = "Sends reminders to survey participants, that have not provided any new answers for a given time.",
+			notes = "")
 	@ApiResponses(
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
+					message = "Reminding successful")})
 	public Response reminderRoutine(String input) {
 		JSONObject response = new JSONObject();
-		String cList = "";
-		String cText = "";
-		String separator = "";
 
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
 		try{
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
+			String token = bodyInput.getAsString("slackToken");
+			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 			System.out.println(bodyInput);
 			if(bodyInput.containsKey("reminderAfterHours")){
 				System.out.println("contains Key : " + bodyInput);
 				Integer timeToRemind = Integer.parseInt(bodyInput.getAsString("reminderAfterHours"));
 				System.out.println(timeToRemind);
-				// Get all participants that have not answered for the amount of time
-				for(Participant pa : currSurvey.getParticipants()){
 
-					// Only if participant has not already completed the survey
+				for(Participant pa : currSurvey.getParticipants()){
+					// Get all participants and check if they have not answered for the amount of time
 					if(!pa.isCompletedsurvey()){
-						System.out.println(pa.getUnaskedQuestions().size());
+						// participant has not already completed the survey
+
 						Integer unSize = pa.getUnaskedQuestions().size();
 						// The last question asked, but not answered is not on the list anymore
 						Integer unansweredQuestions = unSize + 1;
 						Integer allSize = currSurvey.getSortedQuestionIds().size();
-						System.out.println(currSurvey.getSortedQuestionIds().size());
 
 						LocalDateTime lastDT = LocalDateTime.parse(pa.getLasttimeactive());
 						long hoursDifference = ChronoUnit.HOURS.between(lastDT, LocalDateTime.now());
 
-						//seconds for testing, TODO delete later
-						long secsDifference = ChronoUnit.SECONDS.between(lastDT, LocalDateTime.now());
-						System.out.println("time gone : " + secsDifference + "how long to wait: " + timeToRemind);
-						System.out.println("time gone times 2: " + timeToRemind*2);
+						System.out.println("time gone : " + hoursDifference + "how long to wait: " + timeToRemind);
+						//System.out.println("time gone times 2: " + timeToRemind*2);
 						if(hoursDifference > (timeToRemind*2)){
 							// do not remind if already reminded 2 times
-						} else if(hoursDifference > timeToRemind){ // for testing: || secsDifference > timeToRemind
+						} else if(hoursDifference >= timeToRemind){
 							// Participant has not started survey
+							String msg = "";
+							String mail = "";
+
 							if(unSize.equals(allSize)){
-								cList += separator + pa.getEmail();
-								cText += separator + "Hello again! It would be nice if you would start the survey. :)";
-								separator = ",";
+								mail = pa.getEmail();
+								msg = "Hello again! It would be nice if you would start the survey. :)";
 							}
 							// Participant has started, but not finished survey
 							else {
-								cList += separator + pa.getEmail();
-								cText += separator + "Hello again! Please continue with your survey. There are only " + unansweredQuestions + " questions left. :)";
-								separator = ",";
+								mail = pa.getEmail();
+								msg = "Hello again! Please continue with your survey. There are only " + unansweredQuestions + " questions left. :)";
 							}
+
+							// post request to sbfmanager to send message
+							String SBFManagerURL = "SBFManager";
+							String uri = SBFManagerURL + "/token/" + token + "/" + mail;
+							HashMap<String, String> head = new HashMap<>();
+
+							MiniClient client = new MiniClient();
+							client.setConnectorEndpoint(sbfmUrl);
+
+							ClientResponse result = client.sendRequest("POST", uri, "{\"msg\":\"" + msg + "\"}", "application/json", "*/*", head);
+							String resString = result.getResponse();
+							System.out.println(resString);
 						}
 					}
 				}
 			}
 
-			if(cList.length() > 0){
-				response.put("contactList", cList);
-				response.put("contactText", cText);
-			}
-
 			System.out.println(response.toString());
 
-			response.put("text", "No participants to remind.");
+			response.put("text", "Participants reminded.");
 			return Response.ok().entity(response).build();
 
 		} catch(Exception e){
@@ -772,7 +832,6 @@ public class SurveyHandlerService extends RESTService {
 		try{
 			// slack api call to get email for user id
 			String urlParameters = "token=" + token + "&user=" + userId;
-			//String urlParameters  = "param1=data1&param2=data2&param3=data3";
 			byte[] postData = urlParameters.getBytes( StandardCharsets.UTF_8 );
 			int postDataLength = postData.length;
 			String request = "https://slack.com/api/users.info";
@@ -822,19 +881,6 @@ public class SurveyHandlerService extends RESTService {
 		}
 
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

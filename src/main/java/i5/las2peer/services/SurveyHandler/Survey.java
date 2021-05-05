@@ -4,6 +4,7 @@ import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -16,6 +17,7 @@ public class Survey {
     private String sid;
     private String adminmail;
     private String expires;
+    private String startDT;
     private String title;
     SQLDatabase database;
     // end Database model identifier
@@ -186,7 +188,6 @@ public class Survey {
             System.out.println("Adding answer "+ a + " to participant "+ p);
             p.addAnswerFromDb(a);
         }
-        System.out.println("reached");
         // Compare to be asked questions for this survey to given answers, to find unanswered questions
         for (Question tempQ : this.getQuestionAL()){
             boolean answered = false;
@@ -196,7 +197,7 @@ public class Survey {
                 String correspondingQid;
                 if (questionToAnswer.isSubquestion()){
                     // we always compare with parentQids
-                    correspondingQid = questionToAnswer.getParentqid();
+                    correspondingQid = questionToAnswer.getParentQid();
                 } else {
                     correspondingQid = questionToAnswer.getQid();
                 }
@@ -301,6 +302,14 @@ public class Survey {
         return this.expires;
     }
 
+    public String getStartDT() {
+        return startDT;
+    }
+
+    public void setStartDT(String startDT) {
+        this.startDT = startDT;
+    }
+
     public ArrayList<Participant> getParticipants() {
         return this.participants;
     }
@@ -368,7 +377,7 @@ public class Survey {
     public String getAnswersStringFromAllParticipants(){
         String returnValue = "";
         for(Participant p : this.participants){
-            returnValue += p.getAnswersString();
+            returnValue += p.getLSAnswersString();
         }
         return returnValue;
     }
@@ -381,7 +390,7 @@ public class Survey {
             //get answers
             HashMap<String, String> questionAnswerTupel = new HashMap<>();
             for(String questionKey : questionsHM.keySet()){
-                questionAnswerTupel.put(questionKey, p.getAnswer(questionKey));
+                questionAnswerTupel.put(questionKey, p.getAnswer(questionKey).getText());
             }
             results.put(participantEmail, questionAnswerTupel);
         }
@@ -414,6 +423,15 @@ public class Survey {
             }
         }
         return questionsByGid;
+    }
+
+    public Question getParentQuestionBySQQid(String qid){
+        for(Question q : this.questionAL){
+            if(q.checkIfQidInSubQs(qid)){
+                return q;
+            }
+        }
+        return null;
     }
 
 }
