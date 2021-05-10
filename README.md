@@ -75,4 +75,6 @@ Since the las2peersocial-bot-manager-service uses RTM, a classic app, instead of
 (routine bot action explanation will follow)
 
 
+### Creating a LimeSurvey Survey:
 
+-enable under Participants settings: "Allow multiple responses or update responses with one token."

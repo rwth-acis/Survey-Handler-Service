@@ -1,5 +1,6 @@
 package i5.las2peer.services.SurveyHandler;
 
+import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 
@@ -68,8 +69,10 @@ public class Question{
             return this.name;
         }
     }
-    // Has table answeroptions in db, Integer order starts at 1
-    private HashMap<Integer, String> answerOptionsStringAl = new HashMap<>();
+    // Has table answeroptions in db
+    //private HashMap<Integer, String> answerOptionsStringAl = new HashMap<>();
+
+    private ArrayList<AnswerOption> answerOptions = new ArrayList<>();
 
     private ArrayList<Question> subquestionAl = new ArrayList<>();
     private boolean isSubquestion = false;
@@ -94,7 +97,13 @@ public class Question{
             JSONObject answeroptions = (JSONObject) q.get("answeroptions");
             for(String s : answeroptions.keySet()){
                 JSONObject temp = (JSONObject) answeroptions.get(s);
-                this.answerOptionsStringAl.put(Integer.parseInt(temp.getAsString("order")), temp.getAsString("answer"));
+                AnswerOption newAnswerOption = new AnswerOption();
+                newAnswerOption.setQid(this.qid);
+                newAnswerOption.setSid(this.sid);
+                newAnswerOption.setCode(s);
+                newAnswerOption.setIndexi(Integer.parseInt(temp.getAsString("order")));
+                newAnswerOption.setText(temp.getAsString("answer"));
+                answerOptions.add(newAnswerOption);
             }
         }
         if (Integer.parseInt(this.parentqid)> 0){
@@ -116,10 +125,6 @@ public class Question{
 
     public ArrayList<Question> getSubquestionAl(){
         return this.subquestionAl;
-    }
-
-    public void setAnswerOptionsStringAl(HashMap<Integer, String> answerOptionsStringAl) {
-        this.answerOptionsStringAl = answerOptionsStringAl;
     }
 
     public void setSubquestionAl(ArrayList<Question> subquestionAl) {
@@ -211,10 +216,6 @@ public class Question{
         return this.help;
     }
 
-    public String getAnswerOptions(Integer index) {
-        return this.answerOptionsStringAl.get(index);
-    }
-
     public boolean hasHelp() {
         if(this.help != null){
             return true;
@@ -223,10 +224,10 @@ public class Question{
     }
 
     public String encodeJsonBodyAsString(Participant participant){
-        return encodeJsonBodyAsString(false, participant);
+        return encodeJsonBodyAsString(false, false, "", participant);
     }
 
-    public String encodeJsonBodyAsString(boolean newQuestionGroup, Participant participant){
+    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant){
         String resString = "";
         String subString = "";
         int index = 1;
@@ -247,9 +248,92 @@ public class Question{
                     "\"text\":\"" + questionText + "\",\n" +
                     "\"emoji\": true\n" +
                     "},\n" +
-                    "\"value\": " + this.qid + "\n" +
+                    "\"value\": \"" + this.qid + "\"\n" +
                     "},";
             return subString;
+        }
+
+        if(edit){
+            // Check if multiple choice question
+            if (this.subquestionAl.size() > 0) {
+                // no submit button
+                resString = "[\n" +
+                        "{\n" +
+                        "\"type\": \"section\",\n" +
+                        "\"text\": {\n" +
+                        "\"type\": \"plain_text\",\n" +
+                        "\"text\": \"" + questionText + "\",\n" +
+                        "\"emoji\": true\n" +
+                        "}\n" +
+                        "},\n" +
+                        "{\n" +
+                        "\"type\": \"actions\",\n" +
+                        "\"elements\": [\n" +
+                        "{\n" +
+                        "\"type\": \"checkboxes\",\n" +
+                        "\"options\": [";
+                for (Question subq : this.subquestionAl) {
+                    resString += subq.encodeJsonBodyAsString(participant);
+                }
+                // remove last comma after the options
+                resString = resString.substring(0, resString.length() - 1);
+                resString += "],\n" +
+                        "\"action_id\": \"" + this.qid + "\"\n" +
+                        "}\n" +
+                        "]\n" +
+                        "}\n" +
+                        "]";
+
+                return resString;
+            }
+
+
+        } else{
+            // Check if multiple choice question
+            if (this.subquestionAl.size() > 0) {
+                resString = "[\n" +
+                        "{\n" +
+                        "\"type\": \"section\",\n" +
+                        "\"text\": {\n" +
+                        "\"type\": \"plain_text\",\n" +
+                        "\"text\": \"" + questionText + "\",\n" +
+                        "\"emoji\": true\n" +
+                        "}\n" +
+                        "},\n" +
+                        "{\n" +
+                        "\"type\": \"actions\",\n" +
+                        "\"elements\": [\n" +
+                        "{\n" +
+                        "\"type\": \"checkboxes\",\n" +
+                        "\"options\": [";
+                for (Question subq : this.subquestionAl) {
+                    resString += subq.encodeJsonBodyAsString(participant);
+                }
+                // remove last comma after the options
+                resString = resString.substring(0, resString.length() - 1);
+                resString += "],\n" +
+                        "\"action_id\": \"" + this.qid + "\"\n" +
+                        "}\n" +
+                        "]\n" +
+                        "},\n" +
+                        "{\n" +
+                        "\"type\": \"actions\",\n" +
+                        "\"elements\": [\n" +
+                        "{\n" +
+                        "\"type\": \"button\",\n" +
+                        "\"text\": {\n" +
+                        "\"type\": \"plain_text\",\n" +
+                        "\"text\": \"Submit\",\n" +
+                        "\"emoji\": true\n" +
+                        "},\n" +
+                        "\"value\": \"submit\",\n" +
+                        "\"action_id\": \"" + this.qid + "\"\n" +
+                        "}\n" +
+                        "]\n" +
+                        "}" +
+                        "]";
+            }
+
         }
 
         resString += questionText;
@@ -257,6 +341,34 @@ public class Question{
 
         // Switch case to check if question type is mask question (their answer options are not saved in question)
         // The question code is from LimeSurvey
+        String add = "";
+        String firstAdd = "";
+        String secondAdd = "";
+        String thirdAdd = "";
+        String fourthAdd = "";
+        String fifthAdd = "";
+        if(buttonToColor.length() > 0){
+            add = ",\"style\": \"primary\"";
+            switch(buttonToColor){
+                case "1", "Female", "Yes":
+                    firstAdd = add;
+                    break;
+                case "2", "Male", "No":
+                    secondAdd = add;
+                    break;
+                case "3", "No Answer":
+                    thirdAdd = add;
+                    break;
+                case "4":
+                    fourthAdd = add;
+                    break;
+                case "5":
+                    fifthAdd = add;
+                    break;
+            }
+
+        }
+
         switch(this.type){
             case "D":
                 System.out.println("Date/Time");
@@ -277,30 +389,33 @@ public class Question{
                         "\t\t},\n" +
                         "\t\t{\n" +
                         "\t\t\t\"type\": \"actions\",\n" +
-                        "\t\t\t\"elements\": [\n" +
+                        "\t\t\t\"elements\": [\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"Female\",\n" +
                         "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + firstAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"Male\",\n" +
                         "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + secondAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"No Answer\",\n" +
                         "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t\t}\n" + thirdAdd +
                         "\t\t\t\t}\n" +
                         "\t\t\t]\n" +
                         "\t\t}]";
@@ -323,30 +438,33 @@ public class Question{
                         "\t\t},\n" +
                         "\t\t{\n" +
                         "\t\t\t\"type\": \"actions\",\n" +
-                        "\t\t\t\"elements\": [\n" +
+                        "\t\t\t\"elements\": [\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"Yes\",\n" +
                         "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + firstAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"No\",\n" +
                         "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + secondAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"No Answer\",\n" +
                         "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t\t}\n" + thirdAdd +
                         "\t\t\t\t}\n" +
                         "\t\t\t]\n" +
                         "\t\t}]";
@@ -363,41 +481,46 @@ public class Question{
                         "\t\t},\n" +
                         "\t\t{\n" +
                         "\t\t\t\"type\": \"actions\",\n" +
-                        "\t\t\t\"elements\": [\n" +
+                        "\t\t\t\"elements\": [\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"1\"\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + firstAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"2\"\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + secondAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"3\"\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + thirdAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"4\"\n" +
-                        "\t\t\t\t\t}\n" +
-                        "\t\t\t\t},\n" +
+                        "\t\t\t\t\t}\n" + fourthAdd +
+                        "\t\t\t\t},\n";
+                resString +=
                         "\t\t\t\t{\n" +
                         "\t\t\t\t\t\"type\": \"button\",\n" +
                         "\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
                         "\t\t\t\t\t\t\"text\": \"5\"\n" +
-                        "\t\t\t\t\t}\n" +
+                        "\t\t\t\t\t}\n" + fifthAdd +
                         "\t\t\t\t}\n" +
                         "\t\t\t]\n" +
                         "\t\t}\n" +
@@ -405,54 +528,9 @@ public class Question{
                 break;
         }
 
-        // Check if multiple choice question
-        if (this.subquestionAl.size() > 0) {
-            resString = "[\n" +
-                    "{\n" +
-                    "\"type\": \"section\",\n" +
-                    "\"text\": {\n" +
-                    "\"type\": \"plain_text\",\n" +
-                    "\"text\": \"" + questionText + "\",\n" +
-                    "\"emoji\": true\n" +
-                    "}\n" +
-                    "},\n" +
-                    "{\n" +
-                    "\"type\": \"actions\",\n" +
-                    "\"elements\": [\n" +
-                    "{\n" +
-                    "\"type\": \"checkboxes\",\n" +
-                    "\"options\": [";
-            for (Question subq : this.subquestionAl) {
-                resString += subq.encodeJsonBodyAsString(participant);
-            }
-            // remove last comma after the options
-            resString = resString.substring(0, resString.length() - 1);
-            resString += "],\n" +
-                    "\"action_id\": \"" + this.qid + "\"\n" +
-                    "}\n" +
-                    "]\n" +
-                    "},\n" +
-                    "{\n" +
-                    "\"type\": \"actions\",\n" +
-                    "\"elements\": [\n" +
-                    "{\n" +
-                    "\"type\": \"button\",\n" +
-                    "\"text\": {\n" +
-                    "\"type\": \"plain_text\",\n" +
-                    "\"text\": \"Submit\",\n" +
-                    "\"emoji\": true\n" +
-                    "},\n" +
-                    "\"value\": \"submit\",\n" +
-                    "\"action_id\": \"" + this.qid + "\"\n" +
-                    "}\n" +
-                    "]\n" +
-                    "}" +
-                    "]";
-        }
-
 
         //check if single choice question
-        if((this.answerOptionsStringAl.size() > 0 && this.type.equals("L")) || (this.answerOptionsStringAl.size() > 0 && this.type.equals("O")) || this.answerOptionsStringAl.size() > 0 && this.type.equals("!")) {
+        if((!(this.answerOptions.isEmpty()) && this.type.equals("L")) || (!(this.answerOptions.isEmpty()) && this.type.equals("O")) || (!(this.answerOptions.isEmpty()) && this.type.equals("!"))) {
             String askForComment = "";
             if(this.type.equals("O")){
                 askForComment = " Please write a comment for your chosen option.";
@@ -473,18 +551,33 @@ public class Question{
                     "\t\t\t\t{\n" +
                     "\t\t\t\t\t\"type\": \"radio_buttons\",\n" +
                     "\t\t\t\t\t\"options\": [";
-            for(int i = 1; i < answerOptionsStringAl.size() + 1; i++){
-                String currAnswerOption = "{\n" +
-                        "\t\t\t\t\t\t\t\"text\": {\n" +
-                        "\t\t\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
-                        "\t\t\t\t\t\t\t\t\"text\": \"" + answerOptionsStringAl.get(i) + "\",\n" +
-                        "\t\t\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t\t\t},\n" +
-                        "\t\t\t\t\t\t\t\"value\": \"" + index + "\"\n" +
-                        "\t\t\t\t\t\t},";
+            for(int i = 1; i < answerOptions.size() + 1; i++){
+                if(buttonToColor.equals(getAnswerOptionByIndex(i).getText())){
+                    String currAnswerOption = "{\n" +
+                            "\t\t\t\t\t\t\t\"text\": {\n" +
+                            "\t\t\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                            "\t\t\t\t\t\t\t\t\"text\": \"" + getAnswerOptionByIndex(i).getText() + "\",\n" +
+                            "\t\t\t\t\t\t\t\t\"emoji\": true\n" +
+                            "\t\t\t\t\t\t\t},\n" +
+                            "\t\t\t\t\t\t\t\"style\": \"primary\",\n" +
+                            "\t\t\t\t\t\t\t\"value\": \"" + index + "\"\n" +
+                            "\t\t\t\t\t\t},";
+                    resString += currAnswerOption;
+                    index++;
+                } else{
+                    String currAnswerOption = "{\n" +
+                            "\t\t\t\t\t\t\t\"text\": {\n" +
+                            "\t\t\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                            "\t\t\t\t\t\t\t\t\"text\": \"" + getAnswerOptionByIndex(i).getText() + "\",\n" +
+                            "\t\t\t\t\t\t\t\t\"emoji\": true\n" +
+                            "\t\t\t\t\t\t\t},\n" +
+                            "\t\t\t\t\t\t\t\"value\": \"" + index + "\"\n" +
+                            "\t\t\t\t\t\t},";
 
-                resString += currAnswerOption;
-                index++;
+                    resString += currAnswerOption;
+                    index++;
+                }
+
             }
             // remove last comma after the options
             resString = resString.substring(0, resString.length() - 1);
@@ -497,41 +590,6 @@ public class Question{
 
             System.out.println("resstring: " + resString);
         }
-        /*
-        if(this.answerOptionsStringAl.size() > 0 && this.type.equals("!")) {
-            System.out.println("inside type L");
-            resString = "[\n" +
-                    "{\n" +
-                    "\"type\": \"section\",\n" +
-                    "\"text\": {\n" +
-                    "\"type\": \"plain_text\",\n" +
-                    "\"text\": " + questionText + "\n" +
-                    "}\n" +
-                    "},\n" +
-                    "{\n" +
-                    "\"type\": \"actions\",\n" +
-                    "\"elements\": [\n";
-            for(int i = 1; i < answerOptionsStringAl.size() + 1; i++){
-                String currAnswerOption = "{\n" +
-                        "\"type\": \"button\",\n" +
-                        "\"text\": {\n" +
-                        "\"type\": \"plain_text\",\n" +
-                        "\"text\": " + answerOptionsStringAl.get(i) + "\n" +
-                        "}\n" +
-                        "},";
-
-                resString += currAnswerOption;
-                index++;
-            }
-            // remove last comma after the options
-            resString = resString.substring(0, resString.length() - 1);
-            resString += "]\n" +
-                    "}\n" +
-                    "]\n";
-
-            System.out.println("resstring: " + resString);
-        }
-         */
 
 
 
@@ -566,13 +624,13 @@ public class Question{
         if(answer.getComment().length() > 0){
             hasComment = true;
         }
-        String answerKey = this.createAnswerKey(this.isSubquestion, this.code, hasComment);
+        String answerKey = this.createAnswerKey(this.isSubquestion, this.code, false);
         String returnValue = "\"" + answerKey + "\":\"" + answer.getText() + "\",";
 
         if(hasComment){
-            // if the answer has a comment, also get the answer for the main question ( not just the comment text)
-            answerKey = this.createAnswerKey(this.isSubquestion, this.code, false);
-            returnValue += "\"" + answerKey + "\":\"" + answer.getText() + "\",";
+            // if the answer has a comment, get the comment answer
+            answerKey = this.createAnswerKey(this.isSubquestion, this.code, hasComment);
+            returnValue += "\"" + answerKey + "\":\"" + answer.getComment() + "\",";
         }
 
         return returnValue;
@@ -601,8 +659,8 @@ public class Question{
         if(this.type.equals(qType.SINGLECHOICECOMMENT.toString()) || this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString())){
             System.out.println("Question type singlechoice recognized.");
             // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
-            for(String s: this.getAnswerOptionsStringAl().values()){
-                if(s.equals(textAnswer)){
+            for(AnswerOption ao : answerOptions){
+                if(ao.getText().equals(textAnswer)){
                     System.out.println("Answer is valid.");
                     return true;
                 }
@@ -770,10 +828,6 @@ public class Question{
         return null;
     }
 
-    public HashMap<Integer, String> getAnswerOptionsStringAl() {
-        return answerOptionsStringAl;
-    }
-
     public boolean isBlocksQuestion(){
         if(this.type.equals(qType.SHORTFREETEXT.toString()) ||
                 this.type.equals(qType.LONGFREETEXT.toString()) ||
@@ -787,5 +841,26 @@ public class Question{
         } else{
             return true;
         }
+    }
+
+    public ArrayList<AnswerOption> getAnswerOptions() {
+        return answerOptions;
+    }
+
+    public void setAnswerOptions(ArrayList<AnswerOption> answerOptions) {
+        this.answerOptions = answerOptions;
+    }
+
+    public void setAnswerOption(AnswerOption answerOption){
+        this.answerOptions.add(answerOption);
+    }
+
+    public AnswerOption getAnswerOptionByIndex(Integer index){
+        for(AnswerOption ao : answerOptions){
+            if(ao.getIndexi().equals(index)){
+                return ao;
+            }
+        }
+        return null;
     }
 }

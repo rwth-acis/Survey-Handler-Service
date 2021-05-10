@@ -228,7 +228,7 @@ public class Survey {
 
     public void safeQuestionsToDB(SQLDatabase database){
         for(Question q : questionsHM.values()){
-            SurveyHandlerServiceQueries.addQuestionToDB(q, database);
+            SurveyHandlerServiceQueries.addQuestionToDB(q, q.getAnswerOptions(), database);
         }
     }
 

@@ -253,7 +253,18 @@ public class SurveyHandlerService extends RESTService {
 			// find correct survey
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
-			System.out.println(currSurvey);
+
+			String followupSurveyID;
+			Survey followUpSurvey = new Survey("");
+
+			if(bodyInput.containsKey("followupSurveyID")){
+				followupSurveyID = bodyInput.getAsString("followupSurveyID");
+				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
+			}
+
+			System.out.println("survey: " + currSurvey);
+			System.out.println("followup: " + followUpSurvey);
+
 
 			// Check if survey is set up already
 			if (Objects.isNull(currSurvey)){
@@ -316,12 +327,60 @@ public class SurveyHandlerService extends RESTService {
 				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
 			}
 
+			// check if the participant is done with the first survey
+			if(currParticipant.isCompletedsurvey()){
+				// if the participant is done with first survey, check if already participant in second survey
+				currParticipant = followUpSurvey.findParticipant(senderEmail);
+				if(Objects.isNull(currParticipant)){
+					System.out.println("creating new participant for follow up");
+					// participant does not exist for new survey, create a new one
+					currParticipant = new Participant(senderEmail);
+					followUpSurvey.addParticipant(currParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(currParticipant, database);
+				}
+				if(currParticipant.getChannel() == null){
+					currParticipant.setChannel(channel);
+					SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+				}
+
+				boolean active = true;
+
+				// Check if survey has expiration date and if survey has expired
+				if(currSurvey.getExpires() != null){
+					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+					String expireDate = currSurvey.getExpires().split("\\s")[0];
+					String expireTime = currSurvey.getExpires().split("\\s")[1];
+					if(dateNow.isAfter(LocalDate.parse(expireDate))){
+						if(timeNow.isAfter(LocalTime.parse(expireTime)))
+							active = false;
+					}
+				}
+
+				// Check if survey has expiration date and if survey has expired
+				if(currSurvey.getStartDT() != null){
+					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+					String startDate = currSurvey.getStartDT().split("\\s")[0];
+					String startTime = currSurvey.getStartDT().split("\\s")[1];
+					if(dateNow.isBefore(LocalDate.parse(startDate))){
+						if(timeNow.isBefore(LocalTime.parse(startTime)))
+							active = false;
+					}
+				}
+
+				// check if survey is currently active
+				if(!active){
+					// survey is not active yet, so get participant infos from first survey again
+					currSurvey = getSurveyBySurveyID(surveyID);
+					currParticipant = currSurvey.findParticipant(senderEmail);
+				}
+			}
+
 
 			//Set the time the participant answered to check later if needed to be reminded to finish survey
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage);
+			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token);
 
 
 		} catch (ParseException e) {
@@ -330,8 +389,6 @@ public class SurveyHandlerService extends RESTService {
 		response.put("text", "Something went wrong in takingSurvey try block.");
 		return Response.ok().entity(response).build();
 	}
-
-
 
 	private void setUpLimeSurvey(String username, String password, String surveyID, String uri, String adminmail){
 		try{
@@ -406,11 +463,15 @@ public class SurveyHandlerService extends RESTService {
 			String username = bodyInput.getAsString("NameOfUser");
 			String password = bodyInput.getAsString("Password");
 			String surveyID = bodyInput.getAsString("surveyID");
-			String uri = bodyInput.getAsString("uri");
+			String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
+			if(bodyInput.getAsString("uri") != null){
+				uri = bodyInput.getAsString("uri");
+			}
 			String adminmail = bodyInput.getAsString("adminmail");
 
 			if(bodyInput.containsKey("followupSurveyID")){
 				String followupSurveyID = bodyInput.getAsString("followupSurveyID");
+				System.out.println("fsid: " + followupSurveyID);
 				setUpLimeSurvey(username, password, followupSurveyID, uri, adminmail);
 			}
 
@@ -595,6 +656,71 @@ public class SurveyHandlerService extends RESTService {
 					return Response.ok().entity(response).build();
 				}
 			}
+			else if(intent.equals("start_followup")){
+				// start the followup survey
+
+				// add participants that completed first survey
+				ArrayList<Participant> participantsToAdd = new ArrayList<>();
+				for(Participant pa : currSurvey.getParticipants()){
+					if(pa.isCompletedsurvey()){
+						participantsToAdd.add(pa);
+					}
+				}
+
+				// get the followup survey
+				surveyID = bodyInput.getAsString("followupSurveyID");
+				currSurvey = getSurveyBySurveyID(surveyID);
+
+				for(Participant pa : participantsToAdd){
+					currSurvey.addParticipant(pa);
+				}
+
+				//set up survey, if not yet done
+				if(Objects.isNull(currSurvey)){
+					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+					setUpSurvey(input);
+					// See if survey is set up now
+					currSurvey = getSurveyBySurveyID(surveyID);
+					if (Objects.isNull(currSurvey)){
+						System.out.println("ERROR: Could not set up survey, still null.");
+						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+						return Response.ok().entity(response).build();
+					}
+
+					if (currSurvey.getSortedQuestionIds().size() == 0) {
+						response.put("text", "There are no questions in this survey.");
+						return Response.ok().entity(response).build();
+					}
+					System.out.println("Survey is set-up.");
+				}
+
+				String emails = "";
+				for (Participant pa : currSurvey.getParticipants()) {
+					// contact all participants that did not yet get contacted or contacted themselves
+					if(!(pa.isParticipantcontacted())) { //!(pa.getEmail().equals("null") &&
+						System.out.println("inside has email and ");
+						emails += pa.getEmail() + ",";
+						pa.setParticipantcontacted(true);
+					}
+					pa.setLasttimeactive(LocalDateTime.now().toString());
+				}
+				if(emails.length() > 0){
+					emails.substring(0, emails.length() -1); //remove last separator, only if there are several participants
+
+					System.out.println(emails);
+					int questionsInSurvey = currSurvey.getSortedQuestions().size();
+					String welcomeString = "Would you like to start the survey \"" + currSurvey.getTitle() + "\"? There are " + questionsInSurvey + " questions in this survey.";
+					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
+					String changeAnswerExplanation = " To change your answer, either click on the 3 points next to you text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+					response.put("text", welcomeString + skipExplanation + changeAnswerExplanation);
+					response.put("contactList", emails);
+					return Response.ok().entity(response).build();
+				}
+				else{
+					response.put("text", "Please add participants to start the survey. No participants found that have not been contacted yet.");
+					return Response.ok().entity(response).build();
+				}
+			}
 			else {
 				response.put("text", "intent not recognized");
 				return Response.ok().entity(response).build();
@@ -620,19 +746,6 @@ public class SurveyHandlerService extends RESTService {
 					code = HttpURLConnection.HTTP_OK,
 					message = "results sent to LimeSurvey")})
 	public Response sendResultsToLimesurvey(String input){
-		/*
-		Integer counter = 0;
-		while(true){
-			testLock.lock();
-			testlist.add(1);
-			testlist.remove(0);
-			testLock.unlock();
-			if (counter > 5) {
-				break;
-			}
-		}
-
-		 */
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
@@ -642,7 +755,10 @@ public class SurveyHandlerService extends RESTService {
 			String username = bodyInput.getAsString("NameOfUser");
 			String password = bodyInput.getAsString("Password");
 			String surveyID = bodyInput.getAsString("surveyID");
-			String uri = bodyInput.getAsString("uri");
+			String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
+			if(bodyInput.containsKey(uri)){
+				uri = bodyInput.getAsString("uri");
+			}
 
 			// find correct survey
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
@@ -721,6 +837,98 @@ public class SurveyHandlerService extends RESTService {
 			e.printStackTrace();
 		}
 
+
+		// again for the follow up survey
+		try {
+
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			String username = bodyInput.getAsString("NameOfUser");
+			String password = bodyInput.getAsString("Password");
+			if(bodyInput.containsKey("followupSurveyID")) {
+
+				String surveyID = bodyInput.getAsString("followupSurveyID");
+				String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
+				if(bodyInput.containsKey(uri)){
+					uri = bodyInput.getAsString("uri");
+				}
+
+				// find correct survey
+				Survey currSurvey = getSurveyBySurveyID(surveyID);
+
+				if(Objects.isNull(currSurvey)){
+					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+					setUpSurvey(input);
+					// See if survey is set up now
+					currSurvey = getSurveyBySurveyID(surveyID);
+					if (Objects.isNull(currSurvey)){
+						System.out.println("ERROR: Could not set up survey, still null.");
+						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+						return Response.ok().entity(response).build();
+					}
+
+					if (currSurvey.getSortedQuestionIds().size() == 0) {
+						response.put("text", "There are no questions in this survey.");
+						return Response.ok().entity(response).build();
+					}
+					System.out.println("Survey is set-up.");
+				}
+
+
+				MiniClient mini = new MiniClient();
+				mini.setConnectorEndpoint(uri);
+				HashMap<String, String> head = new HashMap<String, String>();
+
+				ClientResponse minires = mini.sendRequest("POST", uri, ("{\"method\": \"get_session_key\", \"params\": [ \"" + username + "\", \"" + password + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+				JSONObject minire = (JSONObject) p.parse(minires.getResponse());
+				String sessionKeyString = minire.getAsString("result");
+
+			/*
+			// Export the responses
+			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
+			String response3 = minire3.getAsString("result");
+			 */
+
+				for(Participant pa : currSurvey.getParticipants()) {
+					String surveyResponseID;
+
+					String content = pa.getLSAnswersString();
+					System.out.println(content);
+
+					if(pa.getSurveyResponseID() != null){
+						// Part of the response is already at LimeSurvey, update response
+						surveyResponseID = pa.getSurveyResponseID();
+						System.out.println(surveyResponseID);
+						String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\",\"id\":\"" + surveyResponseID + "\"}";
+						System.out.println(contentFilled);
+						String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
+						ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
+						JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
+						String response2 = minire2.getAsString("result");
+						System.out.println(response2);
+					} else{
+						// New response, add new response and save id at participant
+						String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\"}";
+						System.out.println(contentFilled);
+						String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
+						ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
+						JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
+						surveyResponseID = minire2.getAsString("result");
+						pa.setSurveyResponseID(surveyResponseID);
+						SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
+						System.out.println(surveyResponseID);
+					}
+				}
+
+				response.put("text", "Passed back results to LimeSurvey.");
+				return Response.ok().entity(response).build();
+			}
+
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
+
 		response.put("text", "Something went wrong in sendResultsBackToLimesurvey try block.");
 		return Response.ok().entity(response).build();
 
@@ -751,6 +959,25 @@ public class SurveyHandlerService extends RESTService {
 			String token = bodyInput.getAsString("slackToken");
 			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
+
+			if(Objects.isNull(currSurvey)){
+				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+				setUpSurvey(input);
+				// See if survey is set up now
+				currSurvey = getSurveyBySurveyID(surveyID);
+				if (Objects.isNull(currSurvey)){
+					System.out.println("ERROR: Could not set up survey, still null.");
+					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+					return Response.ok().entity(response).build();
+				}
+
+				if (currSurvey.getSortedQuestionIds().size() == 0) {
+					response.put("text", "There are no questions in this survey.");
+					return Response.ok().entity(response).build();
+				}
+				System.out.println("Survey is set-up.");
+			}
+
 			System.out.println(bodyInput);
 			if(bodyInput.containsKey("reminderAfterHours")){
 				System.out.println("contains Key : " + bodyInput);
@@ -804,6 +1031,95 @@ public class SurveyHandlerService extends RESTService {
 					}
 				}
 			}
+
+			System.out.println(response.toString());
+
+		} catch(Exception e){
+			e.printStackTrace();
+		}
+
+		// again for the followup survey
+		try{
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			String surveyID = bodyInput.getAsString("surveyID");
+			String token = bodyInput.getAsString("slackToken");
+			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
+			if(bodyInput.containsKey("followupSurveyID")) {
+				Survey currSurvey = getSurveyBySurveyID("followupSurveyID");
+
+				if(Objects.isNull(currSurvey)){
+					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+					setUpSurvey(input);
+					// See if survey is set up now
+					currSurvey = getSurveyBySurveyID(surveyID);
+					if (Objects.isNull(currSurvey)){
+						System.out.println("ERROR: Could not set up survey, still null.");
+						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+						return Response.ok().entity(response).build();
+					}
+
+					if (currSurvey.getSortedQuestionIds().size() == 0) {
+						response.put("text", "There are no questions in this survey.");
+						return Response.ok().entity(response).build();
+					}
+					System.out.println("Survey is set-up.");
+				}
+
+				System.out.println(bodyInput);
+				if(bodyInput.containsKey("reminderAfterHours")){
+					System.out.println("contains Key : " + bodyInput);
+					Integer timeToRemind = Integer.parseInt(bodyInput.getAsString("reminderAfterHours"));
+					System.out.println(timeToRemind);
+
+					for(Participant pa : currSurvey.getParticipants()){
+						// Get all participants and check if they have not answered for the amount of time
+						if(!pa.isCompletedsurvey()){
+							// participant has not already completed the survey
+
+							Integer unSize = pa.getUnaskedQuestions().size();
+							// The last question asked, but not answered is not on the list anymore
+							Integer unansweredQuestions = unSize + 1;
+							Integer allSize = currSurvey.getSortedQuestionIds().size();
+
+							LocalDateTime lastDT = LocalDateTime.parse(pa.getLasttimeactive());
+							long hoursDifference = ChronoUnit.HOURS.between(lastDT, LocalDateTime.now());
+
+							System.out.println("time gone : " + hoursDifference + "how long to wait: " + timeToRemind);
+							//System.out.println("time gone times 2: " + timeToRemind*2);
+							if(hoursDifference > (timeToRemind*2)){
+								// do not remind if already reminded 2 times
+							} else if(hoursDifference >= timeToRemind){
+								// Participant has not started survey
+								String msg = "";
+								String mail = "";
+
+								if(unSize.equals(allSize)){
+									mail = pa.getEmail();
+									msg = "Hello again! It would be nice if you would start the survey. :)";
+								}
+								// Participant has started, but not finished survey
+								else {
+									mail = pa.getEmail();
+									msg = "Hello again! Please continue with your survey. There are only " + unansweredQuestions + " questions left. :)";
+								}
+
+								// post request to sbfmanager to send message
+								String SBFManagerURL = "SBFManager";
+								String uri = SBFManagerURL + "/token/" + token + "/" + mail;
+								HashMap<String, String> head = new HashMap<>();
+
+								MiniClient client = new MiniClient();
+								client.setConnectorEndpoint(sbfmUrl);
+
+								ClientResponse result = client.sendRequest("POST", uri, "{\"msg\":\"" + msg + "\"}", "application/json", "*/*", head);
+								String resString = result.getResponse();
+								System.out.println(resString);
+							}
+						}
+					}
+				}
+			}
+
 
 			System.out.println(response.toString());
 

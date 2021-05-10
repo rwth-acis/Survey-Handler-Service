@@ -133,6 +133,7 @@ public class SurveyHandlerServiceQueries {
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "qid VARCHAR(50) NOT NULL,";
                     query += "indexi INTEGER NOT NULL,";
+                    query += "code VARCHAR(50),";
                     query += "text VARCHAR(700) NOT NULL";
                     break;
 
@@ -374,17 +375,22 @@ public class SurveyHandlerServiceQueries {
                 System.out.println("Found answeroptions in database.");
             }
 
-            HashMap<Integer, String> answerOptionsHM = new HashMap<>();
-
             while(!rs.isAfterLast()){
                 String sidDB = rs.getString("sid");
                 String qidDB = rs.getString("qid");
                 Integer indexDB = rs.getInt("indexi");
+                String code = rs.getString("code");
                 String textDB = rs.getString("text");
 
-                q.getAnswerOptionsStringAl().put(indexDB, textDB);
+                AnswerOption ao = new AnswerOption();
+                ao.setSid(sidDB);
+                ao.setQid(qidDB);
+                ao.setIndexi(indexDB);
+                ao.setCode(code);
+                ao.setText(textDB);
+                q.setAnswerOption(ao);
 
-                System.out.println("Found and added answeroptions for question with id: " + q.getQid());
+                System.out.println("Found and added answeroptions for question with code: " + ao.getCode());
                 rs.next();
             }
 
@@ -546,7 +552,7 @@ public class SurveyHandlerServiceQueries {
         }
     }
 
-    public static boolean addQuestionToDB(Question q, SQLDatabase database){
+    public static boolean addQuestionToDB(Question q, ArrayList<AnswerOption> answerOptions, SQLDatabase database){
         try{
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
@@ -570,7 +576,7 @@ public class SurveyHandlerServiceQueries {
                 inserted = true;
             }
 
-            if(q.getAnswerOptionsStringAl().size() > 0){
+            if(!answerOptions.isEmpty()){
                 addAnsweroptionsToDB(q, database);
             }
 
@@ -664,13 +670,15 @@ public class SurveyHandlerServiceQueries {
             boolean inserted = false;
 
             // Integer in answeroptionsstringal starts at 1
-            for(int i = 1; i < q.getAnswerOptionsStringAl().size() + 1; i++){
-                String query = "INSERT INTO answeroptions(sid, qid, indexi, text) VALUES (?, ?, ?, ?)";
+            for(int i = 1; i < q.getAnswerOptions().size() + 1; i++){
+                AnswerOption answerOption  = q.getAnswerOptionByIndex(i);
+                String query = "INSERT INTO answeroptions(sid, qid, indexi, code, text) VALUES (?, ?, ?, ?, ?)";
                 ps = con.prepareStatement(query);
-                ps.setString(1, q.getSid());
-                ps.setString(2, q.getQid());
-                ps.setInt(3, i);
-                ps.setString(4, q.getAnswerOptions(i));
+                ps.setString(1, answerOption.getSid());
+                ps.setString(2, answerOption.getQid());
+                ps.setInt(3, answerOption.getIndexi());
+                ps.setString(4, answerOption.getCode());
+                ps.setString(5, answerOption.getText());
 
                 int rs = ps.executeUpdate();
 
@@ -752,16 +760,17 @@ public class SurveyHandlerServiceQueries {
             if (rs.first()) {
                 // Found the answer, so update the entry
                 ps.close();
-                ps = con.prepareStatement("UPDATE answers SET messagets = ?, text = ?, commentts = ?, comment = ? WHERE messagets = ? AND sid = ? AND qid = ? AND pid = ?");
+                ps = con.prepareStatement("UPDATE answers SET messagets = ?, text = ?, commentts = ?, comment = ?, finalized = ? WHERE messagets = ? AND sid = ? AND qid = ? AND pid = ?");
                 ps.setString(1, a.getMessageTs());
                 ps.setString(2, a.getText());
                 ps.setString(3, a.getCommentTs());
                 ps.setString(4, a.getComment());
+                ps.setBoolean(5, a.isFinalized());
                 // where clause
-                ps.setString(5, a.getPrevMessageTs());
-                ps.setString(6, a.getSid());
-                ps.setString(7, a.getQid());
-                ps.setString(8, a.getPid());
+                ps.setString(6, a.getPrevMessageTs());
+                ps.setString(7, a.getSid());
+                ps.setString(8, a.getQid());
+                ps.setString(9, a.getPid());
                 ps.executeUpdate();
                 updated = true;
             } else {
