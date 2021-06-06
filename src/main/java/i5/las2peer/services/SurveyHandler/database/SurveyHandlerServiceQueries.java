@@ -87,10 +87,10 @@ public class SurveyHandlerServiceQueries {
             switch (tableName) {
                 case "surveys":
                     query += "sid VARCHAR(50) NOT NULL,";
-                    query += "adminmail VARCHAR(50) NOT NULL,";
+                    query += "adminmail VARCHAR(256) NOT NULL,";
                     query += "expires VARCHAR(50),";
                     query += "startdt VARCHAR(50),";
-                    query += "title VARCHAR(100) NOT NULL";
+                    query += "title VARCHAR(150) NOT NULL";
                     break;
                 case "questions":
                     query += "qid VARCHAR(50) NOT NULL,";
@@ -120,8 +120,8 @@ public class SurveyHandlerServiceQueries {
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "qid VARCHAR(50) NOT NULL,";
                     query += "gid VARCHAR(50) NOT NULL,";
-                    query += "text VARCHAR(700),"; // Huge free text is answer option by limesurvey
-                    query += "comment VARCHAR(256),";
+                    query += "text VARCHAR(900),"; // Huge free text is answer option by limesurvey
+                    query += "comment VARCHAR(900),";
                     query += "dtanswered VARCHAR(50),";
                     query += "messagets VARCHAR(50),";
                     query += "prevmessagets VARCHAR(50),";
@@ -183,6 +183,7 @@ public class SurveyHandlerServiceQueries {
                 System.out.println("No questions found for survey " + sid);
                 ps.close();
                 con.close();
+                // a survey without questions can not be the case, so return null
                 return null;
             } else{
                 System.out.println("Found questions in database.");
@@ -191,8 +192,6 @@ public class SurveyHandlerServiceQueries {
             ArrayList<Question> allQ = new ArrayList<>();
             while(!rs.isAfterLast()){
                 Question tempQ = SurveyHandlerServiceQueries.castToQuestion(rs);
-                // now initializing all answeroptions from db
-                getAnswerOptionsForQuestionFromDB(tempQ, database);
 
                 allQ.add(tempQ);
                 System.out.println("Found and added question with id: " + tempQ.getQid());
@@ -208,6 +207,46 @@ public class SurveyHandlerServiceQueries {
         }
 
         return null;
+    }
+    public static ArrayList<AnswerOption> getAnswerOptionsFromDB(String sid, String qid, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, sid);
+            ps.setString(2, qid);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (!rs.first()){
+                System.out.println("No answeroptions found for survey " + sid + "and qid " + qid);
+                ps.close();
+                con.close();
+                return new ArrayList<>();
+            } else{
+                System.out.println("Found answerOptions in database.");
+            }
+
+            ArrayList<AnswerOption> allAO = new ArrayList<>();
+            while(!rs.isAfterLast()){
+                AnswerOption tempAO = SurveyHandlerServiceQueries.castToAnswerOption(rs);
+
+                allAO.add(tempAO);
+                System.out.println("Found and added question with id: " + tempAO.getQid());
+                rs.next();
+            }
+
+            ps.close();
+            con.close();
+            return allAO;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return new ArrayList<>();
     }
     public static ArrayList<Survey> getSurveysFromDB(SQLDatabase database){
         try{
@@ -449,6 +488,28 @@ public class SurveyHandlerServiceQueries {
             res.setHelp(help);
             res.setCode(code);
             res.setRelevance(relevance);
+            return res;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            return null;
+        }
+    }
+    public static AnswerOption castToAnswerOption(ResultSet rs){
+        try{
+            String sid = rs.getString("sid");
+            String qid = rs.getString("qid");
+            Integer indexi = rs.getInt("indexi");
+            String code = rs.getString("code");
+            String text = rs.getString("text");
+
+
+            AnswerOption res = new AnswerOption();
+            res.setSid(sid);
+            res.setQid(qid);
+            res.setIndexi(indexi);
+            res.setText(text);
+            res.setCode(code);
             return res;
 
         } catch (Exception e){
@@ -744,6 +805,46 @@ public class SurveyHandlerServiceQueries {
         }
     }
 
+    public static boolean updateParticipantsPidInDB(Participant p, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM participants WHERE channel = ? AND email = ? AND sid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, p.getChannel());
+            ps.setString(2, p.getEmail());
+            ps.setString(3, p.getSid());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the participant, so update the entry
+                ps.close();
+                ps = con.prepareStatement("UPDATE participants SET pid = ? WHERE channel = ? AND email = ? AND sid = ?");
+                ps.setString(1, p.getPid());
+                // where clause
+                ps.setString(2, p.getChannel());
+                ps.setString(3, p.getEmail());
+                ps.setString(4, p.getSid());
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find participant in database. Could not update.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not update participant.");
+            return false;
+        }
+    }
+
     public static boolean updateAnswerInDB(Answer a, SQLDatabase database){
         try{
             Connection con = database.getDataSource().getConnection();
@@ -760,17 +861,18 @@ public class SurveyHandlerServiceQueries {
             if (rs.first()) {
                 // Found the answer, so update the entry
                 ps.close();
-                ps = con.prepareStatement("UPDATE answers SET messagets = ?, text = ?, commentts = ?, comment = ?, finalized = ? WHERE messagets = ? AND sid = ? AND qid = ? AND pid = ?");
+                ps = con.prepareStatement("UPDATE answers SET messagets = ?, text = ?, commentts = ?, comment = ?, finalized = ?, isskipped = ? WHERE messagets = ? AND sid = ? AND qid = ? AND pid = ?");
                 ps.setString(1, a.getMessageTs());
                 ps.setString(2, a.getText());
                 ps.setString(3, a.getCommentTs());
                 ps.setString(4, a.getComment());
                 ps.setBoolean(5, a.isFinalized());
+                ps.setBoolean(6, a.isSkipped());
                 // where clause
-                ps.setString(6, a.getPrevMessageTs());
-                ps.setString(7, a.getSid());
-                ps.setString(8, a.getQid());
-                ps.setString(9, a.getPid());
+                ps.setString(7, a.getPrevMessageTs());
+                ps.setString(8, a.getSid());
+                ps.setString(9, a.getQid());
+                ps.setString(10, a.getPid());
                 ps.executeUpdate();
                 updated = true;
             } else {

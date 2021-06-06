@@ -63,14 +63,27 @@ public class Participant {
     }
 
     // Based on the intent, decide what is sent back to the participant
-    public Response calculateNextAction(String intent, String message, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String token){
-        int questionsInSUrvey = this.currentSurvey.getSortedQuestions().size();
-        String welcomeString = "Would you like to start the survey \"" + currentSurvey.getTitle() + "\"? There are " + questionsInSUrvey + " questions in this survey.";
+    public Response calculateNextAction(String intent, String message, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String token, boolean secondSurvey){
+        int questionsInSurvey = this.currentSurvey.getSortedQuestions().size();
+        String hello = "Hello :slightly_smiling_face: \n";
+        if(secondSurvey){
+            hello = "Hello again :slightly_smiling_face: \n";
+        }
+        String welcomeString = hello + "Just send me a message and I will conduct the survey \"" + currentSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer.\n \n Here are some hints:\n";
         String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
-        String changeAnswerExplanation = " To change your answer, either click on the 3 points next to you text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+        String first = "";
+        if(!secondSurvey){
+            first = " To start the second survey you need to answer all questions from the first one.";
+        }
 
+        String changeAnswerExplanation = "\nTo change your given answer edit your message, by clicking on the 3 points next to your text message and then choosing \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+        String resultsGetSaved = "\nYour responses will be saved continuously.";
         String completedSurvey = "You already completed the survey." + changeAnswerExplanation;
-        String surveyDoneString = "Thank you for completing this survey.";
+        String firstEdit = "";
+        if(!secondSurvey){
+            firstEdit = " If you would like to change any answer to this survey, please do so before starting the next survey.";
+        }
+        String surveyDoneString = "Thank you for completing this survey :slightly_smiling_face:" + firstEdit;
         String answerNotFittingQuestion = "Your answer does not fit the question. Please change your answer.";
         String changedAnswer = "Your answer has been changed sucessfully.";
         String submittButtonPressedMessage = "Submit";
@@ -83,12 +96,13 @@ public class Participant {
         // check if it is the first contacting
         boolean participantContacted = this.participantcontacted;
         if (!participantContacted){
-            return participantNewlyContacted(welcomeString, skipExplanation, changeAnswerExplanation);
+            return participantNewlyContacted(welcomeString, skipExplanation, changeAnswerExplanation, resultsGetSaved, first);
         }
 
         // check if the participant changed an answer to a previous question
         boolean participantChangedAnswer = participantChangedAnswer(messageTs, currMessage, prevMessage);
         if (participantChangedAnswer){
+            System.out.println("participant changed answer");
             return updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
         }
 
@@ -285,9 +299,24 @@ public class Participant {
     public String getLSAnswersString(){
         String returnValue = "";
         for(Answer a : this.givenAnswersAl){
-            if(a.isFinalized()){
+            if(a.isFinalized() && !a.isSkipped()){
                 // only add finalized answers
-                returnValue += this.currentSurvey.getQuestionByQid(a.getQid()).createAnswerString(a);
+                returnValue += this.currentSurvey.getQuestionByQid(a.getQid()).createLimeAnswerString(a);
+            }
+        }
+        // Only delete comma if there are answers
+        if(returnValue.length() > 1){
+            return returnValue.substring(0, returnValue.length() - 1);
+        }
+        return returnValue;
+    }
+
+    public String getMSAnswersString(){
+        String returnValue = "";
+        for(Answer a : this.givenAnswersAl){
+            if(a.isFinalized() && !a.isSkipped()){
+                // only add finalized answers
+                returnValue += this.currentSurvey.getQuestionByQid(a.getQid()).createMobsosAnswerString(a);
             }
         }
         // Only delete comma if there are answers
@@ -422,13 +451,13 @@ public class Participant {
         return allAnswers;
     }
 
-    public Response participantNewlyContacted(String welcomeString, String skipExplanation, String changeAnswerExplanation){
+    public Response participantNewlyContacted(String welcomeString, String skipExplanation, String changeAnswerExplanation, String resultsGetSaved, String second){
         JSONObject response = new JSONObject();
         // Participant has not started the survey yet
         System.out.println("participant newly contacted");
         this.participantcontacted = true;
         SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-        response.put("text", welcomeString + skipExplanation + changeAnswerExplanation);
+        response.put("text", welcomeString + skipExplanation + second + changeAnswerExplanation + resultsGetSaved);
         return Response.ok().entity(response).build();
     }
 
@@ -447,10 +476,10 @@ public class Participant {
     }
 
     public boolean participantChangedButtonAnswer(String messageTs){
-        System.out.println("participant changed button answer...");
         Answer answer = getAnswerByTS(messageTs);
         if(answer != null) {
             if (answer.isFinalized()) {
+                System.out.println("participant changed button answer...");
                 return true;
             }
         }
@@ -458,6 +487,28 @@ public class Participant {
     }
 
     public Response updateAnswer(String intent, String message, String messageTs, JSONObject currMessage, JSONObject prevMessage, String changedAnswer, String token){
+        // check if it is a skipped message, if yes ignore
+        Answer a = getAnswerByTS(messageTs);
+        if(a != null){
+            if(a.isSkipped()){
+                System.out.println("skipped message edited");
+                JSONObject response = new JSONObject();
+                response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
+                return Response.ok().entity(response).build();
+            }
+        }
+        String prevTs = prevMessage.getAsString("ts");
+        Answer b = getAnswerByTS(prevTs);
+        if(b != null){
+            if(b.isSkipped()){
+                System.out.println("skipped message edited");
+                JSONObject response = new JSONObject();
+                response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
+                return Response.ok().entity(response).build();
+            }
+        }
+
+
         if(participantChangedTextAnswer(currMessage, prevMessage)){
             return updateTextAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer);
         }
@@ -494,7 +545,9 @@ public class Participant {
             SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
 
         }
-        else if(this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.FIVESCALE.toString())){
+        else if(this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.FIVESCALE.toString()) ||
+                this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.DICHOTOMOUS.toString()) ||
+                this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.SCALE.toString())){
 
             answer.setText(message);
 
@@ -601,7 +654,8 @@ public class Participant {
             }
         }
 
-        response.put("text", changedAnswer);
+        String changed = "Your answer to the question " + Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL()).getText() + " has been changed successfully.";
+        response.put("text", changed);
         return Response.ok().entity(response).build();
 
     }
@@ -628,11 +682,18 @@ public class Participant {
             return Response.ok().entity(response).build();
         }
 
+        Question answerEdited = Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL());
+        if(!answerEdited.answerIsPlausible(message)){
+            response.put("text", answerEdited.reasonAnswerNotPlausible(message));
+            return Response.ok().entity(response).build();
+        }
+
         answer.setPrevMessageTs(originalTs);
 
         if(answer.getComment().length() > 0){
             // if the question requires a comment, this has been edited (button presses only pass on curr message)
             System.out.println("updating comment");
+            answer.setPrevMessageTs(answer.getMessageTs());
             answer.setComment(newText);
             answer.setCommentTs(newTs);
         }
@@ -645,8 +706,8 @@ public class Participant {
 
         System.out.println("updating answer in database...");
         SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.database);
-
-        response.put("text", changedAnswer);
+        String changed = "Your answer to the question " + answerEdited.getText() + " has been changed successfully.";
+        response.put("text", changed);
         return Response.ok().entity(response).build();
     }
 
@@ -672,16 +733,28 @@ public class Participant {
             System.out.println("buttonintent is: " + buttonIntent);
 
             // Participant wants to skip a question
+            boolean skipped = false;
             if(intent.equals("skip")){
-                this.skippedQuestions.add(this.lastquestion);
-                newAnswer.setQid(this.lastquestion);
-                this.givenAnswersAl.add(newAnswer);
-                SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
-            } else if(intent.equals(buttonIntent)){
-                res = newButtonAnswer(newAnswer, lastQuestion, token, message, messageTs, surveyDoneString, answerNotFittingQuestion, submittButtonPressedMessage);
-            } else {
-                res = newTextAnswer(newAnswer, lastQuestion, message, messageTs, surveyDoneString, answerNotFittingQuestion, submittButtonPressedMessage);
+                System.out.println("message: " + message);
+                System.out.println(message.equals("skip"));
+                //skip intent does not get recognized correctly
+                if(message.equals("skip") || message.equals("Skip") || message.length()<5){
+                    this.skippedQuestions.add(this.lastquestion);
+                    newAnswer.setQid(this.lastquestion);
+                    this.givenAnswersAl.add(newAnswer);
+                    SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
+                    skipped = true;
+                }
             }
+
+            if(!skipped){
+                if(intent.equals(buttonIntent)){
+                    res = newButtonAnswer(newAnswer, lastQuestion, token, message, messageTs, surveyDoneString, answerNotFittingQuestion, submittButtonPressedMessage);
+                } else {
+                    res = newTextAnswer(newAnswer, lastQuestion, message, messageTs, surveyDoneString, answerNotFittingQuestion, submittButtonPressedMessage);
+                }
+            }
+
 
             if(res == Response.serverError().build()){
                 // parsing went wrong
@@ -759,7 +832,8 @@ public class Participant {
             String messageText = lastQuestion.encodeJsonBodyAsString(false, true, message, this);
             editSlackMessage(token, messageTs, messageText);
 
-        } else if(lastQuestion.getType().equals(Question.qType.FIVESCALE.toString())) {
+        } else if(lastQuestion.getType().equals(Question.qType.FIVESCALE.toString()) || lastQuestion.getType().equals(Question.qType.DICHOTOMOUS.toString()) ||
+                lastQuestion.getType().equals(Question.qType.SCALE.toString())) {
             if (!lastQuestion.answerIsPlausible(message)) {
                 response.put("text", answerNotFittingQuestion);
                 return Response.ok().entity(response).build();
@@ -782,6 +856,10 @@ public class Participant {
             editSlackMessage(token, messageTs, messageText);
 
         }else if(lastQuestion.getType().equals(Question.qType.SINGLECHOICECOMMENT.toString())){
+            if (!lastQuestion.answerIsPlausible(message)) {
+                response.put("text", answerNotFittingQuestion);
+                return Response.ok().entity(response).build();
+            }
 
             this.currentSubquestionAnswers.clear();
             Answer objectToRemove = new Answer();
@@ -795,9 +873,12 @@ public class Participant {
             givenAnswersAl.remove(objectToRemove);
             SurveyHandlerServiceQueries.deleteAnswerFromDB(objectToRemove, currentSurvey.database);
 
-
-
-            newAnswer.setText(message);
+            newAnswer.setSkipped(false);
+            for(AnswerOption ao : lastQuestion.getAnswerOptions()){
+                if(ao.getText().equals(message)){
+                    newAnswer.setText(ao.getCode());
+                }
+            }
             newAnswer.setQid(this.lastquestion);
             newAnswer.setMessageTs(messageTs);
             newAnswer.setPrevMessageTs(messageTs);
@@ -808,7 +889,8 @@ public class Participant {
             // return no content to wait for the comment
             return Response.noContent().build();
 
-        } else {
+        } else if(lastQuestion.getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
+                lastQuestion.getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString())) {
             // lastquestion is MC, handle accordingly
             JSONParser p = new JSONParser();
             JSONArray selectedOptionsJson;
@@ -894,8 +976,8 @@ public class Participant {
                 }
 
                 // delete the submit button
-                String messageText = lastQuestion.encodeJsonBodyAsString(false, true, "", this);
-                editSlackMessage(token, messageTs, messageText);
+                //String messageText = lastQuestion.encodeJsonBodyAsString(false, true, "", this);
+                //editSlackMessage(token, messageTs, messageText);
 
                 // submit button handling done
 
@@ -967,6 +1049,10 @@ public class Participant {
                 return Response.noContent().build();
             }
         }
+        else{
+            System.out.println("button click, but lastquestiontype not button question detected, returning no content...");
+            return Response.noContent().build();
+        }
 
         return null;
 
@@ -980,16 +1066,16 @@ public class Participant {
         System.out.println("multitype: " + Question.qType.MULTIPLECHOICEWITHCOMMENT);
 
         // check if an answer from a mcc question is expected
-        if(qidFromEditedMCC.length() > 0){
-            Answer a = getAnswer(qidFromEditedMCC);
+        if(this.qidFromEditedMCC.length() > 0){
+            Answer a = getAnswer(this.qidFromEditedMCC);
             a.setComment(message);
             a.setCommentTs(messageTs);
             a.setFinalized(true);
             a.setPrevMessageTs(messageTs);
-            this.givenAnswersAl.remove(getAnswer(qidFromEditedMCC));
+            this.givenAnswersAl.remove(getAnswer(this.qidFromEditedMCC));
             this.givenAnswersAl.add(a);
             SurveyHandlerServiceQueries.updateAnswerInDB(a, currentSurvey.database);
-            qidFromEditedMCC = "";
+            this.qidFromEditedMCC = "";
             // only one answer option more chosen so return
             return Response.ok().build();
             /*
@@ -1103,9 +1189,10 @@ public class Participant {
             newAnswer.setText(message);
             newAnswer.setMessageTs(messageTs);
             this.givenAnswersAl.add(newAnswer);
+
+            System.out.println("saving new answer to database at the end of function");
+            SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
         }
-        System.out.println("saving new answer to database at the end of function");
-        SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
 
         return null;
     }

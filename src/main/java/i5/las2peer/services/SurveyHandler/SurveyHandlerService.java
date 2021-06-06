@@ -153,7 +153,7 @@ public class SurveyHandlerService extends RESTService {
 				sur.setDatabase(database);
 				// init questions
 				ArrayList<Question> allQForSurvey = SurveyHandlerServiceQueries.getSurveyQuestionsFromDB(sur.getSid(), database);
-				System.out.println(allQForSurvey);
+				//System.out.println(allQForSurvey);
 				sur.initQuestionsFromDB(allQForSurvey);
 				// init participants
 				ArrayList<Participant> allPForSurvey = SurveyHandlerServiceQueries.getSurveyParticipantsFromDB(sur.getSid(), database);
@@ -213,6 +213,33 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	@POST
+	@Path("/test")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "",
+			notes = "")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "survey taking request handled")})
+	public Response test(String input) {
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		try {
+			LocalDate dateNow = LocalDate.now();
+			LocalTime timeNow = LocalTime.now();
+
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	response.put("text", "test works");
+		return Response.ok().entity(response).build();
+	}
+	@POST
 	@Path("/takingSurvey")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
@@ -243,11 +270,15 @@ public class SurveyHandlerService extends RESTService {
 			String buttonIntent = bodyInput.getAsString("buttonIntent");
 			System.out.println("buttonIntent: " + buttonIntent);
 
-			// check if senderEmail is actual email or userid
+			// check if senderEmail is actual email or userid or null
 			System.out.println("senderEMail: " + senderEmail);
-			if(!senderEmail.contains("@")){
-				System.out.println("sender email is user id");
-				senderEmail = getSlackEmailBySlackId(senderEmail, token);
+			if(senderEmail == null){
+				senderEmail = channel;
+			} else{
+				if(!senderEmail.contains("@")){
+					System.out.println("sender email is user id");
+					senderEmail = getSlackEmailBySlackId(senderEmail, token);
+				}
 			}
 
 			// find correct survey
@@ -300,6 +331,16 @@ public class SurveyHandlerService extends RESTService {
 				}
 			}
 
+			// Check if message was sent by someone we only knew the channel of, but now also the email
+			if(Objects.nonNull(currSurvey.findParticipant(channel))){
+				// after setting the channel last time now we can set email, since the email gets send the second time a participants sents something
+				Participant tempP = currSurvey.findParticipant(channel);
+				tempP.setEmail(senderEmail);
+				SurveyHandlerServiceQueries.updateParticipantInDB(tempP, database);
+				tempP.setPid(senderEmail);
+				SurveyHandlerServiceQueries.updateParticipantsPidInDB(tempP, database);
+			}
+
 			// Check if message was sent by someone known
 			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
 				// participant does not exist, create a new one
@@ -327,10 +368,24 @@ public class SurveyHandlerService extends RESTService {
 				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
 			}
 
+			//
+			boolean secondSurvey = false;
+
 			// check if the participant is done with the first survey
 			if(currParticipant.isCompletedsurvey()){
+				currParticipant = followUpSurvey.findParticipant(senderEmail);
+				if(Objects.isNull(currParticipant)){
+					currParticipant = currSurvey.findParticipant(senderEmail);
+					if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
+						String changedAnswer = "Your answer has been changed sucessfully.";
+						String answerNotFittingQuestion = "";
+						return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
+					}
+				}
+
 				// if the participant is done with first survey, check if already participant in second survey
 				currParticipant = followUpSurvey.findParticipant(senderEmail);
+				secondSurvey = true;
 				if(Objects.isNull(currParticipant)){
 					System.out.println("creating new participant for follow up");
 					// participant does not exist for new survey, create a new one
@@ -380,7 +435,7 @@ public class SurveyHandlerService extends RESTService {
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token);
+			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey);
 
 
 		} catch (ParseException e) {
@@ -409,19 +464,30 @@ public class SurveyHandlerService extends RESTService {
 
 			// Get question properties (includes answeroptions, logics and questiontype)
 			JSONArray qlProperties = new JSONArray();
+			JSONArray gList = new JSONArray();
 			for(Object jo : ql){
 				String qid = ((JSONObject) jo).getAsString("qid");
 				ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_question_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + qid + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 				JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
 				JSONObject qProperties = (JSONObject) minire3.get("result");
 				qlProperties.add(qProperties);
+				if(!gList.contains(qProperties.getAsString("gid"))){
+					gList.add(qProperties.getAsString("gid"));
+				}
 			}
 
-
+			JSONArray glProperties = new JSONArray();
+			for(Object jo : gList){
+				// Get question group properties from limesurvey
+				ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_group_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + jo.toString() + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+				JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
+				JSONObject gl = (JSONObject) minire3.get("result");
+				glProperties.add(gl);
+			}
 			// Create a new survey object
 			Survey newSurvey = new Survey(surveyID);
 			newSurvey.setAdminmail(adminmail);
-			newSurvey.initData(qlProperties);
+			newSurvey.initLimeSurveyData(qlProperties);
 
 			// Get survey title and add to survey
 			ClientResponse minires4 = mini.sendRequest("POST", uri, ("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
@@ -454,14 +520,87 @@ public class SurveyHandlerService extends RESTService {
 		}
 	}
 
+	private void setUpMobsosSurvey(String surveyID, String uri, String adminmail){
+		try{
+			JSONParser p = new JSONParser();
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint(uri);
+			HashMap<String, String> head = new HashMap<String, String>();
+
+
+			// Get questions from mobsos
+			String questionpath = "surveys/" + surveyID + "/questions";
+			ClientResponse minires2 = mini.sendRequest("POST", uri + questionpath, (""), MediaType.APPLICATION_JSON, MediaType.APPLICATION_JSON, head);
+			JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
+			JSONArray ql = (JSONArray) minire2.get("result");
+
+
+			JSONArray qlProperties = new JSONArray();
+			JSONArray gList = new JSONArray();
+			for(Object jo : ql){
+				// add question properties to array
+				// ql is array in form [questionid,[instructions:_,type:_...]]
+				JSONObject qtemp = (JSONObject) jo;
+				int index = 0;
+				for(Object info : qtemp.values()){
+					JSONObject tempInfo = (JSONObject) info;
+					tempInfo.put("sid",surveyID);
+					tempInfo.put("index",index);
+					index++;
+				}
+			}
+			System.out.println("ql: " + ql.toString());
+			qlProperties = ql;
+
+			// Get survey title
+			String surveypath = "surveys/" + surveyID;
+			ClientResponse minires4 = mini.sendRequest("GET", uri + surveypath, (""), MediaType.APPLICATION_JSON, MediaType.APPLICATION_JSON, head);
+			JSONObject minire4 = (JSONObject) p.parse(minires4.getResponse());
+			JSONArray sl = (JSONArray) minire4.get("result");
+
+			// Create a new survey object
+			Survey newSurvey = new Survey(surveyID);
+			newSurvey.setAdminmail(adminmail);
+
+			for (Object i : sl) {
+				newSurvey.addTitle(((JSONObject) i).getAsString("name"));
+				newSurvey.setExpires(((JSONObject) i).getAsString("end"));
+				newSurvey.setStartDT(((JSONObject) i).getAsString("start"));
+			}
+
+			newSurvey.initMobsosData(qlProperties);
+
+
+			// Check if adding title worked
+			if (Objects.isNull(newSurvey.getTitle())){
+				System.out.println("Failed to add title. Aborting survey creation...");
+			} else {
+				System.out.println(newSurvey.getTitle());
+				//surveyGlobal = newSurvey;
+				allSurveys.add(newSurvey);
+				SurveyHandlerServiceQueries.addSurveyToDB(newSurvey, database);
+				newSurvey.safeQuestionsToDB(database);
+				newSurvey.setDatabase(database);
+				System.out.println("Survey successfully initialized.");
+			}
+		} catch(Exception e){
+			e.printStackTrace();
+			System.out.println("calls to mobsos failed.");
+		}
+	}
+
 	private void setUpSurvey(String input){
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 		try {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 
-			String username = bodyInput.getAsString("NameOfUser");
-			String password = bodyInput.getAsString("Password");
+			String username = "";
+			String password = "";
+			if(bodyInput.containsKey("NameOfUser")){
+				username = bodyInput.getAsString("NameOfUser");
+				password = bodyInput.getAsString("Password");
+			}
 			String surveyID = bodyInput.getAsString("surveyID");
 			String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
 			if(bodyInput.getAsString("uri") != null){
@@ -472,10 +611,23 @@ public class SurveyHandlerService extends RESTService {
 			if(bodyInput.containsKey("followupSurveyID")){
 				String followupSurveyID = bodyInput.getAsString("followupSurveyID");
 				System.out.println("fsid: " + followupSurveyID);
-				setUpLimeSurvey(username, password, followupSurveyID, uri, adminmail);
+				if(username.length() > 0){
+					// if a username was entered, it is a survey from limesurvey
+					setUpLimeSurvey(username, password, followupSurveyID, uri, adminmail);
+				} else{
+					// if not it is from mobsos surveys
+					setUpMobsosSurvey(followupSurveyID, uri, adminmail);
+				}
+
 			}
 
-			setUpLimeSurvey(username, password, surveyID, uri, adminmail);
+			if(username.length() > 0){
+				// if a username was entered, it is a survey from limesurvey
+				setUpLimeSurvey(username, password, surveyID, uri, adminmail);
+			} else{
+				// if not it is from mobsos surveys
+				setUpMobsosSurvey(surveyID, uri, adminmail);
+			}
 
 		} catch(Exception e){
 			e.printStackTrace();
@@ -505,11 +657,21 @@ public class SurveyHandlerService extends RESTService {
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
 			String msg = bodyInput.getAsString("msg");
+			String senderEmail = bodyInput.getAsString("email");
 			System.out.println("token is: " + token);
 
 			// find correct survey
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
+			if(senderEmail != null){
+				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+					Response res = takingSurvey(input);
+					return res;
+				}
+			} else{
+				Response res = takingSurvey(input);
+				return res;
+			}
 
 			//set up survey, if not yet done
 			if(Objects.isNull(currSurvey)){
@@ -528,11 +690,6 @@ public class SurveyHandlerService extends RESTService {
 					return Response.ok().entity(response).build();
 				}
 				System.out.println("Survey is set-up.");
-			}
-
-			if (!(bodyInput.getAsString("adminmail").equals(bodyInput.getAsString("email")))) {
-				Response res = takingSurvey(input);
-				return res;
 			}
 
 			if (intent.equals("add_participant")) {
@@ -644,10 +801,11 @@ public class SurveyHandlerService extends RESTService {
 
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.getSortedQuestions().size();
-					String welcomeString = "Would you like to start the survey \"" + currSurvey.getTitle() + "\"? There are " + questionsInSurvey + " questions in this survey.";
+					String welcomeString = "Hello :slightly_smiling_face: \n Just send me a message and I will conduct the survey \"" + currSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer. \n\n Here are some hints:\n";
 					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
-					String changeAnswerExplanation = " To change your answer, either click on the 3 points next to you text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
-					response.put("text", welcomeString + skipExplanation + changeAnswerExplanation);
+					String changeAnswerExplanation = "\nTo change your given answer edit your message, by clicking on the 3 points next to you text message and then choosing \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+					String resultsGetSaved = "\nYour responses will be saved continuously.";
+					response.put("text", welcomeString + skipExplanation + changeAnswerExplanation + resultsGetSaved);
 					response.put("contactList", emails);
 					return Response.ok().entity(response).build();
 				}
@@ -709,9 +867,9 @@ public class SurveyHandlerService extends RESTService {
 
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.getSortedQuestions().size();
-					String welcomeString = "Would you like to start the survey \"" + currSurvey.getTitle() + "\"? There are " + questionsInSurvey + " questions in this survey.";
+					String welcomeString = "Hello :slightly_smiling_face: \nJust send me a message and I will conduct the survey \"" + currSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer.\n \n Here are some hints:\n";
 					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
-					String changeAnswerExplanation = " To change your answer, either click on the 3 points next to you text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+					String changeAnswerExplanation = " To change your answer, either click on the 3 points next to your text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
 					response.put("text", welcomeString + skipExplanation + changeAnswerExplanation);
 					response.put("contactList", emails);
 					return Response.ok().entity(response).build();
@@ -735,6 +893,91 @@ public class SurveyHandlerService extends RESTService {
 
 
 	@POST
+	@Path("/sendResultsToMobsos")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "Sends the saved answers to Mobsos.",
+			notes = "")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "results sent to Mobsos surveys")})
+	public Response sendResultsToMobsosSurveys(String input) {
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		try {
+
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			String surveyID = bodyInput.getAsString("surveyID");
+			String senderEmail = bodyInput.getAsString("email");
+			String uri = bodyInput.getAsString("uri");
+
+			if (senderEmail != null) {
+				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+					Response res = takingSurvey(input);
+					return res;
+				}
+			} else {
+				Response res = takingSurvey(input);
+				return res;
+			}
+
+			// find correct survey
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
+
+			if (Objects.isNull(currSurvey)) {
+				System.out.println("No survey exists for id " + surveyID + ". Creating...");
+				setUpSurvey(input);
+				// See if survey is set up now
+				currSurvey = getSurveyBySurveyID(surveyID);
+				if (Objects.isNull(currSurvey)) {
+					System.out.println("ERROR: Could not set up survey, still null.");
+					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+					return Response.ok().entity(response).build();
+				}
+
+				if (currSurvey.getSortedQuestionIds().size() == 0) {
+					response.put("text", "There are no questions in this survey.");
+					return Response.ok().entity(response).build();
+				}
+				System.out.println("Survey is set-up.");
+			}
+
+
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint(uri);
+			HashMap<String, String> head = new HashMap<String, String>();
+
+
+			for (Participant pa : currSurvey.getParticipants()) {
+				if(pa.isCompletedsurvey()){
+					// dont send inbetween, since there is no possibility to update response
+					String surveyResponseID;
+
+					String content = pa.getMSAnswersString();
+					System.out.println(content);
+
+					String contentFilled = "{" + content + "}";
+					ClientResponse minires = mini.sendRequest("POST", uri, contentFilled, MediaType.APPLICATION_JSON, "", head);
+					JSONObject minire = (JSONObject) p.parse(minires.getResponse());
+					String res = minire.getAsString("result");
+					System.out.println("aaaaaaaaaaaaaaresult: " + res);
+				}
+
+			}
+
+		} catch (Exception e) {
+			System.out.println("exception after mobsos results");
+			e.printStackTrace();
+		}
+
+		response.put("text", "Something went wrong in sendResultsBackToMobsos try block.");
+		return Response.ok().entity(response).build();
+	}
+
+	@POST
 	@Path("/sendResultsToLimesurvey")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
@@ -755,9 +998,20 @@ public class SurveyHandlerService extends RESTService {
 			String username = bodyInput.getAsString("NameOfUser");
 			String password = bodyInput.getAsString("Password");
 			String surveyID = bodyInput.getAsString("surveyID");
+			String senderEmail = bodyInput.getAsString("email");
 			String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
 			if(bodyInput.containsKey(uri)){
 				uri = bodyInput.getAsString("uri");
+			}
+
+			if(senderEmail != null){
+				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+					Response res = takingSurvey(input);
+					return res;
+				}
+			} else{
+				Response res = takingSurvey(input);
+				return res;
 			}
 
 			// find correct survey
@@ -807,16 +1061,16 @@ public class SurveyHandlerService extends RESTService {
 					// Part of the response is already at LimeSurvey, update response
 					surveyResponseID = pa.getSurveyResponseID();
 					System.out.println(surveyResponseID);
-					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\",\"id\":\"" + surveyResponseID + "\"}";
+					String contentFilled = "{" + content + ",\"id\":\"" + surveyResponseID + "\"}";
 					System.out.println(contentFilled);
 					String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					String response2 = minire2.getAsString("result");
-					System.out.println(response2);
+					System.out.println("aaaaaaaaaaaaaaresult: " + response2);
 				} else{
 					// New response, add new response and save id at participant
-					String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\"}";
+					String contentFilled = "{" + content + "}";
 					System.out.println(contentFilled);
 					String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
@@ -824,16 +1078,14 @@ public class SurveyHandlerService extends RESTService {
 					surveyResponseID = minire2.getAsString("result");
 					pa.setSurveyResponseID(surveyResponseID);
 					SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
-					System.out.println(surveyResponseID);
+					System.out.println("aaaaaaaaaaaaaasurvey response id: " + pa.getSurveyResponseID());
 				}
 			}
-
-			response.put("text", "Passed back results to LimeSurvey.");
-			return Response.ok().entity(response).build();
 
 
 		}
 		catch(Exception e){
+			System.out.println("exception after firstsurvey lime");
 			e.printStackTrace();
 		}
 
@@ -844,8 +1096,19 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String username = bodyInput.getAsString("NameOfUser");
 			String password = bodyInput.getAsString("Password");
+			String senderEmail = bodyInput.getAsString("email");
+			if(senderEmail != null){
+				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+					Response res = takingSurvey(input);
+					return res;
+				}
+			} else{
+				Response res = takingSurvey(input);
+				return res;
+			}
 			if(bodyInput.containsKey("followupSurveyID")) {
 
+				System.out.println("has followup survey. sending results back...");
 				String surveyID = bodyInput.getAsString("followupSurveyID");
 				String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
 				if(bodyInput.containsKey(uri)){
@@ -899,7 +1162,7 @@ public class SurveyHandlerService extends RESTService {
 						// Part of the response is already at LimeSurvey, update response
 						surveyResponseID = pa.getSurveyResponseID();
 						System.out.println(surveyResponseID);
-						String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\",\"id\":\"" + surveyResponseID + "\"}";
+						String contentFilled = "{" + content + ",\"id\":\"" + surveyResponseID + "\"}";
 						System.out.println(contentFilled);
 						String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 						ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
@@ -908,7 +1171,7 @@ public class SurveyHandlerService extends RESTService {
 						System.out.println(response2);
 					} else{
 						// New response, add new response and save id at participant
-						String contentFilled = "{" + content + ",\"token\":\"" + pa.getEmail() + "\"}";
+						String contentFilled = "{" + content + "}";
 						System.out.println(contentFilled);
 						String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 						ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
@@ -959,6 +1222,18 @@ public class SurveyHandlerService extends RESTService {
 			String token = bodyInput.getAsString("slackToken");
 			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
+			String senderEmail = bodyInput.getAsString("email");
+
+			if(senderEmail != null){
+				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+					System.out.println("admin detected, email: " + senderEmail + " and " + bodyInput.getAsString("adminmail"));
+					Response res = takingSurvey(input);
+					return res;
+				}
+			} else{
+				Response res = takingSurvey(input);
+				return res;
+			}
 
 			if(Objects.isNull(currSurvey)){
 				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
@@ -1044,6 +1319,18 @@ public class SurveyHandlerService extends RESTService {
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
 			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
+			String senderEmail = bodyInput.getAsString("email");
+
+			if(senderEmail != null){
+				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+					System.out.println("admin detected, email: " + senderEmail + " and " + bodyInput.getAsString("adminmail"));
+					Response res = takingSurvey(input);
+					return res;
+				}
+			} else{
+				Response res = takingSurvey(input);
+				return res;
+			}
 			if(bodyInput.containsKey("followupSurveyID")) {
 				Survey currSurvey = getSurveyBySurveyID("followupSurveyID");
 

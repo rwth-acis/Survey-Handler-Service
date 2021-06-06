@@ -84,14 +84,14 @@ public class Survey {
     }
 
     // Initialize data structues when given a JSONArray from limesurvey
-    public void initData(JSONArray allQuestions){
+    public void initLimeSurveyData(JSONArray allQuestions){
         ArrayList<Question> tempQuestionAl = new ArrayList<>();
         // Add questions to survey
         for (Object jo : allQuestions) {
             JSONObject j = (JSONObject) jo;
             try {
                 Question newQuestion = new Question();
-                newQuestion.initData(j);
+                newQuestion.initLimeSurveyData(j);
                 // put all questions into hashmap
                 this.questionsHM.put(newQuestion.getQid(), newQuestion);
                 if (newQuestion.isSubquestion()) {
@@ -130,6 +130,29 @@ public class Survey {
         System.out.println(this.getSortedQuestionIds().toString());
     }
 
+    // Initialize data structues when given a JSONArray from mobsos surveys
+    public void initMobsosData(JSONArray allQuestions){
+        ArrayList<Question> tempQuestionAl = new ArrayList<>();
+        // Add questions to survey
+        for (Object jo : allQuestions) {
+            JSONObject j = (JSONObject) jo;
+            try {
+                Question newQuestion = new Question();
+                newQuestion.initMobsosData(j);
+                // put all questions into hashmap
+                this.questionsHM.put(newQuestion.getQid(), newQuestion);
+
+                // put non-subquestions into arraylist (they are all non subquestions)
+                this.questionAL.add(newQuestion);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.out.println("Failed to parse a question from json.");
+            }
+        }
+
+    }
+
     // Initialize data structues when given an ArrayList from database
     public void initQuestionsFromDB(ArrayList<Question> QuestionAl){
 
@@ -150,7 +173,9 @@ public class Survey {
                 continue;
             }
             noSubQuestionAl.add(teQ);
-
+            // init answeroptions
+            ArrayList<AnswerOption> answerOptions = SurveyHandlerServiceQueries.getAnswerOptionsFromDB(this.sid, teQ.getQid(), database);
+            initAnswerOptionsFromDB(teQ, answerOptions);
         }
 
         // set the datastructures, handle subquestions afterwards
@@ -173,6 +198,14 @@ public class Survey {
         for (Participant p : ParticipantAl){
             p.setCurrentSurvey(this);
             this.participants.add(p);
+        }
+    }
+
+    public void initAnswerOptionsFromDB(Question q, ArrayList<AnswerOption> answerOptionsFromDB){
+        ArrayList<AnswerOption> answerOptions = new ArrayList<>();
+
+        for(AnswerOption ao: answerOptionsFromDB){
+            q.setAnswerOption(ao);
         }
     }
 
