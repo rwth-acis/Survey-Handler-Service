@@ -264,7 +264,10 @@ public class SurveyHandlerService extends RESTService {
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
 			String senderEmail = bodyInput.getAsString("email");
-			String token = bodyInput.getAsString("slackToken");
+			String token = ""; // for rocket chat none in this service is needed, so length 0
+			if(bodyInput.containsKey("slackToken")){
+				token = bodyInput.getAsString("slackToken");
+			}
 			String messageTs = bodyInput.getAsString("ts");
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
 			String buttonIntent = bodyInput.getAsString("buttonIntent");
@@ -370,6 +373,16 @@ public class SurveyHandlerService extends RESTService {
 
 			//
 			boolean secondSurvey = false;
+			System.out.println("token: " + token + " size: " + token.length());
+
+			// check which messenger is used
+			boolean slack = false;
+			if(token.length() > 0){
+				// a slack token is set
+				slack = true;
+			}
+
+			System.out.println("using slack: " + slack);
 
 			// check if the participant is done with the first survey
 			if(currParticipant.isCompletedsurvey()){
@@ -379,7 +392,7 @@ public class SurveyHandlerService extends RESTService {
 					if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
 						String changedAnswer = "Your answer has been changed sucessfully.";
 						String answerNotFittingQuestion = "";
-						return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
+						return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token, slack);
 					}
 				}
 
@@ -530,7 +543,7 @@ public class SurveyHandlerService extends RESTService {
 
 			// Get questions from mobsos
 			String questionpath = "surveys/" + surveyID + "/questions";
-			ClientResponse minires2 = mini.sendRequest("POST", uri + questionpath, (""), MediaType.APPLICATION_JSON, MediaType.APPLICATION_JSON, head);
+			ClientResponse minires2 = mini.sendRequest("GET", uri + questionpath, (""), MediaType.APPLICATION_JSON, MediaType.APPLICATION_JSON, head);
 			JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 			JSONArray ql = (JSONArray) minire2.get("result");
 
@@ -739,7 +752,16 @@ public class SurveyHandlerService extends RESTService {
 			}
 			else if (intent.equals("get_answers")) {
 				System.out.println(currSurvey.getAnswersStringFromAllParticipants());
-				response.put("text", "The current answers are: " + currSurvey.getAnswersStringFromAllParticipants());
+				String firstSurveyAnswers = "The current answers for survey " + currSurvey.getTitle() + " are: \n" + currSurvey.getAnswersStringFromAllParticipants();
+				String secondSurveyAnswers = "";
+				// get the followup survey
+				if(bodyInput.containsKey("followupSurveyID")){
+					surveyID = bodyInput.getAsString("followupSurveyID");
+					currSurvey = getSurveyBySurveyID(surveyID);
+					secondSurveyAnswers = "\n\nThe current answers for survey " + currSurvey.getTitle() + " are: \n" + currSurvey.getAnswersStringFromAllParticipants();
+				}
+
+				response.put("text",firstSurveyAnswers + secondSurveyAnswers);
 				return Response.ok().entity(response).build();
 			}
 			else if(intent.equals("delete_participant")){

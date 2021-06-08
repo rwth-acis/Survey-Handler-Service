@@ -409,12 +409,26 @@ public class Survey {
 
     public String getAnswersStringFromAllParticipants(){
         String returnValue = "";
-        for(Participant p : this.participants){
-            returnValue += p.getLSAnswersString();
+        for(Question q : this.questionAL){
+            returnValue += q.getText();
+            returnValue += "\n";
+            returnValue += this.getAnswers(q.getQid());
+            returnValue += "\n";
         }
         return returnValue;
     }
 
+    public ArrayList<Answer> getAnswers(String qid){
+        ArrayList<Answer> allAnswers = new ArrayList<>();
+        for(Participant p : this.participants){
+            if(p.getAnswer(qid) != null){
+                allAnswers.add(p.getAnswer(qid));
+            }
+        }
+        return allAnswers;
+    }
+
+    /*
     public HashMap<String, HashMap<String, String>> getAnswers(){
         // return Participant email : [question1 : answer1, ...]
         HashMap<String, HashMap<String, String>> results = new HashMap<>();
@@ -430,6 +444,7 @@ public class Survey {
 
         return results;
     }
+     */
 
 
     public ArrayList<String> getSortedQuestionIds() {

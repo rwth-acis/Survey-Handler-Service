@@ -316,11 +316,21 @@ public class Question{
         return false;
     }
 
-    public String encodeJsonBodyAsString(Participant participant){
-        return encodeJsonBodyAsString(false, false, "", participant);
+    public String encodeJsonBodyAsString(Participant participant, boolean slack){
+        return encodeJsonBodyAsString(false, false, "", participant, slack);
     }
 
-    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant){
+    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, boolean slack){
+        System.out.println("inside encodejsonbodyasstring. slack: " + slack);
+        if(slack){
+            return parseQuestion(newQuestionGroup, edit, buttonToColor, participant);
+        }
+        else{
+            return parseQuestionAsText(newQuestionGroup, participant);
+        }
+    }
+
+    public String parseQuestion(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant){
         String resString = "";
         String subString = "";
         int index = 1;
@@ -373,7 +383,7 @@ public class Question{
                         "\"type\": \"checkboxes\",\n" +
                         "\"options\": [";
                 for (Question subq : this.subquestionAl) {
-                    resString += subq.encodeJsonBodyAsString(participant);
+                    resString += subq.encodeJsonBodyAsString(participant, true);
                 }
                 // remove last comma after the options
                 resString = resString.substring(0, resString.length() - 1);
@@ -407,7 +417,7 @@ public class Question{
                         "\"type\": \"checkboxes\",\n" +
                         "\"options\": [";
                 for (Question subq : this.subquestionAl) {
-                    resString += subq.encodeJsonBodyAsString(participant);
+                    resString += subq.encodeJsonBodyAsString(participant, true);
                 }
                 // remove last comma after the options
                 resString = resString.substring(0, resString.length() - 1);
@@ -752,7 +762,122 @@ public class Question{
         return resString;
     }
 
-    private Question getSubquestionByIndex(String index){
+    public String parseQuestionAsText(boolean newQuestionGroup, Participant participant){
+        String resString = "";
+        String subString = "";
+        int index = 1;
+
+        String exp = " Please choose one of the following options by sending the respective number as a response: \n";
+
+        String questionText = this.text;
+        int questionsLeft = participant.getUnaskedQuestions().size() + 1;
+        // +1 because the question that is about to be sent is already removed from the list
+        String newQGroupText = "";
+        if(questionsLeft > 1){
+            newQGroupText = "You completed a question group. There are " + questionsLeft + " questions left.\n";
+        }
+        else{
+            newQGroupText = "You completed a question group. There is " + questionsLeft + " question left.\n";
+        }
+
+        if(newQuestionGroup){
+            questionText = newQGroupText + questionText;
+        }
+
+
+        if(this.isSubquestion){
+            subString += this.text;
+            return subString;
+        }
+
+        resString += questionText;
+
+        // Check if multiple choice question
+        if (this.subquestionAl.size() > 0) {
+            if(this.type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
+                resString += "Please choose from the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer. If you want to choose no option, please enter \"-\". If you choose more than one, please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\" and so on.";
+            } else{
+                // no comment required
+                resString += "Please choose from the following options by sending the respective number as a response. If you choose more than one, please separate the numbers with a comma and no space. If you want to choose no option, please enter \"-\".";
+            }
+            for (Question subq : this.subquestionAl) {
+                resString += "\n" + index + ". " + subq.encodeJsonBodyAsString(participant, false);
+                index++;
+            }
+
+        }
+
+        System.out.println(this.type);
+
+        switch(this.type){
+            case "D":
+                System.out.println("Date/Time");
+                resString += " Please enter a date in the format dd.mm.jjjj.";
+                break;
+            case "|":
+                System.out.println("File upload");
+                resString += " Please send a file.";
+                break;
+            case "G":
+                System.out.println("Gender");
+                resString += exp;
+                resString += " 1. Female ";
+                resString += " 2. Male ";
+                resString += " 3. No Answer ";
+                break;
+            case "N":
+                System.out.println("Numerical input");
+                resString += " Please respond with a number.";
+                break;
+            case "X":
+                System.out.println("Text display");
+                break;
+            case "Y":
+                System.out.println("Yes/No");
+                resString += exp;
+                resString += " 1. Yes ";
+                resString += " 2. No ";
+                resString += " 3. No Answer ";
+                break;
+            case "5":
+                System.out.println("5 point choice");
+                resString += " Please only answer with a number between 1 and 5.";
+                break;
+
+        }
+        if((!(this.answerOptions.isEmpty()) && this.type.equals(qType.DICHOTOMOUS.toString())) ||
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.SCALE.toString())) ||
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTRADIO.toString())) ||
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTDROPDOWN.toString()))) {
+
+            System.out.println("inside answeroptions with type dichotomous, scale, listradio or listdropdown");
+            resString += exp;
+            for(int i = 1; i < answerOptions.size() + 1; i++){
+                resString += " " + i + ". " + getAnswerOptionByIndex(i).getText() + "\n";
+                index++;
+            }
+
+            System.out.println("resstring: " + resString);
+        }
+
+        if((!(this.answerOptions.isEmpty()) && this.type.equals(qType.SINGLECHOICECOMMENT.toString()))){
+            System.out.println("inside answeroptions with type singlechoicecomment");
+            resString += " Please choose one of the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen answer option\":\"your comment\": \n";
+            for(int i = 1; i < answerOptions.size() + 1; i++){
+                resString += " " + i + ". " + getAnswerOptionByIndex(i).getText() + "\n";
+                index++;
+            }
+        }
+
+        if(!this.isSubquestion){
+            if(this.help.length() > 0){
+                resString += "\n This is the help: " + this.help + "";
+            }
+        }
+        return resString;
+    }
+
+    public Question getSubquestionByIndex(String index){
         System.out.println(index);
         return this.subquestionAl.get(Integer.parseInt(index) -1);
     }
@@ -835,60 +960,120 @@ public class Question{
         return returnValue;
     }
 
-    public boolean answerIsPlausible(String textAnswer){
+    public boolean answerIsPlausible(String textAnswer, boolean slack){
 
-        if(this.type.equals(qType.SINGLECHOICECOMMENT.toString()) || this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString()) ||
-        this.type.equals(qType.DICHOTOMOUS.toString()) || this.type.equals(qType.SCALE.toString())){
-            System.out.println("Question type singlechoice recognized.");
-            // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
-            for(AnswerOption ao : answerOptions){
-                if(ao.getText().equals(textAnswer)){
+        if(slack){
+            if(this.type.equals(qType.SINGLECHOICECOMMENT.toString()) || this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString()) ||
+                    this.type.equals(qType.DICHOTOMOUS.toString()) || this.type.equals(qType.SCALE.toString())){
+                System.out.println("Question type singlechoice recognized.");
+                // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
+                for(AnswerOption ao : answerOptions){
+                    if(ao.getText().equals(textAnswer)){
+                        System.out.println("Answer is valid.");
+                        return true;
+                    }
+                }
+            }
+
+            if(!this.subquestionAl.isEmpty()){
+                System.out.println("Question type multiple choice recognized.");
+                // If it a mulitple choice question, check if textAnswer equals one answer option (which is saves as text from subquestion)
+                for(Question q : this.subquestionAl){
+                    System.out.println("calling answer plausible recursively...");
+                    if(q.answerIsPlausible(textAnswer, slack)){
+                        System.out.println("Answer is valid.");
+                        return true;
+                    }
+                }
+            }
+
+            if(this.isSubquestion){
+                System.out.println("Question type (multiple choice) subquestion recognized.");
+                // if it is an answer to a mulitple choice question answer option, it is exactly that subquestion text
+                if(this.text.equals(textAnswer)){
+                    System.out.println("textanswer: " + textAnswer + " text: " + this.text);
+                    System.out.println("Answer is valid.");
+                    return true;
+                }
+                return false;
+            }
+
+            if(this.type.equals(qType.GENDER.toString())){
+                System.out.println("Question type gender recognized.");
+                // a gender question only has these three options
+                if(textAnswer.equals("Female") || textAnswer.equals("Male") || textAnswer.equals("No Answer")){
+                    System.out.println("Answer is valid.");
+                    return true;
+                }
+            }
+
+            if(this.type.equals(qType.YESNO.toString())){
+                System.out.println("Question type yesno recognized.");
+                // yes no question has only these three answers
+                if(textAnswer.equals("Yes") || textAnswer.equals("No") || textAnswer.equals("No Answer")){
                     System.out.println("Answer is valid.");
                     return true;
                 }
             }
         }
-
-        if(!this.subquestionAl.isEmpty()){
-            System.out.println("Question type multiple choice recognized.");
-            // If it a mulitple choice question, check if textAnswer equals one answer option (which is saves as text from subquestion)
-            for(Question q : this.subquestionAl){
-                System.out.println("calling answer plausible recursively...");
-                if(q.answerIsPlausible(textAnswer)){
-                    System.out.println("Answer is valid.");
+        else{
+            if(this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString()) ||
+                    this.type.equals(qType.DICHOTOMOUS.toString()) || this.type.equals(qType.SCALE.toString())){
+                System.out.println("Question type singlechoice recognized.");
+                // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
+                int size = this.answerOptions.size();
+                if(0 < Integer.parseInt(textAnswer) && Integer.parseInt(textAnswer) < size + 1){
                     return true;
                 }
             }
+
+            if(this.type.equals(qType.GENDER.toString()) || this.type.equals(qType.YESNO.toString())){
+                if(0 < Integer.parseInt(textAnswer) && Integer.parseInt(textAnswer) < 4){
+                    return true;
+                }
+            }
+
+            if(this.type.equals(qType.SINGLECHOICECOMMENT.toString())){
+                String chosen = textAnswer.split(":")[0];
+                String comment = textAnswer.split(":")[1];
+                int size = this.answerOptions.size();
+                if(0 < Integer.parseInt(chosen) && Integer.parseInt(chosen) < size + 1){
+                    return true;
+                }
+            }
+
+            if(this.type.equals(qType.MULTIPLECHOICENOCOMMENT.toString())){
+                String[] chosen = textAnswer.split(",");
+                int size = this.subquestionAl.size();
+                for(String s : chosen){
+                    if(0 < Integer.parseInt(s) && Integer.parseInt(s) < size + 1){
+                        return true;
+                    }
+                }
+
+            }
+
+            if(this.type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
+                String[] all = textAnswer.split(";");
+                ArrayList<String> chosen = new ArrayList<>();
+                ArrayList<String> comments = new ArrayList<>();
+                int size = this.answerOptions.size();
+                for(String s : all){
+                    chosen.add(s.split(":")[0]);
+                    comments.add(s.split(":")[1]);
+                }
+                for(String s : chosen){
+                    if(0 < Integer.parseInt(s) && Integer.parseInt(s) < size + 1){
+                        return true;
+                    }
+                }
+
+            }
+
+
+
         }
 
-        if(this.isSubquestion){
-            System.out.println("Question type (multiple choice) subquestion recognized.");
-            // if it is an answer to a mulitple choice question answer option, it is exactly that subquestion text
-            if(this.text.equals(textAnswer)){
-                System.out.println("textanswer: " + textAnswer + " text: " + this.text);
-                System.out.println("Answer is valid.");
-                return true;
-            }
-            return false;
-        }
-
-        if(this.type.equals(qType.GENDER.toString())){
-            System.out.println("Question type gender recognized.");
-            // a gender question only has these three options
-            if(textAnswer.equals("Female") || textAnswer.equals("Male") || textAnswer.equals("No Answer")){
-                System.out.println("Answer is valid.");
-                return true;
-            }
-        }
-
-        if(this.type.equals(qType.YESNO.toString())){
-            System.out.println("Question type yesno recognized.");
-            // yes no question has only these three answers
-            if(textAnswer.equals("Yes") || textAnswer.equals("No") || textAnswer.equals("No Answer")){
-                System.out.println("Answer is valid.");
-                return true;
-            }
-        }
 
         if(this.type.equals(qType.SHORTFREETEXT.toString())){
             System.out.println("Question type free text recognized.");
@@ -956,21 +1141,47 @@ public class Question{
         return false;
     }
 
-    public String reasonAnswerNotPlausible(String type){
+    public String reasonAnswerNotPlausible(boolean slack){
 
+        String type = this.type;
         String reason = "";
 
-        if(type.equals(qType.LISTDROPDOWN.toString()) ||
-           type.equals(qType.LISTRADIO.toString()) ||
-           type.equals(qType.DICHOTOMOUS.toString()) ||
-           type.equals(qType.SCALE.toString()) ||
-           type.equals(qType.GENDER.toString()) ||
-           type.equals(qType.YESNO.toString())){
-            reason = "Please answer by clicking on one of the displayed buttons.";
-        }
+        if(slack){
+            if(type.equals(qType.LISTDROPDOWN.toString()) ||
+                    type.equals(qType.LISTRADIO.toString()) ||
+                    type.equals(qType.DICHOTOMOUS.toString()) ||
+                    type.equals(qType.SCALE.toString()) ||
+                    type.equals(qType.GENDER.toString()) ||
+                    type.equals(qType.YESNO.toString())){
+                reason = "Please answer by clicking on one of the displayed buttons.";
+            }
 
-        if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
-            reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
+            if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
+                reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
+            }
+        }
+        else{
+            if(type.equals(qType.LISTDROPDOWN.toString()) ||
+                    type.equals(qType.LISTRADIO.toString()) ||
+                    type.equals(qType.DICHOTOMOUS.toString()) ||
+                    type.equals(qType.SCALE.toString()) ||
+                    type.equals(qType.GENDER.toString()) ||
+                    type.equals(qType.YESNO.toString())){
+                reason = "Please only answer with one of the given numbers written before the answer option";
+            }
+
+            if(type.equals(qType.SINGLECHOICECOMMENT.toString())){
+                reason = "Please answer in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer.";
+            }
+
+            if(type.equals(qType.MULTIPLECHOICENOCOMMENT.toString())){
+                reason = "Please only answer with one of the given numbers written before the answer option and comma speparated with no spaces in between.";
+            }
+
+            if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
+                reason = "Please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\"...";
+            }
+
         }
 
         if(type.equals(qType.SHORTFREETEXT.toString()) ||
