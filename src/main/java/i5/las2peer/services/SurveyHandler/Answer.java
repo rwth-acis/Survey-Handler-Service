@@ -2,21 +2,21 @@ package i5.las2peer.services.SurveyHandler;
 
 public class Answer {
     // Database model identifier
-    public String pid;
-    public String sid;
-    public String qid;
-    public String gid;
-    public String text;
-    public String comment;
-    public String dtanswered;
-    public String prevMessageTs;
-    public boolean finalized;
+    private String pid;
+    private String sid;
+    private String qid;
+    private String gid;
+    private String text;
+    private String comment;
+    private String dtanswered;
+    private String prevMessageTs;
+    private boolean finalized;
 
     //used for unique identification of messages (unique per channel, provided by slack)
-    public String messageTs;
-    public String commentTs;
+    private String messageTs;
+    private String commentTs;
 
-    public boolean skipped;
+    private boolean skipped;
     // end Database model identifier
 
     public Answer(){

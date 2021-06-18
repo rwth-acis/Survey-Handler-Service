@@ -878,7 +878,7 @@ public class Question{
     }
 
     public Question getSubquestionByIndex(String index){
-        System.out.println(index);
+        //System.out.println(index);
         return this.subquestionAl.get(Integer.parseInt(index) -1);
     }
 
@@ -1017,56 +1017,105 @@ public class Question{
             }
         }
         else{
+            // rocket chat
             if(this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString()) ||
                     this.type.equals(qType.DICHOTOMOUS.toString()) || this.type.equals(qType.SCALE.toString())){
                 System.out.println("Question type singlechoice recognized.");
                 // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
                 int size = this.answerOptions.size();
-                if(0 < Integer.parseInt(textAnswer) && Integer.parseInt(textAnswer) < size + 1){
-                    return true;
+                try{
+                    if(0 < Integer.parseInt(textAnswer) && Integer.parseInt(textAnswer) < size + 1){
+                        return true;
+                    }
+                } catch(Exception e){
+                    System.out.println("answer is not plausible");
+                    return false;
                 }
+
             }
 
             if(this.type.equals(qType.GENDER.toString()) || this.type.equals(qType.YESNO.toString())){
-                if(0 < Integer.parseInt(textAnswer) && Integer.parseInt(textAnswer) < 4){
-                    return true;
+                try{
+                    if(0 < Integer.parseInt(textAnswer) && Integer.parseInt(textAnswer) < 4){
+                        return true;
+                    }
+                } catch(Exception e){
+                    System.out.println("answer is not plausible");
+                    return false;
                 }
+
             }
 
             if(this.type.equals(qType.SINGLECHOICECOMMENT.toString())){
-                String chosen = textAnswer.split(":")[0];
-                String comment = textAnswer.split(":")[1];
-                int size = this.answerOptions.size();
-                if(0 < Integer.parseInt(chosen) && Integer.parseInt(chosen) < size + 1){
-                    return true;
+                try{
+                    String chosen = textAnswer.split(":")[0];
+                    String comment = textAnswer.split(":")[1];
+                    int size = this.answerOptions.size();
+                    if(0 < Integer.parseInt(chosen) && Integer.parseInt(chosen) < size + 1){
+                        return true;
+                    }
+                } catch(Exception e){
+                    System.out.println("answer is not plausible");
+                    return false;
                 }
+
             }
 
             if(this.type.equals(qType.MULTIPLECHOICENOCOMMENT.toString())){
-                String[] chosen = textAnswer.split(",");
-                int size = this.subquestionAl.size();
-                for(String s : chosen){
-                    if(0 < Integer.parseInt(s) && Integer.parseInt(s) < size + 1){
+                try{
+                    if(textAnswer.equals("-")){
                         return true;
                     }
+                    else{
+                        String[] chosen = textAnswer.split(",");
+                        System.out.println("chosen: " + chosen);
+                        int size = this.subquestionAl.size();
+                        for(String s : chosen){
+                            System.out.println("parsed int: " + Integer.parseInt(s) + "max size " + size);
+                            if(!(0 < Integer.parseInt(s) && Integer.parseInt(s) < size + 1)){
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                } catch(Exception e){
+                    System.out.println("answer is not plausible");
+                    return false;
                 }
+
 
             }
 
             if(this.type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
-                String[] all = textAnswer.split(";");
-                ArrayList<String> chosen = new ArrayList<>();
-                ArrayList<String> comments = new ArrayList<>();
-                int size = this.answerOptions.size();
-                for(String s : all){
-                    chosen.add(s.split(":")[0]);
-                    comments.add(s.split(":")[1]);
-                }
-                for(String s : chosen){
-                    if(0 < Integer.parseInt(s) && Integer.parseInt(s) < size + 1){
+                try{
+                    if(textAnswer.equals("-")){
                         return true;
                     }
+                    else{
+                        String[] all = textAnswer.split(";");
+                        System.out.println("all: " + all);
+                        ArrayList<String> chosen = new ArrayList<>();
+                        ArrayList<String> comments = new ArrayList<>();
+                        int size = this.subquestionAl.size();
+                        for(String s : all){
+                            chosen.add(s.split(":")[0]);
+                            comments.add(s.split(":")[1]);
+                        }
+                        System.out.println("chosen: " + chosen);
+                        System.out.println("comments: " + comments);
+                        for(String s : chosen){
+                            System.out.println("parsed int: " + Integer.parseInt(s) + "max size " + size);
+                            if(!(0 < Integer.parseInt(s) && Integer.parseInt(s) < size + 1)){
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                } catch(Exception e){
+                    System.out.println("answer is not plausible");
+                    return false;
                 }
+
 
             }
 
@@ -1137,7 +1186,7 @@ public class Question{
             }
         }
 
-        System.out.println("answer is not plausible");
+        System.out.println("answer is not plausible (function end)");
         return false;
     }
 
@@ -1253,6 +1302,15 @@ public class Question{
     public AnswerOption getAnswerOptionByIndex(Integer index){
         for(AnswerOption ao : answerOptions){
             if(ao.getIndexi().equals(index)){
+                return ao;
+            }
+        }
+        return null;
+    }
+
+    public AnswerOption getAnswerOptionByCode(String code){
+        for(AnswerOption ao : answerOptions){
+            if(ao.getCode().equals(code)){
                 return ao;
             }
         }

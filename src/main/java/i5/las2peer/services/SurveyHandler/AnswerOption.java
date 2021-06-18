@@ -3,11 +3,11 @@ package i5.las2peer.services.SurveyHandler;
 public class AnswerOption {
 
     // Database model identifier
-    public String sid;
-    public String qid;
-    public Integer indexi;
-    public String code;
-    public String text;
+    private String sid;
+    private String qid;
+    private Integer indexi;
+    private String code;
+    private String text;
     // end Database model identifier
 
 

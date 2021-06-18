@@ -404,7 +404,7 @@ public class Survey {
                 return p;
             }
         }
-        return null;
+        return new Participant(channel);
     }
 
     public String getAnswersStringFromAllParticipants(){
@@ -412,20 +412,61 @@ public class Survey {
         for(Question q : this.questionAL){
             returnValue += q.getText();
             returnValue += "\n";
-            returnValue += this.getAnswers(q.getQid());
-            returnValue += "\n";
+            if(q.getSubquestionAl().size() > 0){
+                for(Question sq : q.getSubquestionAl()){
+                    returnValue += sq.getText();
+                    returnValue += "\n";
+                    returnValue += this.getAnswers(sq);
+                    returnValue += "\n";
+                }
+            }
+            /*
+            else if(q.getAnswerOptions().size() > 0){
+                for(AnswerOption ao : q.getAnswerOptions()){
+                    returnValue += ao.getText();
+                    returnValue += "\n";
+                    returnValue += this.getAnswers(q);
+                    returnValue += "\n";
+                }
+            }
+
+             */
+            else{
+                returnValue += this.getAnswers(q);
+                returnValue += "\n";
+            }
         }
         return returnValue;
     }
 
-    public ArrayList<Answer> getAnswers(String qid){
+    public ArrayList<String> getAnswers(Question q){
         ArrayList<Answer> allAnswers = new ArrayList<>();
         for(Participant p : this.participants){
-            if(p.getAnswer(qid) != null){
-                allAnswers.add(p.getAnswer(qid));
+            if(p.getAnswer(q.getQid()) != null){
+                allAnswers.add(p.getAnswer(q.getQid()));
             }
         }
-        return allAnswers;
+        return getAnswersText(allAnswers);
+    }
+
+    public ArrayList<String> getAnswersText(ArrayList<Answer> answers){
+        ArrayList<String> all = new ArrayList<>();
+        for(Answer a : answers){
+            if(this.getQuestionByQid(a.getQid()).isSubquestion()){
+                // question is subquestion, so display how many poeple chose option
+                all.add(a.getText());
+            } else if(this.getQuestionByQid(a.getQid()).getAnswerOptions().size() > 0){
+                // question has answer options, parse text to chosen answer option
+                all.add(this.getQuestionByQid(a.getQid()).getAnswerOptionByCode(a.getText()).getText());
+            } else{
+                all.add(a.getText());
+            }
+
+            if(a.getComment().length() > 0){
+                all.add(" comment: " + a.getComment());
+            }
+        }
+        return all;
     }
 
     /*
