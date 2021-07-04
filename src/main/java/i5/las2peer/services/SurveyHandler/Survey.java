@@ -134,17 +134,18 @@ public class Survey {
     public void initMobsosData(JSONArray allQuestions){
         ArrayList<Question> tempQuestionAl = new ArrayList<>();
         // Add questions to survey
+        int index = 0;
         for (Object jo : allQuestions) {
             JSONObject j = (JSONObject) jo;
             try {
                 Question newQuestion = new Question();
-                newQuestion.initMobsosData(j);
+                newQuestion.initMobsosData(j, index);
                 // put all questions into hashmap
                 this.questionsHM.put(newQuestion.getQid(), newQuestion);
 
                 // put non-subquestions into arraylist (they are all non subquestions)
                 this.questionAL.add(newQuestion);
-
+                index++;
             } catch (Exception e) {
                 e.printStackTrace();
                 System.out.println("Failed to parse a question from json.");

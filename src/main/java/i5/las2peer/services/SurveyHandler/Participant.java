@@ -560,7 +560,8 @@ public class Participant {
         // check for question type
         if(this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.SINGLECHOICECOMMENT.toString()) ||
                 this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.LISTDROPDOWN.toString()) ||
-                this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.LISTRADIO.toString())){
+                this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.LISTRADIO.toString()) ||
+                this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.DICHOTOMOUS.toString())){
             Question q = this.currentSurvey.getQuestionByQid(answer.getQid());
             for(AnswerOption ao : q.getAnswerOptions()){
                 if(ao.getText().equals(message)){
@@ -576,7 +577,6 @@ public class Participant {
 
         }
         else if(this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.FIVESCALE.toString()) ||
-                this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.DICHOTOMOUS.toString()) ||
                 this.currentSurvey.getQuestionByQid(answer.getQid()).getType().equals(Question.qType.SCALE.toString())){
 
             answer.setText(message);
@@ -687,9 +687,11 @@ public class Participant {
 
 
         String questionText = "";
-        Question edited = Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL());
+        Question edited = this.currentSurvey.getQuestionByQid(answer.getQid());
+        //Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL());
         if(edited.isSubquestion()){
-            questionText = Question.getQuestionById(edited.getParentQid(), currentSurvey.getQuestionAL()).getText();
+            questionText = this.currentSurvey.getQuestionByQid(answer.getQid()).getText();
+            //Question.getQuestionById(edited.getParentQid(), currentSurvey.getQuestionAL()).getText();
         } else{
             questionText = edited.getText();
         }
@@ -735,14 +737,38 @@ public class Participant {
         // rocket chat
         if(type.equals(Question.qType.LISTDROPDOWN.toString()) ||
                 type.equals(Question.qType.LISTRADIO.toString()) ||
-                type.equals(Question.qType.DICHOTOMOUS.toString()) ||
-                type.equals(Question.qType.SCALE.toString()) ||
-                type.equals(Question.qType.GENDER.toString()) ||
-                type.equals(Question.qType.YESNO.toString())){
+                type.equals(Question.qType.DICHOTOMOUS.toString())){
 
             String text = answerEdited.getAnswerOptionByIndex(Integer.parseInt(message)).getCode();
             answer.setText(text);
             answer.setMessageTs(messageTs);
+        }
+
+        if(type.equals(Question.qType.YESNO.toString())){
+            System.out.println("single choice yes no recognized");
+
+            if(message.equals("1")){
+                answer.setText("Y");
+            } else if(message.equals("2")){
+                answer.setText("N");
+            } else if(message.equals("3")){
+                answer.setText("-");
+            }
+            answer.setMessageTs(messageTs);
+        }
+
+        if(type.equals(Question.qType.GENDER.toString())){
+            System.out.println("single choice gender recognized");
+
+            if(message.equals("1")){
+                answer.setText("F");
+            } else if(message.equals("2")){
+                answer.setText("M");
+            } else if(message.equals("3")){
+                answer.setText("-");
+            }
+            answer.setMessageTs(messageTs);
+
         }
 
         if(type.equals(Question.qType.SINGLECHOICECOMMENT.toString())){
@@ -903,7 +929,8 @@ public class Participant {
             return Response.ok().entity(response).build();
         }
 
-        Question answerEdited = Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL());
+        Question answerEdited = this.currentSurvey.getQuestionByQid(answer.getQid());
+        //Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL());
         if(!answerEdited.answerIsPlausible(message, true)){
             response.put("text", answerEdited.reasonAnswerNotPlausible(true));
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
@@ -1020,7 +1047,8 @@ public class Participant {
         JSONObject response = new JSONObject();
         // message is a list of selected options in json format or a simple text message
 
-        if (lastQuestion.getType().equals(Question.qType.LISTDROPDOWN.toString()) || lastQuestion.getType().equals(Question.qType.LISTRADIO.toString())){
+        if (lastQuestion.getType().equals(Question.qType.LISTDROPDOWN.toString()) || lastQuestion.getType().equals(Question.qType.LISTRADIO.toString()) ||
+            lastQuestion.getType().equals(Question.qType.DICHOTOMOUS.toString())){
             if(!lastQuestion.answerIsPlausible(message, true)){
                 response.put("text", answerNotFittingQuestion);
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
@@ -1067,7 +1095,7 @@ public class Participant {
             String messageText = lastQuestion.encodeJsonBodyAsString(false, true, message, this, true);
             editSlackMessage(token, messageTs, messageText);
 
-        } else if(lastQuestion.getType().equals(Question.qType.FIVESCALE.toString()) || lastQuestion.getType().equals(Question.qType.DICHOTOMOUS.toString()) ||
+        } else if(lastQuestion.getType().equals(Question.qType.FIVESCALE.toString()) ||
                 lastQuestion.getType().equals(Question.qType.SCALE.toString())) {
             if (!lastQuestion.answerIsPlausible(message, true)) {
                 response.put("text", answerNotFittingQuestion);
@@ -1339,8 +1367,9 @@ public class Participant {
 
             // it is a button question in rocket chat
             if(lastQuestion.getType().equals(Question.qType.LISTRADIO.toString()) ||
-                    lastQuestion.getType().equals(Question.qType.LISTDROPDOWN.toString())){
-                System.out.println("single choice list recognized");
+                    lastQuestion.getType().equals(Question.qType.LISTDROPDOWN.toString()) ||
+                    lastQuestion.getType().equals(Question.qType.DICHOTOMOUS.toString())){
+                System.out.println("single choice list or dicho recognized");
 
 
                 // answer is in valid form, so save to db
@@ -1374,9 +1403,8 @@ public class Participant {
 
             }
 
-            if(lastQuestion.getType().equals(Question.qType.DICHOTOMOUS.toString()) ||
-                    lastQuestion.getType().equals(Question.qType.SCALE.toString())){
-                System.out.println("single choice scale dicho recognized");
+            if(lastQuestion.getType().equals(Question.qType.SCALE.toString())){
+                System.out.println("single choice scale recognized");
 
                 // answer is in valid form, so save to db
                 for(AnswerOption ao : lastQuestion.getAnswerOptions()){

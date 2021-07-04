@@ -89,6 +89,7 @@ public class SurveyHandlerService extends RESTService {
 	private String databasePassword = "";
 	private String databaseName = "";
 	private String databaseHost = "";
+	private String url = "";
 	private int databaseTypeInt;
 	private int databasePort;
 
@@ -109,6 +110,15 @@ public class SurveyHandlerService extends RESTService {
 			}
 		}
 		return null;
+	}
+
+	public static void deleteSurvey(String surveyID){
+		for (Survey s : allSurveys){
+			if (s.getSid().equals(surveyID)){
+				SurveyHandlerServiceQueries.deleteSurveyFromDB(getSurveyBySurveyID(surveyID), database);
+			}
+		}
+		allSurveys.remove(getSurveyBySurveyID(surveyID));
 	}
 
 	public static ArrayList<Survey> getAllSurveys(){
@@ -227,6 +237,7 @@ public class SurveyHandlerService extends RESTService {
 					code = HttpURLConnection.HTTP_OK,
 					message = "survey taking request handled")})
 	public Response takingSurvey(String input) {
+		System.out.println("url: " + url);
 		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
 		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
 		System.out.println("log: " + Context.get());
@@ -249,6 +260,7 @@ public class SurveyHandlerService extends RESTService {
 				token = bodyInput.getAsString("slackToken");
 			}
 			String messageTs = bodyInput.getAsString("time");
+			boolean ls = bodyInput.containsKey("NameOfUser");
 
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
 			String buttonIntent = bodyInput.getAsString("buttonIntent");
@@ -289,32 +301,63 @@ public class SurveyHandlerService extends RESTService {
 
 			// Check if survey has expiration date and if survey has expired
 			if(currSurvey.getExpires() != null){
-				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-				String expireDate = currSurvey.getExpires().split("\\s")[0];
-				String expireTime = currSurvey.getExpires().split("\\s")[1];
-				System.out.println(expireDate + " and expires at " + dateNow);
-				System.out.println(expireTime + " and expires at " + timeNow);
-				if(dateNow.isAfter(LocalDate.parse(expireDate))){
-					if(timeNow.isAfter(LocalTime.parse(expireTime)))
-						response.put("text", "The survey is no longer active.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
+				if(ls){
+					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+					String expireDate = currSurvey.getExpires().split("\\s")[0];
+					String expireTime = currSurvey.getExpires().split("\\s")[1];
+					System.out.println(expireDate + " and expires at " + dateNow);
+					System.out.println(expireTime + " and expires at " + timeNow);
+					if(dateNow.isAfter(LocalDate.parse(expireDate))){
+						if(timeNow.isAfter(LocalTime.parse(expireTime)))
+							response.put("text", "The survey is no longer active.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+				} else{
+					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+					String expireDate = currSurvey.getExpires().split("T")[0];
+					String expireTime = currSurvey.getExpires().split("T")[1];
+					System.out.println(expireDate + " and expires at " + dateNow);
+					System.out.println(expireTime + " and expires at " + timeNow);
+					if(dateNow.isAfter(LocalDate.parse(expireDate))){
+						if(timeNow.isAfter(LocalTime.parse(expireTime)))
+							response.put("text", "The survey is no longer active.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
 				}
+
+
 			}
 
 			// Check if survey has expiration date and if survey has expired
 			if(currSurvey.getStartDT() != null){
-				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-				String startDate = currSurvey.getStartDT().split("\\s")[0];
-				String startTime = currSurvey.getStartDT().split("\\s")[1];
-				System.out.println(startDate + " and starts at " + dateNow);
-				System.out.println(startTime + " and starts at " + timeNow);
-				if(dateNow.isBefore(LocalDate.parse(startDate))){
-					if(timeNow.isBefore(LocalTime.parse(startTime)))
-						response.put("text", "The survey is not yet active.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
+				if(ls){
+					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+					String startDate = currSurvey.getStartDT().split("\\s")[0];
+					String startTime = currSurvey.getStartDT().split("\\s")[1];
+					System.out.println(startDate + " and starts at " + dateNow);
+					System.out.println(startTime + " and starts at " + timeNow);
+					if(dateNow.isBefore(LocalDate.parse(startDate))){
+						if(timeNow.isBefore(LocalTime.parse(startTime)))
+							response.put("text", "The survey is not yet active.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+				} else{
+					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+					String startDate = currSurvey.getStartDT().split("T")[0];
+					String startTime = currSurvey.getStartDT().split("T")[1];
+					System.out.println(startDate + " and starts at " + dateNow);
+					System.out.println(startTime + " and starts at " + timeNow);
+					if(dateNow.isBefore(LocalDate.parse(startDate))){
+						if(timeNow.isBefore(LocalTime.parse(startTime)))
+							response.put("text", "The survey is not yet active.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
 				}
+
 			}
 
 			// Check if message was sent by someone we only knew the channel of, but now also the email
@@ -527,23 +570,26 @@ public class SurveyHandlerService extends RESTService {
 			// Get questions from mobsos
 			String questionpath = "surveys/" + surveyID + "/questions";
 			ClientResponse minires = mini.sendRequest("GET", questionpath, "", MediaType.APPLICATION_JSON, MediaType.APPLICATION_JSON, head);
-			JSONArray ql = (JSONArray) p.parse(minires.getResponse());
+			System.out.println("minires: " + minires.getResponse());
+			JSONObject qlO = (JSONObject) p.parse(minires.getResponse());
 
+			JSONArray ql = new JSONArray();
 
-			JSONArray qlProperties = new JSONArray();
-			JSONArray gList = new JSONArray();
-			for(Object jo : ql){
-				// add question properties to array
-				// ql is array in form [questionid,[instructions:_,type:_...]]
-				JSONObject qtemp = (JSONObject) jo;
-				int index = 0;
-				for(Object info : qtemp.values()){
-					JSONObject tempInfo = (JSONObject) info;
-					tempInfo.put("sid",surveyID);
-					tempInfo.put("index",index);
-					index++;
-				}
+			Set<String> keysSet = qlO.keySet();
+			ArrayList<String> keys = new ArrayList<>();
+			for(String s : keysSet){
+				keys.add(s);
 			}
+
+			int index = 0;
+			for(Object co : qlO.values()){
+				JSONObject cjo = (JSONObject) co;
+				cjo.put("qid", keys.get(index));
+				cjo.put("sid", surveyID);
+				ql.add(cjo);
+				index++;
+			}
+			JSONArray qlProperties = new JSONArray();
 			System.out.println("ql: " + ql.toString());
 			qlProperties = ql;
 
@@ -597,7 +643,7 @@ public class SurveyHandlerService extends RESTService {
 				password = bodyInput.getAsString("Password");
 			}
 			String surveyID = bodyInput.getAsString("surveyID");
-			String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
+			String uri = url;
 			if(bodyInput.getAsString("uri") != null){
 				uri = bodyInput.getAsString("uri");
 			}
@@ -650,9 +696,6 @@ public class SurveyHandlerService extends RESTService {
 
 		try {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
-			///////////////////////////////////////////////////////////
-			setUpSurvey(input);
-			/////////////////////////////////////////////////////
 			String intent = bodyInput.getAsString("intent");
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
@@ -917,7 +960,7 @@ public class SurveyHandlerService extends RESTService {
 
 
 	@POST
-	@Path("/sendResultsToMobsos")
+	@Path("/sendResultsToMobsosSurveys")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
@@ -939,7 +982,11 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
 			String senderEmail = bodyInput.getAsString("email");
-			String uri = bodyInput.getAsString("uri");
+			String uri = url;
+			if(bodyInput.getAsString("uri") != null){
+				uri = bodyInput.getAsString("uri");
+			}
+
 
 			if (senderEmail != null) {
 				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
@@ -981,7 +1028,7 @@ public class SurveyHandlerService extends RESTService {
 
 
 			for (Participant pa : currSurvey.getParticipants()) {
-				if(pa.isCompletedsurvey()){
+				if(pa.isCompletedsurvey() && !(pa.getSurveyResponseID() != null)){
 					// dont send inbetween, since there is no possibility to update response
 					String surveyResponseID;
 
@@ -989,13 +1036,18 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(content);
 
 					String contentFilled = "{" + content + "}";
-					ClientResponse minires = mini.sendRequest("POST", uri, contentFilled, MediaType.APPLICATION_JSON, "", head);
-					JSONObject minire = (JSONObject) p.parse(minires.getResponse());
-					String res = minire.getAsString("result");
-					System.out.println("aaaaaaaaaaaaaaresult: " + res);
+					String resultsURL = "surveys/" + surveyID + "/responses";
+					ClientResponse minires = mini.sendRequest("POST", resultsURL, contentFilled, MediaType.APPLICATION_JSON, "", head);
+					System.out.println("minires: " + minires.getResponse());
+					pa.setSurveyResponseID("1");
+					SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
 				}
 
 			}
+
+			response.put("text", "Passed back results to MobSOS surveys.");
+			Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+			return Response.ok().entity(response).build();
 
 		} catch (Exception e) {
 			System.out.println("exception after mobsos results");
@@ -1032,8 +1084,8 @@ public class SurveyHandlerService extends RESTService {
 			String password = bodyInput.getAsString("Password");
 			String surveyID = bodyInput.getAsString("surveyID");
 			String senderEmail = bodyInput.getAsString("email");
-			String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
-			if(bodyInput.containsKey(uri)){
+			String uri = url;
+			if(bodyInput.getAsString("uri") != null){
 				uri = bodyInput.getAsString("uri");
 			}
 
@@ -1145,8 +1197,8 @@ public class SurveyHandlerService extends RESTService {
 
 				System.out.println("has followup survey. sending results back...");
 				String surveyID = bodyInput.getAsString("followupSurveyID");
-				String uri = "https://limesurvey.tech4comp.dbis.rwth-aachen.de/index.php/admin/remotecontrol";
-				if(bodyInput.containsKey(uri)){
+				String uri = url;
+				if(bodyInput.getAsString("uri") != null){
 					uri = bodyInput.getAsString("uri");
 				}
 

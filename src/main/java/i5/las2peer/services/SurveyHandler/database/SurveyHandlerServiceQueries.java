@@ -638,6 +638,7 @@ public class SurveyHandlerServiceQueries {
             }
 
             if(!answerOptions.isEmpty()){
+                System.out.println("empty " + answerOptions.isEmpty() + "size " + answerOptions.size());
                 addAnsweroptionsToDB(q, database);
             }
 
@@ -733,6 +734,7 @@ public class SurveyHandlerServiceQueries {
             // Integer in answeroptionsstringal starts at 1
             for(int i = 1; i < q.getAnswerOptions().size() + 1; i++){
                 AnswerOption answerOption  = q.getAnswerOptionByIndex(i);
+                System.out.println("answeroption: " + answerOption);
                 String query = "INSERT INTO answeroptions(sid, qid, indexi, code, text) VALUES (?, ?, ?, ?, ?)";
                 ps = con.prepareStatement(query);
                 ps.setString(1, answerOption.getSid());
@@ -941,6 +943,8 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
+            ArrayList<Answer> answersToDelete = p.getGivenAnswersAl();
+
             String query = "SELECT * FROM participants WHERE pid = ? AND sid = ?";
             ps = con.prepareStatement(query);
             ps.setString(1, p.getPid());
@@ -957,6 +961,12 @@ public class SurveyHandlerServiceQueries {
 
                 ps.executeUpdate();
                 updated = true;
+
+                // delete all answers as well
+                for(Answer a : answersToDelete){
+                    deleteAnswerFromDB(a, database);
+                }
+
             } else {
                 System.out.println("Did not find participant in database. Could not delete.");
                 updated = false;
@@ -1012,6 +1022,140 @@ public class SurveyHandlerServiceQueries {
         } catch (Exception e){
             e.printStackTrace();
             System.out.println("Could not delete answer.");
+            return false;
+        }
+    }
+
+    public static boolean deleteQuestionFromDB(Question q, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            ArrayList<AnswerOption> answeroptionsToDelete = q.getAnswerOptions();
+
+            String query = "SELECT * FROM questions WHERE sid = ? AND qid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, q.getSid());
+            ps.setString(2, q.getQid());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the answer, so deleting the entry
+                ps.close();
+                ps = con.prepareStatement("DELETE FROM questions WHERE sid = ? AND qid = ?");
+
+                ps.setString(1, q.getSid());
+                ps.setString(2, q.getQid());
+
+                ps.executeUpdate();
+                updated = true;
+
+                // delete all answers as well
+                for(AnswerOption ao : answeroptionsToDelete){
+                    deleteAnswerOptionFromDB(ao, database);
+                }
+
+            } else {
+                System.out.println("Did not find answer in database. Could not delete.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not delete answer.");
+            return false;
+        }
+    }
+
+    public static boolean deleteAnswerOptionFromDB(AnswerOption ao, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ? AND code = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, ao.getSid());
+            ps.setString(2, ao.getQid());
+            ps.setString(3, ao.getCode());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the answer, so deleting the entry
+                ps.close();
+                ps = con.prepareStatement("DELETE FROM answeroptions WHERE sid = ? AND qid = ? AND code = ?");
+
+                ps.setString(1, ao.getSid());
+                ps.setString(2, ao.getQid());
+                ps.setString(3, ao.getCode());
+
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find answeroption in database. Could not delete.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not delete answeroption.");
+            return false;
+        }
+    }
+
+    public static boolean deleteSurveyFromDB(Survey s, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            // retrieve all Questions and Participants to delete as well
+            ArrayList<Question> questionsToDelete = s.getQuestionAL();
+            ArrayList<Participant> participantsToDelete = s.getParticipants();
+
+            String query = "SELECT * FROM surveys WHERE sid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, s.getSid());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the answer, so deleting the entry
+                ps.close();
+                ps = con.prepareStatement("DELETE FROM surveys WHERE sid = ?");
+
+                ps.setString(1, s.getSid());
+
+                ps.executeUpdate();
+                updated = true;
+
+                // delete all questions and participants as well
+                for(Participant p : participantsToDelete){
+                    deleteParticipantFromDB(p, database);
+                }
+                for(Question q : questionsToDelete){
+                    deleteQuestionFromDB(q, database);
+                }
+            } else {
+                System.out.println("Did not find survey in database. Could not delete.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not delete survey.");
             return false;
         }
     }

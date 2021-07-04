@@ -116,10 +116,10 @@ public class Question{
         }
     }
 
-    public void initMobsosData(JSONObject q) throws Exception{
+    public void initMobsosData(JSONObject q, int index) throws Exception{
         JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
-        this.text = q.getAsString("qu:Instructions");
+        this.text = q.getAsString("instructions");
         this.sid = q.getAsString("sid");
 
         // the questions do not have a help text, relevance or are subquestions
@@ -132,37 +132,36 @@ public class Question{
         this.gorder = "1";
 
         // the question code will be deined as the index, since its unique
-        this.code = q.getAsString("index");
-        this.qorder = q.getAsString("index");
+        this.code = String.valueOf(index);
+        this.qorder = String.valueOf(index);
 
 
          // check for type, since information text does not have qid
-        if(q.getAsString("xsi:type").equals("qu:InformationPageType")){
-            this.qid = "";
+        if(q.getAsString("type").equals("qu:InformationPageType")){
+            this.qid = String.valueOf(index);
         }
         else{
             // if not display of information, set qid
             this.qid = q.getAsString("qid");
         }
 
-
-        if(q.getAsString("xsi:type").equals("qu:InformationPageType")){
+        if(q.getAsString("type").equals("qu:InformationPageType")){
             this.type = "X";
         }
-        else if(q.getAsString("xsi:type").equals("qu:OrdinalScaleQuestionPageType")){
+        else if(q.getAsString("type").equals("qu:OrdinalScaleQuestionPageType")){
             this.type = "SC";
-            this.text += "Please rate on a scale of " + q.getAsString("minval") + " (" + q.getAsString("minlabel") + ") to " + q.getAsString("maxval") + " (" + q.getAsString("maxlabel") + ").";
+            this.text += " Please rate on a scale of " + q.getAsString("minval") + " (" + q.getAsString("minlabel") + ") to " + q.getAsString("maxval") + " (" + q.getAsString("maxlabel") + ").";
             for(int i = Integer.parseInt(q.getAsString("minval")); i <= Integer.parseInt(q.getAsString("maxval")); i++){
                 AnswerOption newAnswerOption = new AnswerOption();
                 newAnswerOption.setQid(this.qid);
                 newAnswerOption.setSid(this.sid);
                 newAnswerOption.setCode(String.valueOf(i));
-                newAnswerOption.setIndexi(i);
+                newAnswerOption.setIndexi(i+1);
                 newAnswerOption.setText(String.valueOf(i));
                 this.answerOptions.add(newAnswerOption);
             }
         }
-        else if(q.getAsString("xsi:type").equals("qu:DichotomousQuestionPageType")){
+        else if(q.getAsString("type").equals("qu:DichotomousQuestionPageType")){
             this.type = "D";
 
             // set answer option 1
@@ -170,7 +169,7 @@ public class Question{
             newAnswerOption1.setQid(this.qid);
             newAnswerOption1.setSid(this.sid);
             newAnswerOption1.setCode("0");
-            newAnswerOption1.setIndexi(0);
+            newAnswerOption1.setIndexi(1);
             newAnswerOption1.setText(q.getAsString("minlabel"));
             this.answerOptions.add(newAnswerOption1);
 
@@ -179,19 +178,17 @@ public class Question{
             newAnswerOption2.setQid(this.qid);
             newAnswerOption2.setSid(this.sid);
             newAnswerOption2.setCode("1");
-            newAnswerOption2.setIndexi(1);
+            newAnswerOption2.setIndexi(2);
             newAnswerOption2.setText(q.getAsString("maxlabel"));
             this.answerOptions.add(newAnswerOption2);
 
         }
-        else if(q.getAsString("xsi:type").equals("qu:FreeTextQuestionPageType")){
-            this.type = "H";
+        else if(q.getAsString("type").equals("qu:FreeTextQuestionPageType")){
+            this.type = "U";
         }
         else{
             System.out.println("ERROR: Type for mobsos question not recongized!");
         }
-
-        System.out.println("answeroptinos" + q.getAsString("answeroptions"));
 
 
     }
