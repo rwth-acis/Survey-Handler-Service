@@ -99,6 +99,8 @@ Now install the app to your wished workspace. After this a token will be generat
     
     - for LimeSurvey results: Action Type: Service, Function Name:sendResultsToLimesurvey.
 
+    - for MobSOS surveys results: Action Type: Service, Function Name:sendResultsToMobsosSurveys.
+
     - both of them need the action parameters from the main bot actions
 
 ### Creating a LimeSurvey Survey:
