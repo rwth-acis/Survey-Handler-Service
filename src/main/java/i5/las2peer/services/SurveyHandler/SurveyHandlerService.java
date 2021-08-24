@@ -741,25 +741,40 @@ public class SurveyHandlerService extends RESTService {
 			// find correct survey
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
-			//set up survey, if not yet done
-			if(Objects.isNull(currSurvey)){
-				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-				setUpSurvey(input);
-				// See if survey is set up now
-				currSurvey = getSurveyBySurveyID(surveyID);
-				if (Objects.isNull(currSurvey)){
-					System.out.println("ERROR: Could not set up survey, still null.");
-					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
+			if (intent.equals("set_up_survey")) {
+				//set up survey
+				if(Objects.isNull(currSurvey)){
+					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+					setUpSurvey(input);
+					// See if survey is set up now
+					currSurvey = getSurveyBySurveyID(surveyID);
+					if (Objects.isNull(currSurvey)){
+						System.out.println("ERROR: Could not set up survey, still null.");
+						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
 
-				if (currSurvey.getSortedQuestionIds().size() == 0) {
-					response.put("text", "There are no questions in this survey.");
+					if (currSurvey.getSortedQuestionIds().size() == 0) {
+						response.put("text", "There are no questions in this survey.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+					System.out.println("Survey is set-up.");
+					response.put("text", "The survey has been successfully set up.");
 					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 					return Response.ok().entity(response).build();
 				}
-				System.out.println("Survey is set-up.");
+				else {
+					response.put("text", "The survey is already set up, there are no further actions necessary. Users can send the chatbot a message and it will start to conduct the survey with them.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+			}
+			else if(Objects.isNull(currSurvey)){
+				response.put("text", "Please initiate the setup of the survey first.");
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
 			}
 
 			if (intent.equals("add_participant")) {
