@@ -254,7 +254,8 @@ public class SurveyHandlerService extends RESTService {
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
-			String senderEmail = bodyInput.getAsString("email");
+			String senderEmail = "";
+
 			String token = ""; // for rocket chat none in this service is needed, so length 0
 			if(bodyInput.containsKey("slackToken")){
 				token = bodyInput.getAsString("slackToken");
@@ -269,23 +270,28 @@ public class SurveyHandlerService extends RESTService {
 			// find correct survey
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
-			// check if senderEmail is actual email or userid or null
-			System.out.println("senderEMail: " + senderEmail);
-			if(senderEmail == null){
-				senderEmail = currSurvey.findParticipantByChannel(channel).getEmail();
-			} else{
-				if(!senderEmail.contains("@")){
-					System.out.println("sender email is user id");
-					senderEmail = getSlackEmailBySlackId(senderEmail, token);
-				}
-			}
-
 			String followupSurveyID;
 			Survey followUpSurvey = new Survey("");
 
 			if(bodyInput.containsKey("followupSurveyID")){
 				followupSurveyID = bodyInput.getAsString("followupSurveyID");
 				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
+			}
+
+
+			try{
+				senderEmail = bodyInput.getAsString("email");
+				System.out.println("senderEMail: " + senderEmail);
+
+				// check if senderEmail is actual email or userid
+				if(!senderEmail.contains("@")){
+					System.out.println("sender email is user id");
+					senderEmail = getSlackEmailBySlackId(senderEmail, token);
+					System.out.println("senderEMail: " + senderEmail);
+				}
+			} catch(Exception e){
+				senderEmail = currSurvey.findParticipantByChannel(channel).getEmail();
+				System.out.println("senderEMail: " + senderEmail);
 			}
 
 			System.out.println("survey: " + currSurvey);
@@ -523,6 +529,20 @@ public class SurveyHandlerService extends RESTService {
 				JSONObject gl = (JSONObject) minire3.get("result");
 				glProperties.add(gl);
 			}
+
+			// sort the questiongroups
+			HashMap<String, String> t = new HashMap<>();
+			for(Object glo : glProperties){
+				JSONObject currQLO = (JSONObject) glo;
+				t.put(currQLO.getAsString("gid"), currQLO.getAsString("group_order"));
+			}
+
+			for(Object q : qlProperties){
+				JSONObject currQ = (JSONObject) q;
+				currQ.put("group_order",t.get(currQ.getAsString("gid")));
+			}
+
+
 			// Create a new survey object
 			Survey newSurvey = new Survey(surveyID);
 			newSurvey.setAdminmail(adminmail);
@@ -700,21 +720,26 @@ public class SurveyHandlerService extends RESTService {
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
 			String msg = bodyInput.getAsString("msg");
-			String senderEmail = bodyInput.getAsString("email");
-			System.out.println("token is: " + token);
 
-			// find correct survey
-			Survey currSurvey = getSurveyBySurveyID(surveyID);
+			String senderEmail = "";
+			try{
+				senderEmail = bodyInput.getAsString("email");
 
-			if(senderEmail != null){
 				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
 					Response res = takingSurvey(input);
 					return res;
 				}
-			} else{
+
+			} catch(Exception e){
 				Response res = takingSurvey(input);
 				return res;
 			}
+
+
+			System.out.println("token is: " + token);
+
+			// find correct survey
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			//set up survey, if not yet done
 			if(Objects.isNull(currSurvey)){
@@ -981,19 +1006,22 @@ public class SurveyHandlerService extends RESTService {
 
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
-			String senderEmail = bodyInput.getAsString("email");
 			String uri = url;
 			if(bodyInput.getAsString("uri") != null){
 				uri = bodyInput.getAsString("uri");
 			}
 
 
-			if (senderEmail != null) {
+			String senderEmail = "";
+			try{
+				senderEmail = bodyInput.getAsString("email");
+
 				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
 					Response res = takingSurvey(input);
 					return res;
 				}
-			} else {
+
+			} catch(Exception e){
 				Response res = takingSurvey(input);
 				return res;
 			}
@@ -1083,18 +1111,21 @@ public class SurveyHandlerService extends RESTService {
 			String username = bodyInput.getAsString("NameOfUser");
 			String password = bodyInput.getAsString("Password");
 			String surveyID = bodyInput.getAsString("surveyID");
-			String senderEmail = bodyInput.getAsString("email");
 			String uri = url;
 			if(bodyInput.getAsString("uri") != null){
 				uri = bodyInput.getAsString("uri");
 			}
 
-			if(senderEmail != null){
+			String senderEmail = "";
+			try{
+				senderEmail = bodyInput.getAsString("email");
+
 				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
 					Response res = takingSurvey(input);
 					return res;
 				}
-			} else{
+
+			} catch(Exception e){
 				Response res = takingSurvey(input);
 				return res;
 			}
@@ -1277,6 +1308,10 @@ public class SurveyHandlerService extends RESTService {
 				return Response.ok().entity(response).build();
 			}
 
+			response.put("text", "Passed back results to LimeSurvey.");
+			Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+			return Response.ok().entity(response).build();
+
 		}
 		catch(Exception e){
 			e.printStackTrace();
@@ -1316,19 +1351,21 @@ public class SurveyHandlerService extends RESTService {
 			String token = bodyInput.getAsString("slackToken");
 			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
-			String senderEmail = bodyInput.getAsString("email");
 			boolean slack = false;
 			if(token.startsWith("xoxb-")){
 				slack = true;
 			}
 
-			if(senderEmail != null){
+			String senderEmail = "";
+			try{
+				senderEmail = bodyInput.getAsString("email");
+
 				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
-					System.out.println("admin detected, email: " + senderEmail + " and " + bodyInput.getAsString("adminmail"));
 					Response res = takingSurvey(input);
 					return res;
 				}
-			} else{
+
+			} catch(Exception e){
 				Response res = takingSurvey(input);
 				return res;
 			}

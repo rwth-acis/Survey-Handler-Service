@@ -284,9 +284,9 @@ public class Survey {
 
         // sort arraylist
         Comparator<Question> questionComp = (q1, q2) -> {
-            int q1gid = Integer.parseInt(q1.getGid());
+            int q1gid = Integer.parseInt(q1.getGorder());
             int q1qo = Integer.parseInt(q1.getQorder());
-            int q2gid = Integer.parseInt(q2.getGid());
+            int q2gid = Integer.parseInt(q2.getGorder());
             int q2qo = Integer.parseInt(q2.getQorder());
 
             if (q1gid > q2gid) {

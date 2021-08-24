@@ -99,6 +99,7 @@ public class SurveyHandlerServiceQueries {
                     query += "parentqid VARCHAR(50),";
                     query += "gid VARCHAR(50) NOT NULL,";
                     query += "qorder VARCHAR(50) NOT NULL,";
+                    query += "gorder VARCHAR(50) NOT NULL,";
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "help VARCHAR(500),";
                     query += "code VARCHAR(50),";
@@ -120,7 +121,7 @@ public class SurveyHandlerServiceQueries {
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "qid VARCHAR(50) NOT NULL,";
                     query += "gid VARCHAR(50) NOT NULL,";
-                    query += "text VARCHAR(900),"; // Huge free text is answer option by limesurvey
+                    query += "text VARCHAR(1200),"; // Huge free text is answer option by limesurvey
                     query += "comment VARCHAR(900),";
                     query += "dtanswered VARCHAR(50),";
                     query += "messagets VARCHAR(50),";
@@ -472,6 +473,7 @@ public class SurveyHandlerServiceQueries {
             String text = rs.getString("text");
             String type = rs.getString("type");
             String qorder = rs.getString("qorder");
+            String gorder = rs.getString("gorder");
             String sid = rs.getString("sid");
             String help = rs.getString("help");
             String code = rs.getString("code");
@@ -483,7 +485,7 @@ public class SurveyHandlerServiceQueries {
             res.setParentQid(parentqid);
             res.setText(text);
             res.setType(type);
-            res.setQorder(qorder);
+            res.setGorder(gorder);
             res.setSid(sid);
             res.setHelp(help);
             res.setCode(code);
@@ -618,7 +620,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, sid, help, code, relevance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, gorder, sid, help, code, relevance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, q.getQid());
             ps.setString(2, q.getText());
@@ -626,10 +628,11 @@ public class SurveyHandlerServiceQueries {
             ps.setString(4, q.getParentQid());
             ps.setString(5, q.getGid());
             ps.setString(6, q.getQorder());
-            ps.setString(7, q.getSid());
-            ps.setString(8, q.getHelp());
-            ps.setString(9, q.getCode());
-            ps.setString(10, q.getRelevance());
+            ps.setString(7, q.getGorder());
+            ps.setString(8, q.getSid());
+            ps.setString(9, q.getHelp());
+            ps.setString(10, q.getCode());
+            ps.setString(11, q.getRelevance());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;

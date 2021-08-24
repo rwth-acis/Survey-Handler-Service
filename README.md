@@ -7,7 +7,7 @@ Build
 Execute the following command on your shell:
 
 ```shell
-ant all 
+gradle clean build
 ```
 
 Start

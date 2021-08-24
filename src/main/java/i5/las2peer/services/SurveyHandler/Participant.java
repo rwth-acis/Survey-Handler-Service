@@ -690,7 +690,7 @@ public class Participant {
         Question edited = this.currentSurvey.getQuestionByQid(answer.getQid());
         //Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL());
         if(edited.isSubquestion()){
-            questionText = this.currentSurvey.getQuestionByQid(answer.getQid()).getText();
+            questionText = this.currentSurvey.getParentQuestionBySQQid(answer.getQid()).getText();
             //Question.getQuestionById(edited.getParentQid(), currentSurvey.getQuestionAL()).getText();
         } else{
             questionText = edited.getText();

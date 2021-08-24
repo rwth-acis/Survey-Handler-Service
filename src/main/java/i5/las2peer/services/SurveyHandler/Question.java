@@ -50,16 +50,16 @@ public class Question{
             this.name= name;
             // TODO find correct values
             if(this.name.equals("T")){
-                this.maxLength = 900;
+                this.maxLength = 1200;
             }
             else if(this.name.equals("U")){
-                this.maxLength = 900;
+                this.maxLength = 1200;
             }
             else if(this.name.equals("S")){
-                this.maxLength = 100;
+                this.maxLength = 600;
             }
             else{
-                this.maxLength = 900;
+                this.maxLength = 1200;
             }
         }
 
@@ -96,7 +96,7 @@ public class Question{
         this.type = q.getAsString("type");
         this.relevance = q.getAsString("relevance");
         this.code = q.getAsString("title");
-        this.gorder = q.getAsString("gid");
+        this.gorder = q.getAsString("group_order");
         System.out.println("answeroptinos" + q.getAsString("answeroptions"));
         if(!q.getAsString("answeroptions").contains("No available answer options")){
             JSONObject answeroptions = (JSONObject) q.get("answeroptions");
