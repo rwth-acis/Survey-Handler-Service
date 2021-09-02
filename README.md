@@ -1,51 +1,108 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/rwth-acis/las2peer/master/img/logo/bitmap/las2peer-logo-128x128.png" />
-</p>
-<h1 align="center">las2peer-Template-Project</h1>
+# Survey Handler Service
 
-![Java CI with Gradle](https://github.com/rwth-acis/las2peer-template-project/workflows/Java%20CI%20with%20Gradle/badge.svg?branch=master)
-[![codecov](https://codecov.io/gh/rwth-acis/las2peer-template-project/branch/master/graph/badge.svg)](https://codecov.io/gh/rwth-acis/las2peer-template-project)
-[![Dependencies](https://img.shields.io/librariesio/github/rwth-acis/las2peer-template-project)](https://libraries.io/github/rwth-acis/las2peer-template-project)
+This service can be used to conduct surveys from LimeSurvey with bots created by the Social-Bot-Framework.
 
-This project can be used as a starting point for your las2peer service development.
-It contains everything needed to start las2peer service development, you do not need to add any dependencies manually.  
+Build
+--------
+Execute the following command on your shell:
 
-For documentation on the las2peer service API, please refer to the [wiki](https://github.com/rwth-acis/las2peer-Template-Project/wiki).
+```shell
+gradle clean build
+```
 
-Please follow the instructions of this ReadMe to setup your basic service development environment.  
+Start
+--------
 
-## Preparations
+To start the data-processing service, use one of the available start scripts:
 
-### Java
+Windows:
 
-las2peer uses **Java 14**.
+```shell
+bin/start_network.bat
+```
 
-### Build Dependencies
+Unix/Mac:
+```shell
+bin/start_network.sh
+```
 
-* Gradle
 
 
-## Quick Setup of your Service Development Environment
 
-*If you never used las2peer before, it is recommended that you first visit the
-[Step by Step - First Service](https://github.com/rwth-acis/las2peer-Template-Project/wiki/Step-By-Step:-First-Service)
-tutorial for a more detailed guidance on how to use this template.*  
+# Starting a survey bot on slack:
 
-Follow these four steps to setup your project:  
-1. If you use Eclipse (for our guides we are using version 2020-12), import this project (as Gradle -> Existing Gradle Project). Please make sure, that JavaSE-14 is available in Eclipse (check under Window -> Preferences -> Java -> Installed JREs -> Execution Environments). During the import process, the .classpath files will be generated automatically.
-2. The service source code can be found at `i5.las2peer.services.SurveyHandlerService.SurveyHandler`.  
-(Optional: Change [gradle.properties](gradle.properties)
-according to the service you want to build. Rename your build directory structure according to the names you gave.)
-3. Compile your service with `gradle clean jar`. This will also build the service jar.  
-4. Generate documentation, run your JUnit tests and generate service and user agent with `gradle clean build` (If this did not run check that the policy files are working correctly).  
+### Creating a slack app
+      
 
-The jar file with your service will be in "template_project/export/" and "service/" and the generated agent XML files in "etc/startup/".
-You can find the JUnit reports in the folder "template_project/build/reports/tests/".  
+To create a survey chatbot, first a slack app needs to be created. Creating a classic bot app is possible [here](https://api.slack.com/apps?new_classic_app=1). (Wait for the app creation window to pop up, do not click on the green "Create New App" button).
+Since the las2peersocial-bot-manager-service uses RTM, a classic app, instead of a new app, is needed.
 
-If you decide to change the dependencies of your project, please make sure to refresh the Gradle project in Eclipse by right-clicking on your project and then choosing Gradle -> Refresh Gradle Project.
-Also run "gradle cleanAll" to remove all previously added libraries.
+1. Inside the app settings, create a bot user (on the left side Features: App Home, and then "Add Legacy Bot User")
 
-## Next Steps
+2. On the left side Features: Incoming Webhooks: activate with button top right
 
-Please visit the [Wiki](https://github.com/rwth-acis/las2peer-Template-Project/wiki/) of this project.
-There you will find guides and tutorials, information on las2peer concepts and further interesting las2peer knowledge.  
+3. Add the following oauth scopes under OAuth & Permissons:
+
+    - channels:read
+
+    - chat:write:bot
+    
+    - bot
+    
+    - users:read.email (users:read included)
+
+    - incoming-webhook should already be there. If not add under basic information: incoming webhooks: activate incoming webhooks sliding button
+
+    - Please do not update scopes!
+    
+Now install the app to your wished workspace. After this a token will be generated which is used in the redirect url.
+
+1. Find the bot token: On the left side: OAuth and Permissons, the bot user oauth token (starting with xoxb).
+   
+2. Activate interactive components (on the left side: Basic Information: Add features and functionality, Interactive Components. After activating this feature, a Request URL is needed.)
+
+3. Configuring the request url:
+
+    - The ip address and port where slack posts the request (the address from the sbfmanager), slack app token, the bot name from the frontend, the instance name from the frontend and the buttonintent text are needed.
+    http://ipAddress:port/SBFManager/bots/botName/appRequestURL/instanceName/buttonIntent/token.
+
+
+
+
+### Frontend modeling:
+
+1. Create a bot model by following the guide [here](https://github.com/rwth-acis/Social-Bot-Framework).
+
+2. Under OAuth & Permissons inside your app management, you will find the bot user oauth token, which needs to be added to the messenger Authentication Token in the frontend bot modeling.
+
+3. After creating the basic bot model, add the following Bot Actions with the Service Alias "SurveyHandler":
+
+- Action Type: Service, Function Name: takingSurvey.
+
+- Action Type: Service, Function Name: adminSurvey
+
+    This bot action enables you as the admin to add participants to the survey, to start the survey and to see all answers from the participants. The bot action needs the following action parameters:
+  
+- The bot actions needs the following action parameters: (all Content Type: String, Static and Parameter Type: body)
+
+    * Name: NameOfUser and Content: the username of your "https://limesurvey.tech4comp.dbis.rwth-aachen.de/" account;   
+    * Name: Password and Content: the password of your limesurvey account; 
+    * Name: surveyID and Content: The surveyID of the survey you want to conduct. You can find this by logging into your limesurvey account and then clicking on "List surveys". In the survey list you will see on the very left side the Survey ID.
+    * Name: buttonIntent and Content: The button intent, which is going to be recognized when participants click on answer buttons
+    * Name: sbfmUrl and Content: The URL where the social-bot-framework-manager can receive requests
+    * Name: slackToken and Content: The slack token that has been added to the "Messenger" with type "Slack" as "Authentication Token"
+    * Name: adminmail and Content: the email of the admin user (Content Type: String and Parameter Type: body)
+
+4. It is possible to add routines for sending reminders or sending results to LimeSurvey.
+
+    - for routine: Action Type: Service, Function Name: reminderRoutine.
+    
+    - for LimeSurvey results: Action Type: Service, Function Name:sendResultsToLimesurvey.
+
+    - for MobSOS surveys results: Action Type: Service, Function Name:sendResultsToMobsosSurveys.
+
+    - both of them need the action parameters from the main bot actions
+
+### Creating a LimeSurvey Survey:
+
+-enable under Participants settings: "Allow multiple responses or update responses with one token."
