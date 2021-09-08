@@ -485,6 +485,7 @@ public class SurveyHandlerServiceQueries {
             res.setParentQid(parentqid);
             res.setText(text);
             res.setType(type);
+            res.setQorder(qorder);
             res.setGorder(gorder);
             res.setSid(sid);
             res.setHelp(help);
