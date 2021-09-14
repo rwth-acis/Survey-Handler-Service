@@ -534,7 +534,9 @@ public class SurveyHandlerService extends RESTService {
 			HashMap<String, String> t = new HashMap<>();
 			for(Object glo : glProperties){
 				JSONObject currQLO = (JSONObject) glo;
-				t.put(currQLO.getAsString("gid"), currQLO.getAsString("group_order"));
+				String currQOString = currQLO.getAsString("group_order");
+				int currQOInt = Integer.parseInt(currQOString);
+				t.put(currQLO.getAsString("gid"), String.valueOf(currQOInt-1));
 			}
 
 			for(Object q : qlProperties){

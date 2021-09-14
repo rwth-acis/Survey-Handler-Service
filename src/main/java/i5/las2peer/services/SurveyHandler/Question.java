@@ -8,6 +8,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Optional;
 
 public class Question{
 
@@ -26,6 +27,7 @@ public class Question{
     // end Database model identifier
 
     public static enum qType{
+        ARRAY("F"),
         SINGLECHOICECOMMENT("O"),
         MULTIPLECHOICENOCOMMENT("M"),
         MULTIPLECHOICEWITHCOMMENT("P"),
@@ -302,6 +304,10 @@ public class Question{
         return this.parentqid;
     }
 
+    public Question getParentQuestion(){
+        return SurveyHandlerService.getSurveyBySurveyID(this.sid).getQuestionByQid(this.parentqid);
+    }
+
     public String getHelp() {
         return this.help;
     }
@@ -318,16 +324,20 @@ public class Question{
     }
 
     public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, boolean slack){
+        return encodeJsonBodyAsString(newQuestionGroup, edit, buttonToColor, participant, slack, null);
+    }
+
+    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, boolean slack, Integer arrayNumber){
         System.out.println("inside encodejsonbodyasstring. slack: " + slack);
         if(slack){
-            return parseQuestion(newQuestionGroup, edit, buttonToColor, participant);
+            return parseQuestion(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
         }
         else{
-            return parseQuestionAsText(newQuestionGroup, participant);
+            return parseQuestionAsText(newQuestionGroup, participant, arrayNumber);
         }
     }
 
-    public String parseQuestion(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant){
+    public String parseQuestion(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
         String resString = "";
         String subString = "";
         int index = 1;
@@ -348,7 +358,7 @@ public class Question{
         }
 
 
-        if(this.isSubquestion){
+        if(this.isSubquestion && !this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
             subString += "{\n" +
                     "\"text\": {\n" +
                     "\"type\": \"plain_text\",\n" +
@@ -358,6 +368,12 @@ public class Question{
                     "\"value\": \"" + this.qid + "\"\n" +
                     "},";
             return subString;
+        } else if(this.isSubquestion && this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
+            subString += "\n" + questionText;
+            subString += "\",\n" +
+                    "\"emoji\": true\n" +
+                    "}\n" +
+                    "},\n";
         }
 
         if(edit){
@@ -397,7 +413,7 @@ public class Question{
 
         } else{
             // Check if multiple choice question
-            if (this.subquestionAl.size() > 0) {
+            if (this.subquestionAl.size() > 0 && !this.type.equals(qType.ARRAY.toString())) {
                 resString = "[\n" +
                         "{\n" +
                         "\"type\": \"section\",\n" +
@@ -439,12 +455,50 @@ public class Question{
                         "]\n" +
                         "}" +
                         "]";
+            } else if(this.type.equals(qType.ARRAY.toString())){
+                resString = "[\n" +
+                        "{\n" +
+                        "\"type\": \"section\",\n" +
+                        "\"text\": {\n" +
+                        "\"type\": \"plain_text\",\n" +
+                        "\"text\": \"" + questionText + "\n";
+
+                Question subq = this.getSubquestionByIndex(String.valueOf(arrayNumber));
+                resString += subq.encodeJsonBodyAsString(participant, true);
+
+                resString += "\t\t\t]\n" +
+                        "\t\t}]}]";
             }
 
         }
 
         resString += questionText;
         System.out.println(this.type);
+
+        if(this.isSubquestion && !this.getParentQuestion().answerOptions.isEmpty()){
+            resString = subString + "\t\t{\n" +
+                    "\t\t\t\"type\": \"actions\",\n" +
+                    "\t\t\t\"elements\": [\n" +
+                    "\t\t\t\t{\n" +
+                    "\t\t\t\t\t\"type\": \"radio_buttons\",\n" +
+                    "\t\t\t\t\t\"options\": [";
+            for(int i = 1; i < this.getParentQuestion().answerOptions.size() + 1; i++){
+                String currAnswerOption = "{\n" +
+                        "\t\t\t\t\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\t\t\t\t\"text\": \"" + this.getParentQuestion().getAnswerOptionByIndex(i).getText() + "\",\n" +
+                        "\t\t\t\t\t\t\t\t\"emoji\": true\n" +
+                        "\t\t\t\t\t\t\t},\n" +
+                        "\t\t\t\t\t\t\t\"value\": \"" + index + "\"\n" +
+                        "\t\t\t\t\t\t},";
+
+                resString += currAnswerOption;
+                index++;
+
+            }
+            // remove last comma after the options
+            resString = resString.substring(0, resString.length() - 1);
+        }
 
         // Switch case to check if question type is mask question (their answer options are not saved in question)
         // The question code is from LimeSurvey
@@ -760,6 +814,10 @@ public class Question{
     }
 
     public String parseQuestionAsText(boolean newQuestionGroup, Participant participant){
+        return parseQuestionAsText(newQuestionGroup, participant, null);
+    }
+
+    public String parseQuestionAsText(boolean newQuestionGroup, Participant participant, Integer arrayNumber){
         String resString = "";
         String subString = "";
         int index = 1;
@@ -790,7 +848,7 @@ public class Question{
         resString += questionText;
 
         // Check if multiple choice question
-        if (this.subquestionAl.size() > 0) {
+        if (this.subquestionAl.size() > 0 && !this.type.equals(qType.ARRAY.toString())) {
             if(this.type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
                 resString += "Please choose from the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer. If you want to choose no option, please enter \"-\". If you choose more than one, please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\" and so on.";
             } else{
@@ -800,6 +858,20 @@ public class Question{
             for (Question subq : this.subquestionAl) {
                 resString += "\n" + index + ". " + subq.encodeJsonBodyAsString(participant, false);
                 index++;
+            }
+
+        } else if(this.subquestionAl.size() > 0 && !this.answerOptions.isEmpty() && this.type.equals(qType.ARRAY.toString())){
+            // type array recognoized
+            //System.out.println("subquestional size: " + this.subquestionAl.size());
+            //System.out.println("arraynumber: " + arrayNumber);
+            //System.out.println("subquestional: " + this.subquestionAl.get(arrayNumber - 1).getQid());
+
+            Question subq = this.subquestionAl.get(arrayNumber - 1);
+            resString += exp + subq.encodeJsonBodyAsString(participant, false) + "\n";
+
+            //System.out.println("inside answeroptions with type array");
+            for(int i = 1; i < answerOptions.size() + 1; i++){
+                resString += " " + i + ". " + getAnswerOptionByIndex(i).getText() + "\n";
             }
 
         }
@@ -1043,6 +1115,19 @@ public class Question{
 
             }
 
+            if(this.type.equals(qType.ARRAY.toString())){
+                int size = this.answerOptions.size();
+                try{
+                    if(0 < Integer.parseInt(textAnswer) && Integer.parseInt(textAnswer) < size + 1){
+                        return true;
+                    }
+                } catch(Exception e){
+                    System.out.println("answer is not plausible");
+                    return false;
+                }
+
+            }
+
             if(this.type.equals(qType.SINGLECHOICECOMMENT.toString())){
                 try{
                     String chosen = textAnswer.split(":")[0];
@@ -1212,7 +1297,8 @@ public class Question{
                     type.equals(qType.DICHOTOMOUS.toString()) ||
                     type.equals(qType.SCALE.toString()) ||
                     type.equals(qType.GENDER.toString()) ||
-                    type.equals(qType.YESNO.toString())){
+                    type.equals(qType.YESNO.toString()) ||
+                    type.equals(qType.ARRAY.toString())){
                 reason = "Please only answer with one of the given numbers written before the answer option";
             }
 

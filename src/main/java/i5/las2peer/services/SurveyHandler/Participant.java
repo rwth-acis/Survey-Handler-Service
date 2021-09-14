@@ -75,10 +75,16 @@ public class Participant {
         String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
         String first = "";
         if(!secondSurvey){
-            first = " To start the second survey you need to answer all questions from the first one.";
+            first = " To start a second survey you need to answer all questions from the first one.";
         }
 
-        String changeAnswerExplanation = "\nTo change your given answer edit your message, by clicking on the 3 points next to your text message and then choosing \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+        String changeAnswerExplanation = "\nTo change your given answer edit your message, by clicking on the 3 points next to your text message and then choosing \"Edit Message\".";
+
+        if(buttonIntent != null){
+            // remove last "."
+            changeAnswerExplanation = changeAnswerExplanation.substring(0, changeAnswerExplanation.length() - 1);
+            changeAnswerExplanation += ", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
+        }
         String resultsGetSaved = "\nYour responses will be saved continuously.";
         String completedSurvey = "You already completed the survey." + changeAnswerExplanation;
         String firstEdit = "";
@@ -146,7 +152,6 @@ public class Participant {
 
     private Response AskNextQuestion(boolean slack){
         // clear the answers for previous question
-        this.currentSubquestionAnswers.clear();
         for(Answer a : this.givenAnswersAl){
             if(!a.isFinalized()){
                 System.out.println("found answer that is not finalized: " + a.getMessageTs());
@@ -156,7 +161,6 @@ public class Participant {
         }
         boolean newQuestionGroup = false;
         JSONObject response = new JSONObject();
-        // Check if logic applies to next question
 
         // Normal questions available
         if (this.unaskedQuestions.size() > 0){
@@ -170,14 +174,66 @@ public class Participant {
                     System.out.println("new questiongroup");
                     newQuestionGroup = true;
                 }
+            } else{
+                System.out.println("was null");
+                this.lastquestion = nextId;
             }
 
-            this.unaskedQuestions.remove(0);
-            this.lastquestion = nextId;
+            Integer arrayNumber = 1;
+            if(this.currentSurvey.getQuestionByQid(nextId).getType().equals(Question.qType.ARRAY.toString())){
+                // last question of type array, so mutliple questions to be asked
+                /*
+                System.out.println("next question is array and needs to be asked multiple times: \n" + this.currentSurvey.getQuestionByQid(nextId).getType() +
+                        " and size: " + this.currentSurvey.getQuestionByQid(nextId).getSubquestionAl().size() +
+                        "\n only deleting if all but one subquestion have been asked" +
+                        "\n check if all but one subquestion have answers" +
+                        "\n now checking if that is the prelast subquestion..." +
+                        "\n now checking if lastgivenanswer is answer to lastsubquestion...");
+                */
+
+                // 4 possiblilities
+                // 1: array only has one question
+                // 2: array has more than one question and none have been asked
+                // 3: array has more thzan one question and some have been asked, but more than one remain
+                // 4: array has more than one questino and all but one have been asked
+
+                if(this.currentSurvey.getQuestionByQid(nextId).getSubquestionAl().size() == 1){
+                    System.out.println("array has only one question, questino does not have to be asked again");
+                    this.unaskedQuestions.remove(0);
+                } else{
+                    System.out.println("array has more than one question");
+                    if(!this.givenAnswersAl.isEmpty()){
+                        Answer lastGivenAnswer = this.givenAnswersAl.get(this.givenAnswersAl.size() - 1);
+                        System.out.println("last given answer to questino: " + lastGivenAnswer.getQid());
+
+                        int i = 1;
+                        for(Question subq : this.currentSurvey.getQuestionByQid(nextId).getSubquestionAl()){
+                            if(lastGivenAnswer.getQid().equals(subq.getQid())){
+                                System.out.println("i: " + i);
+                                arrayNumber = i + 1;
+                                System.out.println("now check if only one answer is missing...");
+                                if(i == this.currentSurvey.getQuestionByQid(nextId).getSubquestionAl().size() - 1){
+                                    System.out.println("array has more than one questino and all but one have been asked");
+                                    this.unaskedQuestions.remove(0);
+                                }
+
+                            }
+                            i++;
+                        }
+                    }
+
+                    // else: not deleting, since no answers have been given and there are several questions in this array
+
+                }
+
+            }
+
             System.out.println("setting last question to new question id");
+            this.lastquestion = nextId;
+
             // update last question in database
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-            String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString(newQuestionGroup, false, "", this, slack);
+            String messageText = this.currentSurvey.getQuestionByQid(nextId).encodeJsonBodyAsString(newQuestionGroup, false, "", this, slack, arrayNumber);
 
             // If it is starting with "[" it is a block question
             if(Character.toString(messageText.charAt(0)).equals("[")){
@@ -737,6 +793,7 @@ public class Participant {
         // rocket chat
         if(type.equals(Question.qType.LISTDROPDOWN.toString()) ||
                 type.equals(Question.qType.LISTRADIO.toString()) ||
+                type.equals(Question.qType.ARRAY.toString()) ||
                 type.equals(Question.qType.DICHOTOMOUS.toString())){
 
             String text = answerEdited.getAnswerOptionByIndex(Integer.parseInt(message)).getCode();
@@ -1382,6 +1439,46 @@ public class Participant {
                 newAnswer.setFinalized(true);
                 newAnswer.setQid(this.lastquestion);
                 newAnswer.setMessageTs(messageTs);
+                this.givenAnswersAl.add(newAnswer);
+                System.out.println("saving new answer to database");
+                SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
+
+            }
+
+            // it is an array question in rocket chat
+            if(lastQuestion.getType().equals(Question.qType.ARRAY.toString())){
+                System.out.println("array recognized");
+
+                Integer index = 1;
+                if(!this.getGivenAnswersAl().isEmpty() && this.currentSurvey.getQuestionByQid(this.lastquestion).getSubquestionAl().size() > 1){
+
+
+                    String aQid = this.getGivenAnswersAl().get(this.getGivenAnswersAl().size() - 1).getQid();
+                    //System.out.println("aqid: " + aQid);
+
+                    int i = 1;
+                    for(Question q : lastQuestion.getSubquestionAl()){
+                        if(q.getQid().equals(aQid)){
+                            index = i+1;
+                        }
+                        i++;
+                    }
+                }
+                //System.out.println("index: " + index);
+
+
+                // answer is in valid form, so save to db
+                for(AnswerOption ao : lastQuestion.getAnswerOptions()){
+                    if(String.valueOf(ao.getIndexi()).equals(message)){
+                        newAnswer.setText(ao.getCode());
+                    }
+                }
+                newAnswer.setSkipped(false);
+                newAnswer.setFinalized(true);
+                //System.out.println("qid: " + lastQuestion.getSubquestionByIndex(String.valueOf(index)).getQid());
+                newAnswer.setQid(lastQuestion.getSubquestionByIndex(String.valueOf(index)).getQid());
+                newAnswer.setMessageTs(messageTs);
+                this.currentSubquestionAnswers.add(newAnswer);
                 this.givenAnswersAl.add(newAnswer);
                 System.out.println("saving new answer to database");
                 SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
