@@ -842,6 +842,12 @@ public class Question{
         String questionText = this.text;
         int questionsLeft = participant.getUnaskedQuestions().size() + 1;
         // +1 because the question that is about to be sent is already removed from the list
+
+        // if first question is array question, it is on the list even when part has been asked
+        if(this.qid.equals(participant.getUnaskedQuestions().get(0))){
+            questionsLeft--;
+        }
+
         String newQGroupText = "";
         if(questionsLeft > 1){
             newQGroupText = "You completed a question group. There are " + questionsLeft + " questions left.\n";

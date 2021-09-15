@@ -160,6 +160,7 @@ public class Participant {
             }
         }
         boolean newQuestionGroup = false;
+        boolean questionAsked = true;
         JSONObject response = new JSONObject();
 
         // Normal questions available
@@ -199,8 +200,8 @@ public class Participant {
 
                 if(this.currentSurvey.getQuestionByQid(nextId).getSubquestionAl().size() == 1){
                     System.out.println("array has only one question, questino does not have to be asked again");
-                    this.unaskedQuestions.remove(0);
                 } else{
+                    questionAsked = false;
                     System.out.println("array has more than one question");
                     if(!this.givenAnswersAl.isEmpty()){
                         Answer lastGivenAnswer = this.givenAnswersAl.get(this.givenAnswersAl.size() - 1);
@@ -214,7 +215,7 @@ public class Participant {
                                 System.out.println("now check if only one answer is missing...");
                                 if(i == this.currentSurvey.getQuestionByQid(nextId).getSubquestionAl().size() - 1){
                                     System.out.println("array has more than one questino and all but one have been asked");
-                                    this.unaskedQuestions.remove(0);
+                                    questionAsked = true;
                                 }
 
                             }
@@ -226,6 +227,10 @@ public class Participant {
 
                 }
 
+            }
+
+            if(questionAsked){
+                this.unaskedQuestions.remove(0);
             }
 
             System.out.println("setting last question to new question id");
