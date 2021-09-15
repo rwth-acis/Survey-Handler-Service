@@ -93,6 +93,19 @@ public class Question{
         this.gid = q.getAsString("gid");
         this.qorder = q.getAsString("question_order");
         this.text = q.getAsString("question");
+        if(text.contains("<b id=\"docs-internal-guid") || text.contains("<p>")){
+            System.out.println("detected weird question text, fixing ...");
+            String[] textA = text.split(">");
+            for(String currT : textA){
+                System.out.println(currT);
+                String c = String.valueOf(currT.charAt(0));
+                if(!c.equals("<")){
+                    text = currT;
+                    break;
+                }
+            }
+            text = text.split("<")[0];
+        }
         this.sid = q.getAsString("sid");
         this.help = q.getAsString("help");
         this.type = q.getAsString("type");
@@ -468,6 +481,8 @@ public class Question{
 
                 resString += "\t\t\t]\n" +
                         "\t\t}]}]";
+
+                System.out.println("res: " + resString);
             }
 
         }
