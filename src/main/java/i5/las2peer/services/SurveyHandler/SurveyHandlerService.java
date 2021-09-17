@@ -1211,9 +1211,18 @@ public class SurveyHandlerService extends RESTService {
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					surveyResponseID = minire2.getAsString("result");
-					pa.setSurveyResponseID(surveyResponseID);
-					SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
-					System.out.println("aaaaaaaaaaaaaasurvey response id: " + pa.getSurveyResponseID());
+					try{
+						Integer.parseInt(surveyResponseID);
+						pa.setSurveyResponseID(surveyResponseID);
+						SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
+						System.out.println("response id: " + pa.getSurveyResponseID());
+					} catch (Exception e){
+						System.out.println("ERROR in sending results to LimeSurvey");
+						response.put("text", surveyResponseID);
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+
 				}
 			}
 
@@ -1314,9 +1323,17 @@ public class SurveyHandlerService extends RESTService {
 						ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 						JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 						surveyResponseID = minire2.getAsString("result");
-						pa.setSurveyResponseID(surveyResponseID);
-						SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
-						System.out.println(surveyResponseID);
+						try{
+							Integer.parseInt(surveyResponseID);
+							pa.setSurveyResponseID(surveyResponseID);
+							SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
+							System.out.println("response id: " + pa.getSurveyResponseID());
+						} catch (Exception e){
+							System.out.println("ERROR in sending results to LimeSurvey");
+							response.put("text", surveyResponseID);
+							Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+							return Response.ok().entity(response).build();
+						}
 					}
 				}
 
