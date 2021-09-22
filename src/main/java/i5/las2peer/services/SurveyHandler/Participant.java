@@ -585,14 +585,16 @@ public class Participant {
             }
         }
         String prevTs = prevMessage.getAsString("ts");
-        Answer b = getAnswerByTS(prevTs);
-        if(b != null){
-            if(b.isSkipped()){
-                System.out.println("skipped message edited");
-                JSONObject response = new JSONObject();
-                response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
-                Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-                return Response.ok().entity(response).build();
+        if(prevTs != null){
+            Answer b = getAnswerByTS(prevTs);
+            if(b != null){
+                if(b.isSkipped()){
+                    System.out.println("skipped message edited");
+                    JSONObject response = new JSONObject();
+                    response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
+                    Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+                    return Response.ok().entity(response).build();
+                }
             }
         }
 
