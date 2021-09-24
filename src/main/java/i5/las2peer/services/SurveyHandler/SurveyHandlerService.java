@@ -47,6 +47,7 @@ import io.swagger.annotations.Contact;
 import io.swagger.annotations.Info;
 import io.swagger.annotations.License;
 import io.swagger.annotations.SwaggerDefinition;
+import org.glassfish.jersey.server.JSONP;
 import org.junit.Assert;
 
 import java.util.Properties;
@@ -112,7 +113,17 @@ public class SurveyHandlerService extends RESTService {
 		return null;
 	}
 
-	public static void deleteSurvey(String surveyID){
+	public static String setAdminlanguage(String surveyID, String language){
+		for (Survey s : allSurveys){
+			if (s.getSid().equals(surveyID)){
+				// all surveys with same id have the same admin, so same adminlanguage
+				s.setAdminLanguage(language);
+			}
+		}
+		return null;
+	}
+
+	public static void deleteSurvey(String surveyID, String language){
 		for (Survey s : allSurveys){
 			if (s.getSid().equals(surveyID)){
 				SurveyHandlerServiceQueries.deleteSurveyFromDB(getSurveyBySurveyID(surveyID), database);
@@ -254,6 +265,11 @@ public class SurveyHandlerService extends RESTService {
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
+			String beginningText = "";
+			if(bodyInput.containsKey("beginningText")){
+				System.out.println("has beginningText");
+				beginningText = bodyInput.getAsString("beginningText");
+			}
 			String senderEmail = "";
 
 			String token = ""; // for rocket chat none in this service is needed, so length 0
@@ -315,6 +331,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(expireTime + " and expires at " + timeNow);
 					if(dateNow.isAfter(LocalDate.parse(expireDate))){
 						if(timeNow.isAfter(LocalTime.parse(expireTime)))
+							System.out.println("survey not active anymore");
 							response.put("text", "The survey is no longer active.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
@@ -327,6 +344,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(expireTime + " and expires at " + timeNow);
 					if(dateNow.isAfter(LocalDate.parse(expireDate))){
 						if(timeNow.isAfter(LocalTime.parse(expireTime)))
+							System.out.println("survey not active anymore");
 							response.put("text", "The survey is no longer active.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
@@ -346,6 +364,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(startTime + " and starts at " + timeNow);
 					if(dateNow.isBefore(LocalDate.parse(startDate))){
 						if(timeNow.isBefore(LocalTime.parse(startTime)))
+							System.out.println("survey not yet active");
 							response.put("text", "The survey is not yet active.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
@@ -358,6 +377,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(startTime + " and starts at " + timeNow);
 					if(dateNow.isBefore(LocalDate.parse(startDate))){
 						if(timeNow.isBefore(LocalTime.parse(startTime)))
+							System.out.println("survey not yet active");
 							response.put("text", "The survey is not yet active.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
@@ -416,62 +436,65 @@ public class SurveyHandlerService extends RESTService {
 
 			System.out.println("using slack: " + slack);
 
-			// check if the participant is done with the first survey
-			if(currParticipant.isCompletedsurvey()){
-				currParticipant = followUpSurvey.findParticipant(senderEmail);
-				if(Objects.isNull(currParticipant)){
-					currParticipant = currSurvey.findParticipant(senderEmail);
-					if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
-						String changedAnswer = "Your answer has been changed sucessfully.";
-						String answerNotFittingQuestion = "";
-						return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token, slack);
+			// check if there is a followup survey, if not sid is ""
+			if(followUpSurvey.getSid().length() > 0){
+				// check if the participant is done with the first survey
+				if(currParticipant.isCompletedsurvey()){
+					currParticipant = followUpSurvey.findParticipant(senderEmail);
+					if(Objects.isNull(currParticipant)){
+						currParticipant = currSurvey.findParticipant(senderEmail);
+						if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
+							String changedAnswer = "Your answer has been changed sucessfully.";
+							String answerNotFittingQuestion = "";
+							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token, slack);
+						}
 					}
-				}
 
-				// if the participant is done with first survey, check if already participant in second survey
-				currParticipant = followUpSurvey.findParticipant(senderEmail);
-				secondSurvey = true;
-				if(Objects.isNull(currParticipant)){
-					System.out.println("creating new participant for follow up");
-					// participant does not exist for new survey, create a new one
-					currParticipant = new Participant(senderEmail);
-					followUpSurvey.addParticipant(currParticipant);
-					SurveyHandlerServiceQueries.addParticipantToDB(currParticipant, database);
-				}
-				if(currParticipant.getChannel() == null){
-					currParticipant.setChannel(channel);
-					SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
-				}
-
-				boolean active = true;
-
-				// Check if survey has expiration date and if survey has expired
-				if(currSurvey.getExpires() != null){
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String expireDate = currSurvey.getExpires().split("\\s")[0];
-					String expireTime = currSurvey.getExpires().split("\\s")[1];
-					if(dateNow.isAfter(LocalDate.parse(expireDate))){
-						if(timeNow.isAfter(LocalTime.parse(expireTime)))
-							active = false;
+					// if the participant is done with first survey, check if already participant in second survey
+					currParticipant = followUpSurvey.findParticipant(senderEmail);
+					secondSurvey = true;
+					if(Objects.isNull(currParticipant)){
+						System.out.println("creating new participant for follow up");
+						// participant does not exist for new survey, create a new one
+						currParticipant = new Participant(senderEmail);
+						followUpSurvey.addParticipant(currParticipant);
+						SurveyHandlerServiceQueries.addParticipantToDB(currParticipant, database);
 					}
-				}
-
-				// Check if survey has expiration date and if survey has expired
-				if(currSurvey.getStartDT() != null){
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String startDate = currSurvey.getStartDT().split("\\s")[0];
-					String startTime = currSurvey.getStartDT().split("\\s")[1];
-					if(dateNow.isBefore(LocalDate.parse(startDate))){
-						if(timeNow.isBefore(LocalTime.parse(startTime)))
-							active = false;
+					if(currParticipant.getChannel() == null){
+						currParticipant.setChannel(channel);
+						SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
 					}
-				}
 
-				// check if survey is currently active
-				if(!active){
-					// survey is not active yet, so get participant infos from first survey again
-					currSurvey = getSurveyBySurveyID(surveyID);
-					currParticipant = currSurvey.findParticipant(senderEmail);
+					boolean active = true;
+
+					// Check if survey has expiration date and if survey has expired
+					if(currSurvey.getExpires() != null){
+						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+						String expireDate = currSurvey.getExpires().split("\\s")[0];
+						String expireTime = currSurvey.getExpires().split("\\s")[1];
+						if(dateNow.isAfter(LocalDate.parse(expireDate))){
+							if(timeNow.isAfter(LocalTime.parse(expireTime)))
+								active = false;
+						}
+					}
+
+					// Check if survey has expiration date and if survey has expired
+					if(currSurvey.getStartDT() != null){
+						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+						String startDate = currSurvey.getStartDT().split("\\s")[0];
+						String startTime = currSurvey.getStartDT().split("\\s")[1];
+						if(dateNow.isBefore(LocalDate.parse(startDate))){
+							if(timeNow.isBefore(LocalTime.parse(startTime)))
+								active = false;
+						}
+					}
+
+					// check if survey is currently active
+					if(!active){
+						// survey is not active yet, so get participant infos from first survey again
+						currSurvey = getSurveyBySurveyID(surveyID);
+						currParticipant = currSurvey.findParticipant(senderEmail);
+					}
 				}
 			}
 
@@ -480,7 +503,7 @@ public class SurveyHandlerService extends RESTService {
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey);
+			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningText);
 
 
 		} catch (ParseException e) {
@@ -501,7 +524,17 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject minire = (JSONObject) p.parse(minires.getResponse());
 			String sessionKeyString = minire.getAsString("result");
 
-			// Get questions from limesurvey
+			// Get survey language properties
+			ClientResponse minires5 = mini.sendRequest("POST", uri, ("{\"method\": \"get_survey_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject minire5 = (JSONObject) p.parse(minires5.getResponse());
+			JSONObject sp = (JSONObject) minire5.get("result");
+
+			String mainLanguage = sp.getAsString("language");
+			System.out.println("main: " + mainLanguage);
+			String additionalLanguage = sp.getAsString("additional_languages");
+			System.out.println("add: " + additionalLanguage);
+
+			// Get questions from limesurvey for main language
 			ClientResponse minires2 = mini.sendRequest("POST", uri, ("{\"method\": \"list_questions\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 			JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 			JSONArray ql = (JSONArray) minire2.get("result");
@@ -515,11 +548,28 @@ public class SurveyHandlerService extends RESTService {
 				ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_question_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + qid + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 				JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
 				JSONObject qProperties = (JSONObject) minire3.get("result");
+				qProperties.put("language", mainLanguage);
 				qlProperties.add(qProperties);
 				if(!gList.contains(qProperties.getAsString("gid"))){
 					gList.add(qProperties.getAsString("gid"));
 				}
 			}
+
+			System.out.println("props1: " + qlProperties.size());
+
+			// Get question properties for additional language (includes answeroptions, logics and questiontype)
+			if(additionalLanguage.length() > 0){
+				for(Object jo : ql){
+					String qid = ((JSONObject) jo).getAsString("qid");
+					ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"get_question_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + qid + "\", null, \"" + additionalLanguage + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+					JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
+					JSONObject qProperties = (JSONObject) minire3.get("result");
+					qProperties.put("language", additionalLanguage);
+					qlProperties.add(qProperties);
+				}
+			}
+
+			System.out.println("props2: " + qlProperties.size());
 
 			JSONArray glProperties = new JSONArray();
 			for(Object jo : gList){
@@ -757,7 +807,7 @@ public class SurveyHandlerService extends RESTService {
 						return Response.ok().entity(response).build();
 					}
 
-					if (currSurvey.getSortedQuestionIds().size() == 0) {
+					if (currSurvey.numberOfQuestions() == 0) {
 						response.put("text", "There are no questions in this survey.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
@@ -769,6 +819,36 @@ public class SurveyHandlerService extends RESTService {
 				}
 				else {
 					response.put("text", "The survey is already set up, there are no further actions necessary. Users can send the chatbot a message and it will start to conduct the survey with them.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+			}
+			else if (intent.equals("set_up_followup_survey")) {
+				//set up survey
+				if(Objects.isNull(currSurvey)){
+					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+					setUpSurvey(input);
+					// See if survey is set up now
+					currSurvey = getSurveyBySurveyID(surveyID);
+					if (Objects.isNull(currSurvey)){
+						System.out.println("ERROR: Could not set up follow up survey, still null.");
+						response.put("text", "ERROR: Could not set up follow up survey. Reason unknown.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+
+					if (currSurvey.numberOfQuestions() == 0) {
+						response.put("text", "There are no questions in this survey.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+					System.out.println("Survey is set-up.");
+					response.put("text", "The followup survey has been successfully set up.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+				else {
+					response.put("text", "The follow up survey is already set up, there are no further actions necessary. Users can send the chatbot a message and it will start to conduct the survey with them.");
 					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 					return Response.ok().entity(response).build();
 				}
@@ -901,7 +981,7 @@ public class SurveyHandlerService extends RESTService {
 					emails.substring(0, emails.length() -1); //remove last separator, only if there are several participants
 
 					System.out.println(emails);
-					int questionsInSurvey = currSurvey.getSortedQuestions().size();
+					int questionsInSurvey = currSurvey.numberOfQuestions();
 					String welcomeString = "Hello :slightly_smiling_face: \n Just send me a message and I will conduct the survey \"" + currSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer. \n\n Here are some hints:\n";
 					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
 					String changeAnswerExplanation = "\nTo change your given answer edit your message, by clicking on the 3 points next to your text message and then choosing \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
@@ -938,23 +1018,9 @@ public class SurveyHandlerService extends RESTService {
 
 				//set up survey, if not yet done
 				if(Objects.isNull(currSurvey)){
-					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-					setUpSurvey(input);
-					// See if survey is set up now
-					currSurvey = getSurveyBySurveyID(surveyID);
-					if (Objects.isNull(currSurvey)){
-						System.out.println("ERROR: Could not set up survey, still null.");
-						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-
-					if (currSurvey.getSortedQuestionIds().size() == 0) {
-						response.put("text", "There are no questions in this survey.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-					System.out.println("Survey is set-up.");
+					response.put("text", "Please initiate the setup of the survey first.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
 				}
 
 				String emails = "";
@@ -971,7 +1037,7 @@ public class SurveyHandlerService extends RESTService {
 					emails.substring(0, emails.length() -1); //remove last separator, only if there are several participants
 
 					System.out.println(emails);
-					int questionsInSurvey = currSurvey.getSortedQuestions().size();
+					int questionsInSurvey = currSurvey.numberOfQuestions();
 					String welcomeString = "Hello :slightly_smiling_face: \nJust send me a message and I will conduct the survey \"" + currSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer.\n \n Here are some hints:\n";
 					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
 					String changeAnswerExplanation = " To change your answer, either click on the 3 points next to your text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
@@ -1047,23 +1113,9 @@ public class SurveyHandlerService extends RESTService {
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			if (Objects.isNull(currSurvey)) {
-				System.out.println("No survey exists for id " + surveyID + ". Creating...");
-				setUpSurvey(input);
-				// See if survey is set up now
-				currSurvey = getSurveyBySurveyID(surveyID);
-				if (Objects.isNull(currSurvey)) {
-					System.out.println("ERROR: Could not set up survey, still null.");
-					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-
-				if (currSurvey.getSortedQuestionIds().size() == 0) {
-					response.put("text", "There are no questions in this survey.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-				System.out.println("Survey is set-up.");
+				response.put("text", "Please initiate the setup of the survey first.");
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
 			}
 
 
@@ -1151,23 +1203,9 @@ public class SurveyHandlerService extends RESTService {
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			if(Objects.isNull(currSurvey)){
-				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-				setUpSurvey(input);
-				// See if survey is set up now
-				currSurvey = getSurveyBySurveyID(surveyID);
-				if (Objects.isNull(currSurvey)){
-					System.out.println("ERROR: Could not set up survey, still null.");
-					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-
-				if (currSurvey.getSortedQuestionIds().size() == 0) {
-					response.put("text", "There are no questions in this survey.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-				System.out.println("Survey is set-up.");
+				response.put("text", "Please initiate the setup of the survey first.");
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
 			}
 
 
@@ -1263,23 +1301,9 @@ public class SurveyHandlerService extends RESTService {
 				Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 				if(Objects.isNull(currSurvey)){
-					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-					setUpSurvey(input);
-					// See if survey is set up now
-					currSurvey = getSurveyBySurveyID(surveyID);
-					if (Objects.isNull(currSurvey)){
-						System.out.println("ERROR: Could not set up survey, still null.");
-						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-
-					if (currSurvey.getSortedQuestionIds().size() == 0) {
-						response.put("text", "There are no questions in this survey.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-					System.out.println("Survey is set-up.");
+					response.put("text", "Please initiate the setup of the survey first.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
 				}
 
 
@@ -1290,13 +1314,6 @@ public class SurveyHandlerService extends RESTService {
 				ClientResponse minires = mini.sendRequest("POST", uri, ("{\"method\": \"get_session_key\", \"params\": [ \"" + username + "\", \"" + password + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 				JSONObject minire = (JSONObject) p.parse(minires.getResponse());
 				String sessionKeyString = minire.getAsString("result");
-
-			/*
-			// Export the responses
-			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-			JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
-			String response3 = minire3.getAsString("result");
-			 */
 
 				for(Participant pa : currSurvey.getParticipants()) {
 					String surveyResponseID;
@@ -1405,23 +1422,9 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			if(Objects.isNull(currSurvey)){
-				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-				setUpSurvey(input);
-				// See if survey is set up now
-				currSurvey = getSurveyBySurveyID(surveyID);
-				if (Objects.isNull(currSurvey)){
-					System.out.println("ERROR: Could not set up survey, still null.");
-					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-
-				if (currSurvey.getSortedQuestionIds().size() == 0) {
-					response.put("text", "There are no questions in this survey.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-				System.out.println("Survey is set-up.");
+				response.put("text", "Please initiate the setup of the survey first.");
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
 			}
 
 			System.out.println(bodyInput);
@@ -1438,7 +1441,7 @@ public class SurveyHandlerService extends RESTService {
 						Integer unSize = pa.getUnaskedQuestions().size();
 						// The last question asked, but not answered is not on the list anymore
 						Integer unansweredQuestions = unSize + 1;
-						Integer allSize = currSurvey.getSortedQuestionIds().size();
+						Integer allSize = currSurvey.numberOfQuestions();
 
 						LocalDateTime lastDT = LocalDateTime.parse(pa.getLasttimeactive());
 						long hoursDifference = ChronoUnit.HOURS.between(lastDT, LocalDateTime.now());
@@ -1522,23 +1525,9 @@ public class SurveyHandlerService extends RESTService {
 				Survey currSurvey = getSurveyBySurveyID("followupSurveyID");
 
 				if(Objects.isNull(currSurvey)){
-					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-					setUpSurvey(input);
-					// See if survey is set up now
-					currSurvey = getSurveyBySurveyID(surveyID);
-					if (Objects.isNull(currSurvey)){
-						System.out.println("ERROR: Could not set up survey, still null.");
-						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-
-					if (currSurvey.getSortedQuestionIds().size() == 0) {
-						response.put("text", "There are no questions in this survey.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-					System.out.println("Survey is set-up.");
+					response.put("text", "Please initiate the setup of the survey first.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
 				}
 
 				System.out.println(bodyInput);
@@ -1555,7 +1544,7 @@ public class SurveyHandlerService extends RESTService {
 							Integer unSize = pa.getUnaskedQuestions().size();
 							// The last question asked, but not answered is not on the list anymore
 							Integer unansweredQuestions = unSize + 1;
-							Integer allSize = currSurvey.getSortedQuestionIds().size();
+							Integer allSize = currSurvey.numberOfQuestions();
 
 							LocalDateTime lastDT = LocalDateTime.parse(pa.getLasttimeactive());
 							long hoursDifference = ChronoUnit.HOURS.between(lastDT, LocalDateTime.now());

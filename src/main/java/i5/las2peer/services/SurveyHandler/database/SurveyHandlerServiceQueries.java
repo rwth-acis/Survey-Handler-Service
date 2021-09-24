@@ -90,7 +90,8 @@ public class SurveyHandlerServiceQueries {
                     query += "adminmail VARCHAR(256) NOT NULL,";
                     query += "expires VARCHAR(50),";
                     query += "startdt VARCHAR(50),";
-                    query += "title VARCHAR(150) NOT NULL";
+                    query += "title VARCHAR(150) NOT NULL,";
+                    query += "adminlanguage VARCHAR(50)";
                     break;
                 case "questions":
                     query += "qid VARCHAR(50) NOT NULL,";
@@ -103,7 +104,9 @@ public class SurveyHandlerServiceQueries {
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "help VARCHAR(500),";
                     query += "code VARCHAR(50),";
-                    query += "relevance VARCHAR(50) NOT NULL";
+                    query += "relevance VARCHAR(50) NOT NULL,";
+                    query += "mandatory BOOL,";
+                    query += "language VARCHAR(50)";
                     break;
                 case "participants":
                     query += "pid VARCHAR(256) NOT NULL,";
@@ -114,7 +117,8 @@ public class SurveyHandlerServiceQueries {
                     query += "lasttimeactive VARCHAR(50),";
                     query += "surveyresponseid VARCHAR(50),";
                     query += "participantcontacted BOOL,";
-                    query += "completedsurvey BOOL";
+                    query += "completedsurvey BOOL,";
+                    query += "language VARCHAR(50)";
                     break;
                 case "answers":
                     query += "pid VARCHAR(256) NOT NULL,";
@@ -135,7 +139,8 @@ public class SurveyHandlerServiceQueries {
                     query += "qid VARCHAR(50) NOT NULL,";
                     query += "indexi INTEGER NOT NULL,";
                     query += "code VARCHAR(50),";
-                    query += "text VARCHAR(700) NOT NULL";
+                    query += "text VARCHAR(700) NOT NULL,";
+                    query += "language VARCHAR(50)";
                     break;
 
                 default:
@@ -209,15 +214,16 @@ public class SurveyHandlerServiceQueries {
 
         return null;
     }
-    public static ArrayList<AnswerOption> getAnswerOptionsFromDB(String sid, String qid, SQLDatabase database){
+    public static ArrayList<AnswerOption> getAnswerOptionsFromDB(String sid, String qid, String language, SQLDatabase database){
         try{
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ?";
+            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ? AND language = ?";
             ps = con.prepareStatement(query);
             ps.setString(1, sid);
             ps.setString(2, qid);
+            ps.setString(3, language);
 
             ResultSet rs = ps.executeQuery();
 
@@ -398,11 +404,13 @@ public class SurveyHandlerServiceQueries {
 
             String sid = q.getSid();
             String qid = q.getQid();
+            String language = q.getLanguage();
 
-            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ?";
+            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ? AND language = ?";
             ps = con.prepareStatement(query);
             ps.setString(1, sid);
             ps.setString(2, qid);
+            ps.setString(3, language);
 
             ResultSet rs = ps.executeQuery();
 
@@ -421,6 +429,7 @@ public class SurveyHandlerServiceQueries {
                 Integer indexDB = rs.getInt("indexi");
                 String code = rs.getString("code");
                 String textDB = rs.getString("text");
+                String languageDB = rs.getString("language");
 
                 AnswerOption ao = new AnswerOption();
                 ao.setSid(sidDB);
@@ -428,6 +437,7 @@ public class SurveyHandlerServiceQueries {
                 ao.setIndexi(indexDB);
                 ao.setCode(code);
                 ao.setText(textDB);
+                ao.setLanguage(languageDB);
                 q.setAnswerOption(ao);
 
                 System.out.println("Found and added answeroptions for question with code: " + ao.getCode());
@@ -450,6 +460,7 @@ public class SurveyHandlerServiceQueries {
             String expires = rs.getString("expires");
             String startdt = rs.getString("startdt");
             String title = rs.getString("title");
+            String adminLanguage = rs.getString("adminlanguage");
 
 
             Survey res = new Survey(sid);
@@ -457,6 +468,7 @@ public class SurveyHandlerServiceQueries {
             res.setExpires(expires);
             res.setStartDT(startdt);
             res.setTitle(title);
+            res.setAdminLanguage(adminLanguage);
 
             return res;
 
@@ -478,6 +490,8 @@ public class SurveyHandlerServiceQueries {
             String help = rs.getString("help");
             String code = rs.getString("code");
             String relevance = rs.getString("relevance");
+            boolean mandatory = rs.getBoolean("mandatory");
+            String language = rs.getString("language");
 
             Question res = new Question();
             res.setQid(qid);
@@ -491,6 +505,8 @@ public class SurveyHandlerServiceQueries {
             res.setHelp(help);
             res.setCode(code);
             res.setRelevance(relevance);
+            res.setMandatory(mandatory);
+            res.setLanguage(language);
             return res;
 
         } catch (Exception e){
@@ -505,6 +521,7 @@ public class SurveyHandlerServiceQueries {
             Integer indexi = rs.getInt("indexi");
             String code = rs.getString("code");
             String text = rs.getString("text");
+            String language = rs.getString("language");
 
 
             AnswerOption res = new AnswerOption();
@@ -513,6 +530,7 @@ public class SurveyHandlerServiceQueries {
             res.setIndexi(indexi);
             res.setText(text);
             res.setCode(code);
+            res.setLanguage(language);
             return res;
 
         } catch (Exception e){
@@ -531,6 +549,7 @@ public class SurveyHandlerServiceQueries {
             String surveyresponseid = rs.getString("surveyresponseid");
             boolean participantcontacted = rs.getBoolean("participantcontacted");
             boolean completedsurvey = rs.getBoolean("completedsurvey");
+            String language = rs.getString("language");
 
             Participant res = new Participant(email);
             res.setPid(pid);
@@ -541,6 +560,7 @@ public class SurveyHandlerServiceQueries {
             res.setSurveyresponseid(surveyresponseid);
             res.setParticipantcontacted(participantcontacted);
             res.setCompletedsurvey(completedsurvey);
+            res.setLanguage(language);
 
             return res;
 
@@ -591,13 +611,14 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO surveys(sid, adminmail, expires, startdt, title) VALUES (?, ?, ?, ?, ?)";
+            String query = "INSERT INTO surveys(sid, adminmail, expires, startdt, title, adminlanguage) VALUES (?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, s.getSid());
             ps.setString(2, s.getAdminmail());
             ps.setString(3,s.getExpires());
             ps.setString(4,s.getStartDT());
             ps.setString(5,s.getTitle());
+            ps.setString(6, s.getAdminLanguage());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -621,7 +642,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, gorder, sid, help, code, relevance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO questions(qid, text, type, parentqid, gid, qorder, gorder, sid, help, code, relevance, mandatory, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, q.getQid());
             ps.setString(2, q.getText());
@@ -634,6 +655,8 @@ public class SurveyHandlerServiceQueries {
             ps.setString(9, q.getHelp());
             ps.setString(10, q.getCode());
             ps.setString(11, q.getRelevance());
+            ps.setBoolean(12, q.isMandatory());
+            ps.setString(13, q.getLanguage());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -642,7 +665,7 @@ public class SurveyHandlerServiceQueries {
             }
 
             if(!answerOptions.isEmpty()){
-                System.out.println("empty " + answerOptions.isEmpty() + "size " + answerOptions.size());
+                //System.out.println("empty " + answerOptions.isEmpty() + ", size " + answerOptions.size());
                 addAnsweroptionsToDB(q, database);
             }
 
@@ -662,7 +685,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO participants(channel, email, pid, sid, lastquestion, lasttimeactive, surveyresponseid, participantcontacted, completedsurvey) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO participants(channel, email, pid, sid, lastquestion, lasttimeactive, surveyresponseid, participantcontacted, completedsurvey, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, p.getChannel());
             ps.setString(2, p.getEmail());
@@ -673,6 +696,7 @@ public class SurveyHandlerServiceQueries {
             ps.setString(7, p.getSurveyResponseID());
             ps.setBoolean(8, p.isParticipantcontacted());
             ps.setBoolean(9, p.isCompletedsurvey());
+            ps.setString(10, p.getLanguage());
 
             int rs = ps.executeUpdate();
 
@@ -738,14 +762,14 @@ public class SurveyHandlerServiceQueries {
             // Integer in answeroptionsstringal starts at 1
             for(int i = 1; i < q.getAnswerOptions().size() + 1; i++){
                 AnswerOption answerOption  = q.getAnswerOptionByIndex(i);
-                System.out.println("answeroption: " + answerOption);
-                String query = "INSERT INTO answeroptions(sid, qid, indexi, code, text) VALUES (?, ?, ?, ?, ?)";
+                String query = "INSERT INTO answeroptions(sid, qid, indexi, code, text, language) VALUES (?, ?, ?, ?, ?, ?)";
                 ps = con.prepareStatement(query);
                 ps.setString(1, answerOption.getSid());
                 ps.setString(2, answerOption.getQid());
                 ps.setInt(3, answerOption.getIndexi());
                 ps.setString(4, answerOption.getCode());
                 ps.setString(5, answerOption.getText());
+                ps.setString(6, answerOption.getLanguage());
 
                 int rs = ps.executeUpdate();
 
@@ -779,7 +803,7 @@ public class SurveyHandlerServiceQueries {
             if (rs.first()) {
                 // Found the participant, so update the entry
                 ps.close();
-                ps = con.prepareStatement("UPDATE participants SET channel = ?, email = ?, pid = ?, sid = ?, lastquestion = ?, lasttimeactive = ?, surveyresponseid = ?, participantcontacted = ?, completedsurvey = ? WHERE sid = ? AND pid = ?");
+                ps = con.prepareStatement("UPDATE participants SET channel = ?, email = ?, pid = ?, sid = ?, lastquestion = ?, lasttimeactive = ?, surveyresponseid = ?, participantcontacted = ?, completedsurvey = ?, language = ? WHERE sid = ? AND pid = ?");
                 ps.setString(1, p.getChannel());
                 ps.setString(2, p.getEmail());
                 ps.setString(3, p.getPid());
@@ -789,9 +813,10 @@ public class SurveyHandlerServiceQueries {
                 ps.setString(7, p.getSurveyResponseID());
                 ps.setBoolean(8, p.isParticipantcontacted());
                 ps.setBoolean(9, p.isCompletedsurvey());
+                ps.setString(10, p.getLanguage());
                 // where clause
-                ps.setString(10, p.getSid());
-                ps.setString(11,p.getPid());
+                ps.setString(11, p.getSid());
+                ps.setString(12,p.getPid());
                 ps.executeUpdate();
                 updated = true;
             } else {
@@ -1046,10 +1071,11 @@ public class SurveyHandlerServiceQueries {
             if (rs.first()) {
                 // Found the answer, so deleting the entry
                 ps.close();
-                ps = con.prepareStatement("DELETE FROM questions WHERE sid = ? AND qid = ?");
+                ps = con.prepareStatement("DELETE FROM questions WHERE sid = ? AND qid = ? AND language = ?");
 
                 ps.setString(1, q.getSid());
                 ps.setString(2, q.getQid());
+                ps.setString(3, q.getLanguage());
 
                 ps.executeUpdate();
                 updated = true;
@@ -1081,21 +1107,23 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ? AND code = ?";
+            String query = "SELECT * FROM answeroptions WHERE sid = ? AND qid = ? AND code = ? AND language = ?";
             ps = con.prepareStatement(query);
             ps.setString(1, ao.getSid());
             ps.setString(2, ao.getQid());
             ps.setString(3, ao.getCode());
+            ps.setString(4, ao.getLanguage());
             boolean updated = false;
             ResultSet rs = ps.executeQuery();
             if (rs.first()) {
                 // Found the answer, so deleting the entry
                 ps.close();
-                ps = con.prepareStatement("DELETE FROM answeroptions WHERE sid = ? AND qid = ? AND code = ?");
+                ps = con.prepareStatement("DELETE FROM answeroptions WHERE sid = ? AND qid = ? AND code = ? AND language = ?");
 
                 ps.setString(1, ao.getSid());
                 ps.setString(2, ao.getQid());
                 ps.setString(3, ao.getCode());
+                ps.setString(4, ao.getLanguage());
 
                 ps.executeUpdate();
                 updated = true;
@@ -1122,7 +1150,10 @@ public class SurveyHandlerServiceQueries {
             PreparedStatement ps = null;
 
             // retrieve all Questions and Participants to delete as well
-            ArrayList<Question> questionsToDelete = s.getQuestionAL();
+            ArrayList<Question> questionsToDelete = new ArrayList<>();
+            for(String lang : s.getLanguages()){
+                questionsToDelete = s.getQuestionAL(lang);
+            }
             ArrayList<Participant> participantsToDelete = s.getParticipants();
 
             String query = "SELECT * FROM surveys WHERE sid = ?";

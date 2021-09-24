@@ -24,6 +24,8 @@ public class Question{
     private String help;
     private String relevance;
     private String code;
+    private String language;
+    private boolean mandatory;
     // end Database model identifier
 
     public static enum qType{
@@ -93,7 +95,7 @@ public class Question{
         this.gid = q.getAsString("gid");
         this.qorder = q.getAsString("question_order");
         this.text = q.getAsString("question");
-        if(text.contains("<b id=\"docs-internal-guid") || text.contains("<p>")){
+        if(text.contains("<b id=\"docs-internal-guid") || text.contains("<p>") || text.contains("<u>")){
             System.out.println("detected weird question text, fixing ...");
             String[] textA = text.split(">");
             for(String currT : textA){
@@ -112,6 +114,17 @@ public class Question{
         this.relevance = q.getAsString("relevance");
         this.code = q.getAsString("title");
         this.gorder = q.getAsString("group_order");
+        this.language = q.getAsString("language");
+        if(q.getAsString("mandatory") == null){
+
+        }
+        else if(q.getAsString("mandatory").equals("N")){
+            this.mandatory = false;
+        }
+        else if(q.getAsString("mandatory").equals("Y")){
+            this.mandatory = true;
+        }
+        this.language = q.getAsString("language");
         System.out.println("answeroptinos" + q.getAsString("answeroptions"));
         if(!q.getAsString("answeroptions").contains("No available answer options")){
             JSONObject answeroptions = (JSONObject) q.get("answeroptions");
@@ -123,12 +136,17 @@ public class Question{
                 newAnswerOption.setCode(s);
                 newAnswerOption.setIndexi(Integer.parseInt(temp.getAsString("order")));
                 newAnswerOption.setText(temp.getAsString("answer"));
+                newAnswerOption.setLanguage(this.language);
                 this.answerOptions.add(newAnswerOption);
             }
         }
         if (Integer.parseInt(this.parentqid)> 0){
             this.isSubquestion = true;
         }
+    }
+
+    public Survey getSurvey(){
+        return SurveyHandlerService.getSurveyBySurveyID(this.sid);
     }
 
     public void initMobsosData(JSONObject q, int index) throws Exception{
@@ -140,6 +158,7 @@ public class Question{
         // the questions do not have a help text, relevance or are subquestions
         this.help = "";
         this.relevance = "1";
+        this.mandatory = false;
         this.setParentQid("0");
 
         // the question groups are not defined
@@ -264,7 +283,24 @@ public class Question{
         this.code = code;
     }
 
+    public boolean isMandatory() {
+        return mandatory;
+    }
+
+    public void setMandatory(boolean mandatory) {
+        this.mandatory = mandatory;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
+    }
+
     public void setParentQid(String parentqid) {
+        System.out.println("thisq: " + this.qid);
         this.parentqid = parentqid;
         if (Integer.parseInt(this.parentqid) > 0){
             this.isSubquestion = true;
@@ -317,8 +353,8 @@ public class Question{
         return this.parentqid;
     }
 
-    public Question getParentQuestion(){
-        return SurveyHandlerService.getSurveyBySurveyID(this.sid).getQuestionByQid(this.parentqid);
+    public Question getParentQuestion(String language){
+        return this.getSurvey().getQuestionByQid(this.parentqid, language);
     }
 
     public String getHelp() {
@@ -371,7 +407,7 @@ public class Question{
         }
 
 
-        if(this.isSubquestion && !this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
+        if(this.isSubquestion && !this.getParentQuestion(participant.getLanguage()).getType().equals(qType.ARRAY.toString())){
             subString += "{\n" +
                     "\"text\": {\n" +
                     "\"type\": \"plain_text\",\n" +
@@ -381,7 +417,7 @@ public class Question{
                     "\"value\": \"" + this.qid + "\"\n" +
                     "},";
             return subString;
-        } else if(this.isSubquestion && this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
+        } else if(this.isSubquestion && this.getParentQuestion(participant.getLanguage()).getType().equals(qType.ARRAY.toString())){
             subString += "\n" + questionText;
             subString += "\",\n" +
                     "\"emoji\": true\n" +
@@ -490,18 +526,18 @@ public class Question{
         resString += questionText;
         System.out.println(this.type);
 
-        if(this.isSubquestion && !this.getParentQuestion().answerOptions.isEmpty()){
+        if(this.isSubquestion && !this.getParentQuestion(participant.getLanguage()).answerOptions.isEmpty()){
             resString = subString + "\t\t{\n" +
                     "\t\t\t\"type\": \"actions\",\n" +
                     "\t\t\t\"elements\": [\n" +
                     "\t\t\t\t{\n" +
                     "\t\t\t\t\t\"type\": \"radio_buttons\",\n" +
                     "\t\t\t\t\t\"options\": [";
-            for(int i = 1; i < this.getParentQuestion().answerOptions.size() + 1; i++){
+            for(int i = 1; i < this.getParentQuestion(participant.getLanguage()).answerOptions.size() + 1; i++){
                 String currAnswerOption = "{\n" +
                         "\t\t\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
-                        "\t\t\t\t\t\t\t\t\"text\": \"" + this.getParentQuestion().getAnswerOptionByIndex(i).getText() + "\",\n" +
+                        "\t\t\t\t\t\t\t\t\"text\": \"" + this.getParentQuestion(participant.getLanguage()).getAnswerOptionByIndex(i).getText() + "\",\n" +
                         "\t\t\t\t\t\t\t\t\"emoji\": true\n" +
                         "\t\t\t\t\t\t\t},\n" +
                         "\t\t\t\t\t\t\t\"value\": \"" + index + "\"\n" +
@@ -844,8 +880,10 @@ public class Question{
         // +1 because the question that is about to be sent is already removed from the list
 
         // if first question is array question, it is on the list even when part has been asked
-        if(this.qid.equals(participant.getUnaskedQuestions().get(0))){
-            questionsLeft--;
+        if(!participant.getUnaskedQuestions().isEmpty()){
+            if(this.qid.equals(participant.getUnaskedQuestions().get(0))){
+                questionsLeft--;
+            }
         }
 
         String newQGroupText = "";
@@ -883,11 +921,12 @@ public class Question{
 
         } else if(this.subquestionAl.size() > 0 && !this.answerOptions.isEmpty() && this.type.equals(qType.ARRAY.toString())){
             // type array recognoized
-            //System.out.println("subquestional size: " + this.subquestionAl.size());
-            //System.out.println("arraynumber: " + arrayNumber);
-            //System.out.println("subquestional: " + this.subquestionAl.get(arrayNumber - 1).getQid());
+            System.out.println("subquestional size: " + this.subquestionAl.size());
+            System.out.println("arraynumber: " + arrayNumber);
+            System.out.println("subquestional: " + this.subquestionAl.get(arrayNumber - 1).getQid());
 
-            Question subq = this.subquestionAl.get(arrayNumber - 1);
+            Integer one = 1;
+            Question subq = this.subquestionAl.get(arrayNumber - one);
             resString += exp + subq.encodeJsonBodyAsString(participant, false) + "\n";
 
             //System.out.println("inside answeroptions with type array");
@@ -1308,6 +1347,12 @@ public class Question{
                 reason = "Please answer by clicking on one of the displayed buttons.";
             }
 
+            if(type.equals(qType.ARRAY.toString()) ||
+                    type.equals(qType.MULTIPLECHOICENOCOMMENT.toString()) ||
+                    type.equals(qType.SINGLECHOICECOMMENT.toString())){
+                reason = "Please answer by clicking on one of the displayed buttons.";
+            }
+
             if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
                 reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
             }
@@ -1419,5 +1464,54 @@ public class Question{
             }
         }
         return null;
+    }
+
+    public boolean isRelevant(Participant p){
+        if(this.relevance.length() > 0){
+            System.out.println("question has relevance: " + this.relevance);
+            if(this.relevance.contains("==")){
+                //check if another question was answered with yes or no
+
+                // separate into parts
+                String code = this.relevance.split("==")[0];
+                code = code.replaceAll(" ","");
+                String requirement = this.relevance.split("==")[1];
+                requirement = requirement.replaceAll(" ","");
+                requirement = requirement.replaceAll("\"","");
+
+                System.out.println("code: " + code);
+                System.out.println("req: " + requirement);
+
+                //check if answer for code matches requirement
+                System.out.println("survey: " + this.getSurvey());
+                Question q = this.getSurvey().getQuestionByCode(code, p.getLanguage());
+
+                if(q == null){
+                    // the code field is set wrong, so not checking for requirement
+                    System.out.println("the code field is set wrong, so not checking for requirement");
+                    return true;
+                }
+
+                for(Answer a : p.getGivenAnswersAl()){
+                    if(a.getQid().equals(q.getQid())){
+                        System.out.println("found answer, now checking req...");
+                        String answerTextAsNumber = "";
+                        if(a.getText().equals(requirement)){
+                            System.out.println("req met");
+                            return true;
+                        }
+                    }
+                }
+
+                System.out.println("behind for loop");
+
+            } else{
+                return true;
+            }
+        } else{
+            return true;
+        }
+
+        return false;
     }
 }

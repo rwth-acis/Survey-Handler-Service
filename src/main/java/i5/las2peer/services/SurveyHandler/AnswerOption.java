@@ -8,6 +8,7 @@ public class AnswerOption {
     private Integer indexi;
     private String code;
     private String text;
+    private String language;
     // end Database model identifier
 
 
@@ -49,5 +50,13 @@ public class AnswerOption {
 
     public void setText(String text) {
         this.text = text;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
     }
 }

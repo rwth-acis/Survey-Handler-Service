@@ -19,14 +19,14 @@ public class Survey {
     private String expires;
     private String startDT;
     private String title;
+    private String adminLanguage;
     SQLDatabase database;
     // end Database model identifier
 
-
-    // hashmap contains ALL questions (sub and parent questions)
-    private HashMap<String, Question> questionsHM = new HashMap<>();
-    // questionAL only contains parent questions, should be sorted
-    private ArrayList<Question> questionAL = new ArrayList<>();
+    // sorted by language, hashmap contains ALL questions (sub and parent questions)
+    private HashMap<String, HashMap<String, Question>> questionsHMLanguage = new HashMap<>();
+    // sorted by language, questionAL only contains parent questions, should be sorted
+    private HashMap<String, ArrayList<Question>> questionALLanguage = new HashMap<>();
 
     private ArrayList<Participant> participants = new ArrayList<>();
 
@@ -63,20 +63,20 @@ public class Survey {
         this.sid = sid;
     }
 
-    public HashMap<String, Question> getQuestionsHM() {
-        return questionsHM;
+    public HashMap<String, HashMap<String, Question>> getQuestionsHMLanguage() {
+        return questionsHMLanguage;
     }
 
-    public ArrayList<Question> getQuestionAL() {
-        return questionAL;
+    public ArrayList<Question> getQuestionAL(String language) {
+        return questionALLanguage.get(language);
     }
 
-    public void setQuestionsHM(HashMap<String, Question> questionsHM) {
-        this.questionsHM = questionsHM;
+    public HashMap<String, ArrayList<Question>> getQuestionALLanguage() {
+        return questionALLanguage;
     }
 
-    public void setQuestionAL(ArrayList<Question> questionAL) {
-        this.questionAL = questionAL;
+    public void setQuestionHMLanguage(HashMap<String, HashMap<String, Question>> questionsHMLanguage) {
+        this.questionsHMLanguage = questionsHMLanguage;
     }
 
     public void setParticipants(ArrayList<Participant> participants) {
@@ -86,21 +86,38 @@ public class Survey {
     // Initialize data structues when given a JSONArray from limesurvey
     public void initLimeSurveyData(JSONArray allQuestions){
         ArrayList<Question> tempQuestionAl = new ArrayList<>();
+        ArrayList<String> languages = new ArrayList<>();
+        HashMap<String, Question> qHM = new HashMap<>();
+        ArrayList<Question> qAL = new ArrayList<>();
+
         // Add questions to survey
         for (Object jo : allQuestions) {
             JSONObject j = (JSONObject) jo;
             try {
                 Question newQuestion = new Question();
                 newQuestion.initLimeSurveyData(j);
-                // put all questions into hashmap
-                this.questionsHM.put(newQuestion.getQid(), newQuestion);
+
+                if(this.questionsHMLanguage.get(newQuestion.getLanguage()) == null){
+                    this.questionsHMLanguage.put(newQuestion.getLanguage(), new HashMap<>());
+                }
+
+                qHM = this.questionsHMLanguage.get(newQuestion.getLanguage());
+                qHM.put(newQuestion.getQid(), newQuestion);
+
+                if(!languages.contains(newQuestion.getLanguage())){
+                    System.out.println("adding lang: " + newQuestion.getLanguage());
+                    languages.add(newQuestion.getLanguage());
+                }
                 if (newQuestion.isSubquestion()) {
                     // put subquestions into temp list to handle later
                     tempQuestionAl.add(newQuestion);
                 } else {
-
                     // put non-subquestions into arraylist
-                    this.questionAL.add(newQuestion);
+                    if(this.questionALLanguage.get(newQuestion.getLanguage()) == null){
+                        this.questionALLanguage.put(newQuestion.getLanguage(), new ArrayList<>());
+                    }
+                    qAL = this.getQuestionAL(newQuestion.getLanguage());
+                    qAL.add(newQuestion);
                 }
 
             } catch (Exception e) {
@@ -109,30 +126,46 @@ public class Survey {
             }
         }
 
-        // handle all subquestions and assign them to their parent question, no sub-sub questions possible, so ignore the possibility
-        for(Question q : tempQuestionAl){
-            String questionParent = q.getParentQid();
+        // add questions in corresponding language storage
+        for(String currLanguage : languages){
 
-            Question parentQuestion = this.questionsHM.get(questionParent);
-            parentQuestion.addSubquestion(q);
+            ArrayList<Question> allQs = new ArrayList<>();
+            for(Question cq : this.questionALLanguage.get(currLanguage)){
+                allQs.add(cq);
+            }
+            this.questionALLanguage.put(currLanguage, allQs);
+            //System.out.println("v2: " + this.questionALLanguage.get(this.questionAL.get(0).getLanguage()).size());
+
+            // handle all subquestions and assign them to their parent question, no sub-sub questions possible, so ignore the possibility
+            for(Question q : tempQuestionAl){
+                System.out.println("sizi: " + tempQuestionAl.size());
+                if(q.getLanguage().equals(currLanguage)){
+                    String questionParent = q.getParentQid();
+                    Question parentQuestion = this.questionsHMLanguage.get(currLanguage).get(questionParent);
+                    System.out.println("pq: " + parentQuestion.getQid() + " . " + parentQuestion.getLanguage() + "." + q.getLanguage() + "." +  currLanguage);
+                    parentQuestion.addSubquestion(q);
+                }
+            }
+
+            for(Question q : this.questionALLanguage.get(currLanguage)){
+                this.sortQuestionsAl(q.getSubquestionAl());
+            }
+
+            System.out.println("before sorting...");
+            System.out.println(this.getSortedQuestionIds(currLanguage).toString());
+            // Create correct question order
+            this.sortQuestionsAl(this.questionALLanguage.get(currLanguage));
+            System.out.println("after sorting...");
+            System.out.println(this.getSortedQuestionIds(currLanguage).toString());
+
         }
-
-        for(Question q : this.questionAL){
-            q.getSubquestionAl();
-            this.sortQuestionsAl(q.getSubquestionAl());
-        }
-
-        System.out.println("before sorting...");
-        System.out.println(this.getSortedQuestionIds().toString());
-        // Create correct question order
-        this.sortQuestionsAl(this.questionAL);
-        System.out.println("after sorting...");
-        System.out.println(this.getSortedQuestionIds().toString());
     }
 
     // Initialize data structues when given a JSONArray from mobsos surveys
     public void initMobsosData(JSONArray allQuestions){
         ArrayList<Question> tempQuestionAl = new ArrayList<>();
+        HashMap<String, Question> qHM = new HashMap<>();
+        ArrayList<Question> qAL = new ArrayList<>();
         // Add questions to survey
         int index = 0;
         for (Object jo : allQuestions) {
@@ -141,10 +174,19 @@ public class Survey {
                 Question newQuestion = new Question();
                 newQuestion.initMobsosData(j, index);
                 // put all questions into hashmap
-                this.questionsHM.put(newQuestion.getQid(), newQuestion);
+                if(this.questionsHMLanguage.get(newQuestion.getLanguage()) == null){
+                    this.questionsHMLanguage.put(newQuestion.getLanguage(), new HashMap<>());
+                }
+                if(this.questionALLanguage.get(newQuestion.getLanguage()) == null){
+                    this.questionALLanguage.put(newQuestion.getLanguage(), new ArrayList<>());
+                }
+                qHM = this.questionsHMLanguage.get("default");
+                qHM.put(newQuestion.getQid(), newQuestion);
 
                 // put non-subquestions into arraylist (they are all non subquestions)
-                this.questionAL.add(newQuestion);
+                qAL = this.questionALLanguage.get("default");
+                qAL.add(newQuestion);
+
                 index++;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -163,9 +205,20 @@ public class Survey {
         //ArrayList<Question> QuestionAl = SurveyHandlerServiceQueries.getSurveyQuestionsFromDB(sur.getSid(), database);
 
         //System.out.println(QuestionAl.toString());
+        ArrayList<String> languages = new ArrayList<>();
+        for(Question q : QuestionAl){
+            if(!languages.contains(q.getLanguage())){
+                languages.add(q.getLanguage());
+            }
+        }
+
+        for(String s : languages){
+
+        }
         ArrayList<Question> noSubQuestionAl = new ArrayList<>();
         ArrayList<Question> subQuestionAl = new ArrayList<>();
         HashMap<String, Question> questionsHM = new HashMap<>();
+
         for (Question teQ : QuestionAl) {
             questionsHM.put(teQ.getQid(), teQ);
 
@@ -175,24 +228,45 @@ public class Survey {
             }
             noSubQuestionAl.add(teQ);
             // init answeroptions
-            ArrayList<AnswerOption> answerOptions = SurveyHandlerServiceQueries.getAnswerOptionsFromDB(this.sid, teQ.getQid(), database);
+            ArrayList<AnswerOption> answerOptions = SurveyHandlerServiceQueries.getAnswerOptionsFromDB(this.sid, teQ.getQid(), teQ.getLanguage(), database);
             initAnswerOptionsFromDB(teQ, answerOptions);
         }
 
-        // set the datastructures, handle subquestions afterwards
-        this.setQuestionsHM(questionsHM);
-        this.setQuestionAL(noSubQuestionAl);
+        // add sorted questions in corresponding language storage
+        for(String currLanguage : languages){
+            HashMap<String, Question> questions = new HashMap<>();
+            ArrayList<Question> qAL = new ArrayList<>();
+            for(Question curr : questionsHM.values()){
+                if(curr.getLanguage().equals(currLanguage)){
+                    questions.put(curr.getQid(), curr);
+                }
+            }
+            for(Question cur : this.questionALLanguage.get(currLanguage)){
+                qAL.add(cur);
+            }
 
-        // iterate through subquestions and add to correct question object in subquestion list
-        for (Question tempQ : subQuestionAl) {
-            // get parent question, this should exist because we parsed all (parent) questions before
-            Question parentQ = this.getQuestionByQid(tempQ.getParentQid());
-            parentQ.addSubquestion(tempQ);
+            // set the datastructures, handle subquestions afterwards
+            this.questionsHMLanguage.put(currLanguage, questions);
+            this.questionALLanguage.put(currLanguage, qAL);
+
+            // iterate through subquestions and add to correct question object in subquestion list
+            ArrayList<Question> subQS = new ArrayList<>();
+            for(Question q : subQuestionAl){
+                if(q.getLanguage().equals(currLanguage)){
+                    subQS.add(q);
+                }
+            }
+
+            for (Question tempQ : subQS) {
+                // get parent question, this should exist because we parsed all (parent) questions before
+                Question parentQ = this.getQuestionByQid(tempQ.getParentQid(), tempQ.getLanguage());
+                parentQ.addSubquestion(tempQ);
+            }
+
+            // now sort
+            this.sortQuestionsAl(this.getQuestionAL(currLanguage));
+            this.sortSubquestions(currLanguage);
         }
-
-        // sort all questions
-        this.sortQuestionsAl(this.getQuestionAL());
-        this.sortSubquestions();
     }
 
     public void initParticipantsFromDB(ArrayList<Participant> ParticipantAl){
@@ -212,7 +286,12 @@ public class Survey {
 
     public void initAnswersForParticipantFromDB(Participant p, ArrayList<Answer> answerAlFromDB){
         // get all possible questions ( these should be ordered already)
-        ArrayList<Question> possibleQs = this.getQuestionAL();
+        ArrayList<Question> possibleQs = this.getQuestionAL(this.getLanguages().get(0));
+        if(p.getLanguage() != null){
+            if(p.getLanguage().length() > 0){
+                possibleQs = this.getQuestionAL(p.getLanguage());
+            }
+        }
         // calculate which questions are still left unanswered
         ArrayList<Question> unaskedQuestions = new ArrayList<>();
 
@@ -223,10 +302,10 @@ public class Survey {
             p.addAnswerFromDb(a);
         }
         // Compare to be asked questions for this survey to given answers, to find unanswered questions
-        for (Question tempQ : this.getQuestionAL()){
+        for (Question tempQ : possibleQs){
             boolean answered = false;
             for (Answer tempA : answerAlFromDB){
-                Question questionToAnswer = this.getQuestionsHM().get(tempA.getQid());
+                Question questionToAnswer = this.getQuestionsHMLanguage().get(tempQ.getLanguage()).get(tempA.getQid());
                 // check if the question is a subquestion
                 String correspondingQid;
                 if (questionToAnswer.isSubquestion()){
@@ -261,21 +340,17 @@ public class Survey {
     }
 
     public void safeQuestionsToDB(SQLDatabase database){
-        for(Question q : questionsHM.values()){
-            SurveyHandlerServiceQueries.addQuestionToDB(q, q.getAnswerOptions(), database);
+        for(String language : this.getLanguages()){
+            for(Question q : questionsHMLanguage.get(language).values()){
+                SurveyHandlerServiceQueries.addQuestionToDB(q, q.getAnswerOptions(), database);
+            }
         }
     }
 
-
-    private void addQuestion(Question q) {
-
-        this.questionsHM.put(q.getQid(), q);
-    }
-
     // sorts subquestions of all known questions to this survey
-    public void sortSubquestions(){
+    public void sortSubquestions(String language){
         // QuestionAL contains all parent question, each might have subquestions
-        for (Question unsortedQ : this.getQuestionAL()){
+        for (Question unsortedQ : this.getQuestionAL(language)){
             this.sortQuestionsAl(unsortedQ.getSubquestionAl());
         }
     }
@@ -344,6 +419,28 @@ public class Survey {
         this.startDT = startDT;
     }
 
+    public ArrayList<String> getLanguages() {
+        System.out.println("inside getlaguages");
+        ArrayList<String> languages = new ArrayList<>();
+        for(String s : questionALLanguage.keySet()){
+            System.out.println("currlan: " + s);
+            languages.add(s);
+        }
+        return languages;
+    }
+
+    public boolean hasMoreThanOneLanguage(){
+        return getLanguages().size() > 1;
+    }
+
+    public String getAdminLanguage() {
+        return adminLanguage;
+    }
+
+    public void setAdminLanguage(String adminLanguage) {
+        this.adminLanguage = adminLanguage;
+    }
+
     public ArrayList<Participant> getParticipants() {
         return this.participants;
     }
@@ -371,7 +468,8 @@ public class Survey {
         System.out.println(this.participants);
         this.participants.add(p);
         System.out.println(this.participants.size());
-        p.setUnaskedQuestions(this.getSortedQuestionIds());
+        // first add questions in defualt language, if language is chosen, adjust
+        p.setUnaskedQuestions(this.getSortedQuestionIds(this.getLanguages().get(0)));
         // Only one survey per participant exists
         p.setCurrentSurvey(this);
         return true;
@@ -410,6 +508,7 @@ public class Survey {
 
     public String getAnswersStringFromAllParticipants(){
         String returnValue = "";
+        /*
         for(Question q : this.questionAL){
             returnValue += q.getText();
             returnValue += "\n";
@@ -432,9 +531,29 @@ public class Survey {
             }
 
              */
+        /*
             else{
                 returnValue += this.getAnswers(q);
                 returnValue += "\n";
+            }
+        }
+         */
+        for(String language : getLanguages()){
+            for(Question q : this.questionALLanguage.get(language)){
+                returnValue += q.getText();
+                returnValue += "\n";
+                if(q.getSubquestionAl().size() > 0){
+                    for(Question sq : q.getSubquestionAl()){
+                        returnValue += sq.getText();
+                        returnValue += "\n";
+                        returnValue += this.getAnswers(sq);
+                        returnValue += "\n";
+                    }
+                }
+                else{
+                    returnValue += this.getAnswers(q);
+                    returnValue += "\n";
+                }
             }
         }
         return returnValue;
@@ -453,12 +572,12 @@ public class Survey {
     public ArrayList<String> getAnswersText(ArrayList<Answer> answers){
         ArrayList<String> all = new ArrayList<>();
         for(Answer a : answers){
-            if(this.getQuestionByQid(a.getQid()).isSubquestion()){
+            if(this.getQuestionByQid(a.getQid(), getParticipantByPID(a.getPid()).getLanguage()).isSubquestion()){
                 // question is subquestion, so display how many poeple chose option
                 all.add(a.getText());
-            } else if(this.getQuestionByQid(a.getQid()).getAnswerOptions().size() > 0){
+            } else if(this.getQuestionByQid(a.getQid(), getParticipantByPID(a.getPid()).getLanguage()).getAnswerOptions().size() > 0){
                 // question has answer options, parse text to chosen answer option
-                all.add(this.getQuestionByQid(a.getQid()).getAnswerOptionByCode(a.getText()).getText());
+                all.add(this.getQuestionByQid(a.getQid(), getParticipantByPID(a.getPid()).getLanguage()).getAnswerOptionByCode(a.getText()).getText());
             } else{
                 all.add(a.getText());
             }
@@ -470,44 +589,39 @@ public class Survey {
         return all;
     }
 
-    /*
-    public HashMap<String, HashMap<String, String>> getAnswers(){
-        // return Participant email : [question1 : answer1, ...]
-        HashMap<String, HashMap<String, String>> results = new HashMap<>();
-        for(Participant p : this.participants){
-            String participantEmail = p.getEmail();
-            //get answers
-            HashMap<String, String> questionAnswerTupel = new HashMap<>();
-            for(String questionKey : questionsHM.keySet()){
-                questionAnswerTupel.put(questionKey, p.getAnswer(questionKey).getText());
+    public Participant getParticipantByPID(String pid){
+        for(Participant p : getParticipants()){
+            if(p.getPid().equals(pid)){
+                return p;
             }
-            results.put(participantEmail, questionAnswerTupel);
         }
 
-        return results;
+        return null;
     }
-     */
 
-
-    public ArrayList<String> getSortedQuestionIds() {
+    public ArrayList<String> getSortedQuestionIds(String language) {
         ArrayList<String> tempAl = new ArrayList<>();
-        for(Question q : questionAL){
+        for(Question q : questionALLanguage.get(language)){
             tempAl.add(q.getQid());
         }
         return tempAl;
     }
 
-    public ArrayList<Question> getSortedQuestions() {
-        return this.questionAL;
+    public int numberOfQuestions(){
+        return getSortedQuestions(this.getLanguages().get(0)).size();
     }
 
-    public Question getQuestionByQid(String qid){
-        return questionsHM.get(qid);
+    public ArrayList<Question> getSortedQuestions(String language) {
+        return this.questionALLanguage.get(language);
     }
 
-    ArrayList<Question> getQuestionByGid(String gid){
+    public Question getQuestionByQid(String qid, String language){
+        return questionsHMLanguage.get(language).get(qid);
+    }
+
+    ArrayList<Question> getQuestionByGid(String gid, String language){
         ArrayList<Question> questionsByGid = new ArrayList<>();
-        for(Question q : questionAL){
+        for(Question q : questionALLanguage.get(language)){
             if (q.getGid().equals(gid)) {
                 questionsByGid.add(q);
             }
@@ -515,8 +629,19 @@ public class Survey {
         return questionsByGid;
     }
 
-    public Question getParentQuestionBySQQid(String qid){
-        for(Question q : this.questionAL){
+    Question getQuestionByCode(String code, String language){
+        for(Question q : questionALLanguage.get(language)){
+            System.out.println("code: " + q.getCode() + " codee: " + code);
+            if (q.getCode().equals(code.toString())) {
+                return q;
+            }
+        }
+
+        return null;
+    }
+
+    public Question getParentQuestionBySQQid(String qid, String language){
+        for(Question q : this.questionALLanguage.get(language)){
             if(q.checkIfQidInSubQs(qid)){
                 return q;
             }
