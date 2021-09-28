@@ -67,6 +67,52 @@ public class Participant {
 
     // Based on the intent, decide what is sent back to the participant
     public Response calculateNextAction(String intent, String message, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String token, boolean secondSurvey, String beginningText){
+
+        JSONObject response = new JSONObject();
+        Participant currParticipant = this;
+
+        String languages = "";
+        for(String s : this.currentSurvey.getLanguages()){
+            languages += "\"" + s + "\"";
+            languages += " or ";
+        }
+        // remove last "or"
+        languages = languages.substring(0, languages.length() - 4);
+
+        String languageChoosing = "Please choose a language by entering one of the following options: " + languages + ".";
+
+
+        if(!this.currentSurvey.hasMoreThanOneLanguage()){
+            // set language to only language available
+            System.out.println("survey has one language");
+            this.language = this.currentSurvey.getLanguages().get(0);
+            this.setUnaskedQuestions(this.currentSurvey.getSortedQuestionIds(this.language));
+        }
+        else{
+            System.out.println("survey has more than one language");
+            // let participant choose language
+            if(this.language == null){
+                this.language = "";
+                return chooseLanguage(languageChoosing);
+            }
+            if(!languageSet()){
+                // participant got asked which language and has sent answer
+                for(String currLanguage : this.currentSurvey.getLanguages()){
+                    if(currLanguage.equals(message)){
+                        this.language = currLanguage;
+                        this.setUnaskedQuestions(this.currentSurvey.getSortedQuestionIds(this.language));
+                    }
+                }
+                if(!languageSet()){
+                    // participant sent non existent lanugage code
+                    response.put("text", languageChoosing);
+                    Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+                    return Response.ok().entity(response).build();
+                }
+            }
+        }
+
+
         int questionsInSurvey = this.currentSurvey.getSortedQuestions(this.currentSurvey.getLanguages().get(0)).size();
         String hello = "Hello :slightly_smiling_face: \n";
         if(secondSurvey){
@@ -79,7 +125,7 @@ public class Participant {
             first = " To start a second survey you need to answer all questions from the first one.";
         }
 
-        String changeAnswerExplanation = "\nTo change your given answer edit your message, by clicking on the 3 points next to your text message and then choosing \"Edit Message\".";
+        String changeAnswerExplanation = "\nTo change your given answer, edit your message by clicking on the 3 points next to your text message and then choosing \"Edit Message\".";
 
         if(buttonIntent != null){
             // remove last "."
@@ -97,24 +143,47 @@ public class Participant {
         String changedAnswer = "Your answer has been changed sucessfully.";
         String submittButtonPressedMessage = "Submit";
 
-        String languages = "";
-        for(String s : this.currentSurvey.getLanguages()){
-            languages += "\"" + s + "\"";
-            languages += " or ";
+        if(this.language != null){
+            System.out.println("1" + this.language);
+            if(languageSet()){
+                System.out.println("2" + this.language);
+                if(languageIsGerman()){
+                    System.out.println("language de");
+                    hello = "Hallo :slightly_smiling_face: \n";
+
+                    welcomeString = hello + "Schreibe mir eine Nachricht im Chat und ich werde die Umfrage \"" + currentSurvey.getTitle() + "\" mit dir durchfuehren. Es gibt " + questionsInSurvey + " Fragen die du beantwroten kannst.\n \n Hier sind ein paar Hinweise:\n";
+                    skipExplanation = " Um eine Frage zu ueberspringen sende bitte \"skip\", dir wird diese Frage dann spaeter nochmal gestellt.";
+                    first = "";
+                    if(!secondSurvey){
+                        first = " Um eine zweite Umfrage zu starten musst du alle Fragen der ersten Umfrage beantwortet haben.";
+                    }
+
+                    changeAnswerExplanation = "\nUm eine Antwort zu aendern kannst du deine Nachricht editieren, indem du auf die 3 Punkte neben der Nachricht klickst und dann \"Edit Message\" auswaehlst.";
+
+                    if(buttonIntent != null){
+                        // remove last "."
+                        changeAnswerExplanation = changeAnswerExplanation.substring(0, changeAnswerExplanation.length() - 1);
+                        changeAnswerExplanation += ", oder erneut auf einen Button klickst.";
+                    }
+                    resultsGetSaved = "\nDeine Antworten werden kontinuierlich gespeichert.";
+                    completedSurvey = "Du hast die Umfrage bereits vollstaendig beantwortet." + changeAnswerExplanation;
+                    firstEdit = "";
+                    if(!secondSurvey){
+                        firstEdit = " Wenn du Antworten zu dieser Umfrage aendern mochtest, mache dies bitte bevor du die naechste Umfrage startest.";
+                    }
+                    surveyDoneString = "Danke fuer deine Teilnahme :slightly_smiling_face:" + firstEdit;
+                    answerNotFittingQuestion = "Deine Anwort passt nicht zur Frage. Bitte aendere deine Antwort";
+                    changedAnswer = "Deine Antwort wurde erfolgreich geaendert.";
+                    submittButtonPressedMessage = "Submit";
+                }
+            }
         }
-        // remove last "or"
-        languages = languages.substring(0, languages.length() - 4);
-
-        String languageChoosing = "Please choose a language by entering one of the following options: " + languages + ".";
-
+        System.out.println("we: " + welcomeString);
         System.out.println("beginningT length: " + beginningText.length());
         if(beginningText.length() < 1){
             // if no text is set in frontend, use predefined text
             beginningText = welcomeString + skipExplanation + first + changeAnswerExplanation + resultsGetSaved;
         }
-
-        JSONObject response = new JSONObject();
-        Participant currParticipant = this;
 
         System.out.println("calculating next action...");
 
@@ -127,34 +196,6 @@ public class Participant {
 
         // check if it is the first contacting
         boolean participantContacted = this.participantcontacted;
-        if(!this.currentSurvey.hasMoreThanOneLanguage()){
-            // set language to only language available
-            System.out.println("survey has one language");
-            this.language = this.currentSurvey.getLanguages().get(0);
-        }
-        else{
-            System.out.println("survey has more than one language");
-            // let participant choose language
-            if(this.language == null){
-                this.language = "";
-                return chooseLanguage(languageChoosing);
-            }
-            if(this.language.length() < 1){
-                // participant got asked which language and has sent answer
-                for(String currLanguage : this.currentSurvey.getLanguages()){
-                    if(currLanguage.equals(message)){
-                        this.language = currLanguage;
-                        this.setUnaskedQuestions(this.currentSurvey.getSortedQuestionIds(this.language));
-                    }
-                }
-                if(this.language.length() < 1){
-                    // participant sent non existent lanugage code
-                    response.put("text", languageChoosing);
-                    Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-                    return Response.ok().entity(response).build();
-                }
-            }
-        }
 
         if (!participantContacted){
             return participantNewlyContacted(beginningText);
@@ -183,6 +224,23 @@ public class Participant {
     public void changeLanguage(String language){
         System.out.println("chagning language to: " + language);
         this.language = language;
+    }
+
+    public boolean languageSet(){
+        System.out.println("set: " + this.language.length());
+        if(this.language.length() > 0){
+            return true;
+        }
+
+        return false;
+    }
+
+    public boolean languageIsGerman(){
+        if(this.language.equals("de")){
+            return true;
+        }
+
+        return false;
     }
 
     private String answerOptionForComment(){
@@ -667,7 +725,11 @@ public class Participant {
             if(a.isSkipped()){
                 System.out.println("skipped message edited");
                 JSONObject response = new JSONObject();
-                response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
+                if(this.languageIsGerman()){
+                    response.put("text", "Bitte editiere keine geskippten Fragen, du wirst diese am Ende der Umfrage nochmal gestellt bekommen.");
+                } else{
+                    response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
+                }
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
             }
@@ -679,7 +741,11 @@ public class Participant {
                 if(b.isSkipped()){
                     System.out.println("skipped message edited");
                     JSONObject response = new JSONObject();
-                    response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
+                    if(this.languageIsGerman()){
+                        response.put("text", "Bitte editiere keine geskippten Fragen, du wirst diese am Ende der Umfrage nochmal gestellt bekommen.");
+                    } else{
+                        response.put("text", "Please do not edit skipped answers, you will be asked the question again at the end of the survey.");
+                    }
                     Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                     return Response.ok().entity(response).build();
                 }
@@ -821,7 +887,11 @@ public class Participant {
 
                             qidFromEditedMCC = s;
                             if(option != null){
-                                response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
+                                if(this.languageIsGerman()){
+                                    response.put("text", "Bitte schreibe einen Kommentar für die ausgewählte Option: \"" + option + "\"");
+                                } else{
+                                    response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
+                                }
                                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                                 return Response.ok().entity(response).build();
                             }
@@ -1396,7 +1466,11 @@ public class Participant {
 
                     String option = answerOptionForComment();
                     if(option != null){
-                        response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
+                        if(this.languageIsGerman()){
+                            response.put("text", "Bitte schreibe einen Kommentar für die ausgewählte Option: \"" + option + "\"");
+                        } else{
+                            response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
+                        }
                         Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                         return Response.ok().entity(response).build();
                     }
@@ -1868,7 +1942,11 @@ public class Participant {
                 this.currentSubquestionAnswers.remove(0);
                 String option = answerOptionForComment();
                 if(option != null){
-                    response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
+                    if(this.languageIsGerman()){
+                        response.put("text", "Bitte schreibe einen Kommentar für die ausgewählte Option: \"" + option + "\"");
+                    } else{
+                        response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
+                    }
                     Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                     return Response.ok().entity(response).build();
                 } else{
@@ -1907,13 +1985,21 @@ public class Participant {
 
             if(lastQuestion.getType().equals(Question.qType.SINGLECHOICECOMMENT.toString()) && this.currentSubquestionAnswers.isEmpty()){
                 // single choice comment requires selcted answer before comment
-                response.put("text", "Please select an answer first, then resend your comment.");
+                if(this.languageIsGerman()){
+                    response.put("text", "Bitte wähle erst eine Antwortmoeglichkeit aus und sende dann deinen Kommentar.");
+                } else{
+                    response.put("text", "Please select an answer first, then resend your comment.");
+                }
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
             }
             if(lastQuestion.getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString()) && this.currentSubquestionAnswers.isEmpty()){
                 // single choice comment requires selcted answer before comment
-                response.put("text", "Please select options first, then you will be asked to write your comments");
+                if(this.languageIsGerman()){
+                    response.put("text", "Bitte wähle erst Antwortmoeglichkeiten aus, du wirst dann nach jeweils einen Kommentar gefragt.");
+                } else{
+                    response.put("text", "Please select options first, then you will be asked to write your comments");
+                }
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
             }

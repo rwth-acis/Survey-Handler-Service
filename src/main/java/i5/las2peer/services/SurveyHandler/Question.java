@@ -125,7 +125,7 @@ public class Question{
             this.mandatory = true;
         }
         this.language = q.getAsString("language");
-        System.out.println("answeroptinos" + q.getAsString("answeroptions"));
+        //System.out.println("answeroptinos" + q.getAsString("answeroptions"));
         if(!q.getAsString("answeroptions").contains("No available answer options")){
             JSONObject answeroptions = (JSONObject) q.get("answeroptions");
             for(String s : answeroptions.keySet()){
@@ -297,6 +297,14 @@ public class Question{
 
     public void setLanguage(String language) {
         this.language = language;
+    }
+
+    public boolean languageIsGerman(){
+        if(this.language.equals("de")){
+            return true;
+        }
+
+        return false;
     }
 
     public void setParentQid(String parentqid) {
@@ -874,6 +882,9 @@ public class Question{
         int index = 1;
 
         String exp = " Please choose one of the following options by sending the respective number as a response: \n";
+        if(this.languageIsGerman()){
+            exp = " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest: \n";
+        }
 
         String questionText = this.text;
         int questionsLeft = participant.getUnaskedQuestions().size() + 1;
@@ -909,10 +920,19 @@ public class Question{
         // Check if multiple choice question
         if (this.subquestionAl.size() > 0 && !this.type.equals(qType.ARRAY.toString())) {
             if(this.type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
-                resString += "Please choose from the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer. If you want to choose no option, please enter \"-\". If you choose more than one, please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\" and so on.";
+                if(this.languageIsGerman()){
+                    resString += "Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest sowie einen Kommentar zu deiner ausgewaehlten Option. Bitte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort. Wenn du keine Antwort auswaehlen willst, sende bitte \"-\". Wenn du mehr als eine Anwort auswaehlst antworte bitte in folgendem Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\";\"Nummer der zweiten ausgewaehlten Option\":\"Dein Kommentar zur zweiten ausgewaehlten Option\" und so weiter.";
+                } else{
+                    resString += "Please choose from the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer. If you want to choose no option, please enter \"-\". If you choose more than one, please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\" and so on.";
+                }
+
             } else{
                 // no comment required
-                resString += "Please choose from the following options by sending the respective number as a response. If you choose more than one, please separate the numbers with a comma and no space. If you want to choose no option, please enter \"-\".";
+                if(this.languageIsGerman()){
+                    resString = " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest. Wenn du mehr als eine Antwort auswaehlst separiere die Nummern bitte mit einem Komma und keinem Leerzeichen. Wenn du keine Antwort auswaehlen willst, sende bitte \"-\".";
+                } else{
+                    resString += "Please choose from the following options by sending the respective number as a response. If you choose more than one, please separate the numbers with a comma and no space. If you want to choose no option, please enter \"-\".";
+                }
             }
             for (Question subq : this.subquestionAl) {
                 resString += "\n" + index + ". " + subq.encodeJsonBodyAsString(participant, false);
@@ -991,6 +1011,10 @@ public class Question{
 
         if((!(this.answerOptions.isEmpty()) && this.type.equals(qType.SINGLECHOICECOMMENT.toString()))){
             System.out.println("inside answeroptions with type singlechoicecomment");
+            if(this.languageIsGerman()){
+                resString += "Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest sowie einen Kommentar zu deiner ausgewaehlten Option. Bitte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort.";
+
+            }
             resString += " Please choose one of the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen answer option\":\"your comment\": \n";
             for(int i = 1; i < answerOptions.size() + 1; i++){
                 resString += " " + i + ". " + getAnswerOptionByIndex(i).getText() + "\n";
@@ -1344,17 +1368,29 @@ public class Question{
                     type.equals(qType.SCALE.toString()) ||
                     type.equals(qType.GENDER.toString()) ||
                     type.equals(qType.YESNO.toString())){
-                reason = "Please answer by clicking on one of the displayed buttons.";
+                if(this.languageIsGerman()){
+                    reason = "Bitte antworte, indem du auf einen der dargestellten Buttons klickst.";
+                } else{
+                    reason = "Please answer by clicking on one of the displayed buttons.";
+                }
             }
 
             if(type.equals(qType.ARRAY.toString()) ||
                     type.equals(qType.MULTIPLECHOICENOCOMMENT.toString()) ||
                     type.equals(qType.SINGLECHOICECOMMENT.toString())){
-                reason = "Please answer by clicking on one of the displayed buttons.";
+                if(this.languageIsGerman()){
+                    reason = "Bitte antworte, indem du auf einen der dargestellten Buttons klickst.";
+                } else{
+                    reason = "Please answer by clicking on one of the displayed buttons.";
+                }
             }
 
             if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
-                reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
+                if(this.languageIsGerman()){
+                    reason = "Bitte wähle alle Checkboxes aus welche zutreffen und klicke dann auf den \"Submit\" button.";
+                } else{
+                    reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
+                }
             }
         }
         else{
@@ -1365,19 +1401,38 @@ public class Question{
                     type.equals(qType.GENDER.toString()) ||
                     type.equals(qType.YESNO.toString()) ||
                     type.equals(qType.ARRAY.toString())){
-                reason = "Please only answer with one of the given numbers written before the answer option";
+                if(this.languageIsGerman()){
+                    reason = "Bitte antworte nur mit einer der Nummern vor der Antwortmöglichkeit.";
+                } else{
+                    reason = "Please only answer with one of the given numbers written before the answer option";
+                }
             }
 
             if(type.equals(qType.SINGLECHOICECOMMENT.toString())){
-                reason = "Please answer in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer.";
+                if(this.languageIsGerman()){
+                    reason = "Bitte antworte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort.";
+                } else{
+                    reason = "Please answer in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer.";
+                }
+
             }
 
             if(type.equals(qType.MULTIPLECHOICENOCOMMENT.toString())){
-                reason = "Please only answer with one of the given numbers written before the answer option and comma speparated with no spaces in between.";
+                if(this.languageIsGerman()){
+                    reason = "Bitte antworte nur mit Nummern welche vor einer Antowrtmoeglichkeit steht und separiere diese mit Kommata und keinen Leerzeichen.";
+                } else{
+                    reason = "Please only answer with one of the given numbers written before the answer option and comma speparated with no spaces in between.";
+                }
+
             }
 
             if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
-                reason = "Please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\"...";
+                if(this.languageIsGerman()){
+                    reason = "Bitte antworte nur im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\";\"Nummer der zweiten ausgewaehlten Option\":\"Dein Kommentar zur zweiten ausgewaehlten Option\" und so weiter.";
+                } else{
+                    reason = "Please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\"...";
+
+                }
             }
 
         }
@@ -1389,15 +1444,27 @@ public class Question{
         }
 
         if(type.equals(qType.DATETIME.toString())){
-            reason = "Please answer with a date in the format dd.mm.yyyy.";
+            if(this.languageIsGerman()){
+                reason = "Bitte antworte nur mit einem Datum im Format tt.mm.jjjj.";
+            } else{
+                reason = "Please answer with a date in the format dd.mm.yyyy.";
+            }
         }
 
         if(type.equals(qType.FIVESCALE.toString())){
-            reason = "Please only answer with a number between 1 and 5.";
+            if(this.languageIsGerman()){
+                reason = "Bitte antworte nur mit einer Nummer zwischen 1 und 5.";
+            } else{
+                reason = "Please only answer with a number between 1 and 5.";
+            }
         }
 
         if(type.equals(qType.NUMERICALINPUT.toString())){
-            reason = "Please answer with a number.";
+            if(this.languageIsGerman()){
+                reason = "Bitte antworte nur mit einer Nummer.";
+            } else{
+                reason = "Please answer with a number.";
+            }
         }
 
         return reason;

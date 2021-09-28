@@ -104,7 +104,7 @@ public class SurveyHandlerServiceQueries {
                     query += "sid VARCHAR(50) NOT NULL,";
                     query += "help VARCHAR(500),";
                     query += "code VARCHAR(50),";
-                    query += "relevance VARCHAR(50) NOT NULL,";
+                    query += "relevance VARCHAR(150) NOT NULL,";
                     query += "mandatory BOOL,";
                     query += "language VARCHAR(50)";
                     break;
