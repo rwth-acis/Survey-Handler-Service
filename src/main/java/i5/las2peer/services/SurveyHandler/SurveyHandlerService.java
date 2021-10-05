@@ -265,10 +265,15 @@ public class SurveyHandlerService extends RESTService {
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
-			String beginningText = "";
+			String beginningTextEN = "";
+			String beginningTextDE = "";
 			if(bodyInput.containsKey("beginningText")){
 				System.out.println("has beginningText");
-				beginningText = bodyInput.getAsString("beginningText");
+				beginningTextEN = bodyInput.getAsString("beginningText");
+				beginningTextDE = bodyInput.getAsString("beginningText");
+			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
+				beginningTextEN = bodyInput.getAsString("beginningTextEN");
+				beginningTextDE = bodyInput.getAsString("beginningTextDE");
 			}
 			String senderEmail = "";
 
@@ -306,7 +311,18 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println("senderEMail: " + senderEmail);
 				}
 			} catch(Exception e){
-				senderEmail = currSurvey.findParticipantByChannel(channel).getEmail();
+				try{
+					senderEmail = currSurvey.findParticipantByChannel(channel).getEmail();
+				} catch (Exception ex){
+					// in case of telegram no email is passed on, so username is the 'email'
+					if(bodyInput.containsKey("user")){
+						senderEmail = bodyInput.getAsString("user");
+					}
+					else{
+						System.out.println("channel, email or user is not transmitted correctly");
+					}
+				}
+
 				System.out.println("senderEMail: " + senderEmail);
 			}
 
@@ -503,7 +519,7 @@ public class SurveyHandlerService extends RESTService {
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningText);
+			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
 
 
 		} catch (ParseException e) {
@@ -772,12 +788,20 @@ public class SurveyHandlerService extends RESTService {
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
 			String msg = bodyInput.getAsString("msg");
+			String adminmail = bodyInput.getAsString("adminmail");
 
 			String senderEmail = "";
 			try{
 				senderEmail = bodyInput.getAsString("email");
 
-				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+				if(senderEmail == null && bodyInput.containsKey("user")){
+
+					if(!bodyInput.getAsString("user").equals(adminmail)){
+						Response res = takingSurvey(input);
+						return res;
+					}
+				}
+				else if (!adminmail.equals(senderEmail)) {
 					Response res = takingSurvey(input);
 					return res;
 				}
@@ -1095,18 +1119,34 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 
+			String adminmail = bodyInput.getAsString("adminmail");
+
 			String senderEmail = "";
 			try{
 				senderEmail = bodyInput.getAsString("email");
 
-				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+				if(senderEmail == null && bodyInput.containsKey("user")){
+
+					if(!bodyInput.getAsString("user").equals(adminmail)){
+						Response res = takingSurvey(input);
+						return res;
+					}
+				}
+				else if (!adminmail.equals(senderEmail)) {
 					Response res = takingSurvey(input);
 					return res;
 				}
 
 			} catch(Exception e){
-				Response res = takingSurvey(input);
-				return res;
+				if(bodyInput.containsKey("user")){
+					if(!bodyInput.getAsString("user").equals(bodyInput.getAsString("adminmail"))){
+						Response res = takingSurvey(input);
+						return res;
+					}
+				} else{
+					Response res = takingSurvey(input);
+					return res;
+				}
 			}
 
 			// find correct survey
@@ -1185,18 +1225,34 @@ public class SurveyHandlerService extends RESTService {
 				uri = bodyInput.getAsString("uri");
 			}
 
+			String adminmail = bodyInput.getAsString("adminmail");
+
 			String senderEmail = "";
 			try{
 				senderEmail = bodyInput.getAsString("email");
 
-				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+				if(senderEmail == null && bodyInput.containsKey("user")){
+
+					if(!bodyInput.getAsString("user").equals(adminmail)){
+						Response res = takingSurvey(input);
+						return res;
+					}
+				}
+				else if (!adminmail.equals(senderEmail)) {
 					Response res = takingSurvey(input);
 					return res;
 				}
 
 			} catch(Exception e){
-				Response res = takingSurvey(input);
-				return res;
+				if(bodyInput.containsKey("user")){
+					if(!bodyInput.getAsString("user").equals(bodyInput.getAsString("adminmail"))){
+						Response res = takingSurvey(input);
+						return res;
+					}
+				} else{
+					Response res = takingSurvey(input);
+					return res;
+				}
 			}
 
 			// find correct survey
@@ -1407,18 +1463,35 @@ public class SurveyHandlerService extends RESTService {
 				slack = true;
 			}
 
+			String adminmail = bodyInput.getAsString("adminmail");
+
 			String senderEmail = "";
 			try{
 				senderEmail = bodyInput.getAsString("email");
 
-				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
+				if(senderEmail == null && bodyInput.containsKey("user")){
+
+					if(!bodyInput.getAsString("user").equals(adminmail)){
+						System.out.println("not equal");
+						Response res = takingSurvey(input);
+						return res;
+					}
+				}
+				else if (!adminmail.equals(senderEmail)) {
 					Response res = takingSurvey(input);
 					return res;
 				}
 
 			} catch(Exception e){
-				Response res = takingSurvey(input);
-				return res;
+				if(bodyInput.containsKey("user")){
+					if(!bodyInput.getAsString("user").equals(bodyInput.getAsString("adminmail"))){
+						Response res = takingSurvey(input);
+						return res;
+					}
+				} else{
+					Response res = takingSurvey(input);
+					return res;
+				}
 			}
 
 			if(Objects.isNull(currSurvey)){

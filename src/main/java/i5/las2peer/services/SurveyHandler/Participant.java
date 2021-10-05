@@ -66,8 +66,9 @@ public class Participant {
     }
 
     // Based on the intent, decide what is sent back to the participant
-    public Response calculateNextAction(String intent, String message, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String token, boolean secondSurvey, String beginningText){
+    public Response calculateNextAction(String intent, String message, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String token, boolean secondSurvey, String beginningTextEN, String beginningTextDE){
 
+        String beginningText = "";
         JSONObject response = new JSONObject();
         Participant currParticipant = this;
 
@@ -86,7 +87,9 @@ public class Participant {
             // set language to only language available
             System.out.println("survey has one language");
             this.language = this.currentSurvey.getLanguages().get(0);
-            this.setUnaskedQuestions(this.currentSurvey.getSortedQuestionIds(this.language));
+            if(this.unaskedQuestions.isEmpty()){
+                this.setUnaskedQuestions(this.currentSurvey.getSortedQuestionIds(this.language));
+            }
         }
         else{
             System.out.println("survey has more than one language");
@@ -118,8 +121,8 @@ public class Participant {
         if(secondSurvey){
             hello = "Hello again :slightly_smiling_face: \n";
         }
-        String welcomeString = hello + "Just send me a message and I will conduct the survey \"" + currentSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer.\n \n Here are some hints:\n";
-        String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
+        String welcomeString = hello + "Just send me a message and I will conduct the survey \"" + currentSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer.\n \nHere are some hints:\n";
+        String skipExplanation = "To skip a question just send \"skip\", you will be able to answer them later if you want.";
         String first = "";
         if(!secondSurvey){
             first = " To start a second survey you need to answer all questions from the first one.";
@@ -151,8 +154,8 @@ public class Participant {
                     System.out.println("language de");
                     hello = "Hallo :slightly_smiling_face: \n";
 
-                    welcomeString = hello + "Schreibe mir eine Nachricht im Chat und ich werde die Umfrage \"" + currentSurvey.getTitle() + "\" mit dir durchfuehren. Es gibt " + questionsInSurvey + " Fragen die du beantwroten kannst.\n \n Hier sind ein paar Hinweise:\n";
-                    skipExplanation = " Um eine Frage zu ueberspringen sende bitte \"skip\", dir wird diese Frage dann spaeter nochmal gestellt.";
+                    welcomeString = hello + "Schreibe mir eine Nachricht im Chat und ich werde die Umfrage \"" + currentSurvey.getTitle() + "\" mit dir durchfuehren. Es gibt " + questionsInSurvey + " Fragen die du beantworten kannst.\n \nHier sind ein paar Hinweise:\n";
+                    skipExplanation = "Um eine Frage zu ueberspringen sende bitte \"skip\", dir wird diese Frage dann spaeter nochmal gestellt.";
                     first = "";
                     if(!secondSurvey){
                         first = " Um eine zweite Umfrage zu starten musst du alle Fragen der ersten Umfrage beantwortet haben.";
@@ -180,9 +183,13 @@ public class Participant {
         }
         System.out.println("we: " + welcomeString);
         System.out.println("beginningT length: " + beginningText.length());
-        if(beginningText.length() < 1){
+        if(beginningTextEN.length() < 1 && beginningTextDE.length() < 1){
             // if no text is set in frontend, use predefined text
             beginningText = welcomeString + skipExplanation + first + changeAnswerExplanation + resultsGetSaved;
+        } else if(languageIsGerman()){
+            beginningText = beginningTextDE;
+        } else{
+            beginningText = beginningTextEN;
         }
 
         System.out.println("calculating next action...");
@@ -311,7 +318,11 @@ public class Participant {
 
                 if(this.currentSurvey.getQuestionByQid(nextId, this.language).getSubquestionAl().size() == 1){
                     System.out.println("array has only one question, questino does not have to be asked again");
-                } else{
+                }
+                else if(this.skippedQuestions.contains(nextId) && !this.unaskedQuestions.isEmpty()){
+                    System.out.println("array question was skipped and was asked only once, so removing from unasked question list");
+                }
+                else{
                     questionAsked = false;
                     System.out.println("array has more than one question");
                     if(!this.givenAnswersAl.isEmpty()){
@@ -888,7 +899,7 @@ public class Participant {
                             qidFromEditedMCC = s;
                             if(option != null){
                                 if(this.languageIsGerman()){
-                                    response.put("text", "Bitte schreibe einen Kommentar für die ausgewählte Option: \"" + option + "\"");
+                                    response.put("text", "Bitte schreibe einen Kommentar für die ausgewaehlte Option: \"" + option + "\"");
                                 } else{
                                     response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
                                 }
@@ -1222,7 +1233,12 @@ public class Participant {
                 if(message.equals("skip") || message.equals("Skip") || message.length()<5){
                     try{
                         if(this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).isMandatory()){
-                            response.put("text", "This question is mandatory, please answer it.");
+                            if(languageIsGerman()){
+                                response.put("text", "Diese Frage ist obligatorisch, bitte beantworte diese.");
+                            }
+                            else{
+                                response.put("text", "This question is mandatory, please answer it.");
+                            }
                             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                             return Response.ok().entity(response).build();
                         }
@@ -1230,8 +1246,36 @@ public class Participant {
                         System.out.println("mandatory value is not set");
                     }
 
-                    this.skippedQuestions.add(this.lastquestion);
-                    newAnswer.setQid(this.lastquestion);
+                    if(this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).getType().equals(Question.qType.ARRAY.toString())){
+                        // skipped array questions only skip the current subquestion, not the entire question
+                        if(this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).getSubquestionAl().size() == 1
+                            || this.givenAnswersAl.isEmpty()){
+                            // add subquestion qid to skipped question list
+                            this.skippedQuestions.add(this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).getSubquestionByIndex("0").getQid());
+                            newAnswer.setQid(this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).getSubquestionByIndex("0").getQid());
+                        }
+                        else{
+                            if(!this.givenAnswersAl.isEmpty()){
+                                Answer lastGivenAnswer = this.givenAnswersAl.get(this.givenAnswersAl.size() - 1);
+                                System.out.println("last given answer to question: " + lastGivenAnswer.getQid());
+                                int index = 1;
+                                for(Question subq : this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).getSubquestionAl()){
+                                    System.out.println("first: " + subq.getQid());
+                                    index++;
+                                    if(lastGivenAnswer.getQid().equals(subq.getQid())){
+                                        // add qid of current skipped subquestion
+                                        this.skippedQuestions.add(subq.getSubquestionByIndex(String.valueOf(index)).getQid());
+                                        newAnswer.setQid(subq.getSubquestionByIndex(String.valueOf(index)).getQid());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else{
+                        this.skippedQuestions.add(this.lastquestion);
+                        newAnswer.setQid(this.lastquestion);
+                    }
                     this.givenAnswersAl.add(newAnswer);
                     SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
                     skipped = true;
@@ -1467,7 +1511,7 @@ public class Participant {
                     String option = answerOptionForComment();
                     if(option != null){
                         if(this.languageIsGerman()){
-                            response.put("text", "Bitte schreibe einen Kommentar für die ausgewählte Option: \"" + option + "\"");
+                            response.put("text", "Bitte schreibe einen Kommentar für die ausgewaehlte Option: \"" + option + "\"");
                         } else{
                             response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
                         }
@@ -1593,6 +1637,16 @@ public class Participant {
 
         // Check if it is a text answer for button questions in rocket chat
         if(lastQuestion.isBlocksQuestion() && !slack){
+            if(message.length() == 2 && String.valueOf(message.charAt(1)).equals(".")){
+                // check if message asking for a number contains a "."
+                JSONParser p = new JSONParser();
+                try{
+                    Integer.parseInt(message.substring(0,1));
+                    // remove "."
+                    message = message.substring(0,1);
+                } catch (Exception e){
+                }
+            }
             System.out.println("blocks question and rocketchat recognized");
 
             if(!lastQuestion.answerIsPlausible(message, slack)){
@@ -1943,7 +1997,7 @@ public class Participant {
                 String option = answerOptionForComment();
                 if(option != null){
                     if(this.languageIsGerman()){
-                        response.put("text", "Bitte schreibe einen Kommentar für die ausgewählte Option: \"" + option + "\"");
+                        response.put("text", "Bitte schreibe einen Kommentar für die ausgewaehlte Option: \"" + option + "\"");
                     } else{
                         response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
                     }
@@ -1986,7 +2040,7 @@ public class Participant {
             if(lastQuestion.getType().equals(Question.qType.SINGLECHOICECOMMENT.toString()) && this.currentSubquestionAnswers.isEmpty()){
                 // single choice comment requires selcted answer before comment
                 if(this.languageIsGerman()){
-                    response.put("text", "Bitte wähle erst eine Antwortmoeglichkeit aus und sende dann deinen Kommentar.");
+                    response.put("text", "Bitte waehle erst eine Antwortmoeglichkeit aus und sende dann deinen Kommentar.");
                 } else{
                     response.put("text", "Please select an answer first, then resend your comment.");
                 }
@@ -1996,7 +2050,7 @@ public class Participant {
             if(lastQuestion.getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString()) && this.currentSubquestionAnswers.isEmpty()){
                 // single choice comment requires selcted answer before comment
                 if(this.languageIsGerman()){
-                    response.put("text", "Bitte wähle erst Antwortmoeglichkeiten aus, du wirst dann nach jeweils einen Kommentar gefragt.");
+                    response.put("text", "Bitte waehle erst Antwortmoeglichkeiten aus, du wirst dann nach jeweils einen Kommentar gefragt.");
                 } else{
                     response.put("text", "Please select options first, then you will be asked to write your comments");
                 }

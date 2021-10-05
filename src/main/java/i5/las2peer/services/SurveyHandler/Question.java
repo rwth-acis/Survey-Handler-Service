@@ -4,6 +4,7 @@ import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 
+import javax.mail.Part;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -95,18 +96,11 @@ public class Question{
         this.gid = q.getAsString("gid");
         this.qorder = q.getAsString("question_order");
         this.text = q.getAsString("question");
-        if(text.contains("<b id=\"docs-internal-guid") || text.contains("<p>") || text.contains("<u>")){
+        if(text.contains("<b id=\"docs-internal-guid") || text.contains("<p>") || (text.contains("<") && text.contains(">"))){
             System.out.println("detected weird question text, fixing ...");
-            String[] textA = text.split(">");
-            for(String currT : textA){
-                System.out.println(currT);
-                String c = String.valueOf(currT.charAt(0));
-                if(!c.equals("<")){
-                    text = currT;
-                    break;
-                }
-            }
-            text = text.split("<")[0];
+            System.out.println("before: " + text);
+            text = text.replaceAll("<.*?>","");
+            System.out.println("after: " + text);
         }
         this.sid = q.getAsString("sid");
         this.help = q.getAsString("help");
@@ -404,10 +398,18 @@ public class Question{
         // +1 because the question that is about to be sent is already removed from the list
         String newQGroupText = "";
         if(questionsLeft > 1){
-            newQGroupText = "You completed a question group. There are " + questionsLeft + " questions left.\n";
+            if(this.languageIsGerman()){
+                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Fragen.";
+            } else{
+                newQGroupText = "You completed a question group. There are " + questionsLeft + " questions left.\n";
+            }
         }
         else{
-            newQGroupText = "You completed a question group. There is " + questionsLeft + " question left.\n";
+            if(this.languageIsGerman()){
+                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Frage.";
+            } else{
+                newQGroupText = "You completed a question group. There is " + questionsLeft + " question left.\n";
+            }
         }
 
         if(newQuestionGroup){
@@ -570,13 +572,13 @@ public class Question{
         if(buttonToColor.length() > 0){
             add = ",\"style\": \"primary\"";
             switch(buttonToColor){
-                case "1", "Female", "Yes":
+                case "1", "Female", "Yes", "Ja":
                     firstAdd = add;
                     break;
-                case "2", "Male", "No":
+                case "2", "Male", "No", "Nein":
                     secondAdd = add;
                     break;
-                case "3", "No Answer":
+                case "3", "No Answer", "Keine Antwort":
                     thirdAdd = add;
                     break;
                 case "4":
@@ -628,17 +630,62 @@ public class Question{
                         "\t\t\t\t\t\t\"emoji\": true\n" +
                         "\t\t\t\t\t}\n" + secondAdd +
                         "\t\t\t\t},\n";
-                resString +=
-                        "\t\t\t\t{\n" +
-                        "\t\t\t\t\t\"type\": \"button\",\n" +
-                        "\t\t\t\t\t\"text\": {\n" +
-                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
-                        "\t\t\t\t\t\t\"text\": \"No Answer\",\n" +
-                        "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" + thirdAdd +
-                        "\t\t\t\t}\n" +
-                        "\t\t\t]\n" +
-                        "\t\t}]";
+                if(!isMandatory()){
+                    resString +=
+                            "\t\t\t\t{\n" +
+                                    "\t\t\t\t\t\"type\": \"button\",\n" +
+                                    "\t\t\t\t\t\"text\": {\n" +
+                                    "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                    "\t\t\t\t\t\t\"text\": \"No Answer\",\n" +
+                                    "\t\t\t\t\t\t\"emoji\": true\n" +
+                                    "\t\t\t\t\t}\n" + thirdAdd +
+                                    "\t\t\t\t}\n" +
+                                    "\t\t\t]\n" +
+                                    "\t\t}]";
+                }
+                if(languageIsGerman()){
+                    resString = "[{\n" +
+                            "\t\t\t\"type\": \"section\",\n" +
+                            "\t\t\t\"text\": {\n" +
+                            "\t\t\t\t\"type\": \"mrkdwn\",\n" +
+                            "\t\t\t\t\"text\": \"" + questionText + "\"\n" +
+                            "\t\t\t}\n" +
+                            "\t\t},\n" +
+                            "\t\t{\n" +
+                            "\t\t\t\"type\": \"actions\",\n" +
+                            "\t\t\t\"elements\": [\n";
+                    resString +=
+                            "\t\t\t\t{\n" +
+                                    "\t\t\t\t\t\"type\": \"button\",\n" +
+                                    "\t\t\t\t\t\"text\": {\n" +
+                                    "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                    "\t\t\t\t\t\t\"text\": \"Weiblich\",\n" +
+                                    "\t\t\t\t\t\t\"emoji\": true\n" +
+                                    "\t\t\t\t\t}\n" + firstAdd +
+                                    "\t\t\t\t},\n";
+                    resString +=
+                            "\t\t\t\t{\n" +
+                                    "\t\t\t\t\t\"type\": \"button\",\n" +
+                                    "\t\t\t\t\t\"text\": {\n" +
+                                    "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                    "\t\t\t\t\t\t\"text\": \"Maennlich\",\n" +
+                                    "\t\t\t\t\t\t\"emoji\": true\n" +
+                                    "\t\t\t\t\t}\n" + secondAdd +
+                                    "\t\t\t\t},\n";
+                    if(!isMandatory()){
+                        resString +=
+                                "\t\t\t\t{\n" +
+                                        "\t\t\t\t\t\"type\": \"button\",\n" +
+                                        "\t\t\t\t\t\"text\": {\n" +
+                                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                        "\t\t\t\t\t\t\"text\": \"Keine Antwort\",\n" +
+                                        "\t\t\t\t\t\t\"emoji\": true\n" +
+                                        "\t\t\t\t\t}\n" + thirdAdd +
+                                        "\t\t\t\t}\n" +
+                                        "\t\t\t]\n" +
+                                        "\t\t}]";
+                    }
+                }
                 break;
             case "N":
                 System.out.println("Numerical input");
@@ -677,17 +724,60 @@ public class Question{
                         "\t\t\t\t\t\t\"emoji\": true\n" +
                         "\t\t\t\t\t}\n" + secondAdd +
                         "\t\t\t\t},\n";
-                resString +=
-                        "\t\t\t\t{\n" +
-                        "\t\t\t\t\t\"type\": \"button\",\n" +
-                        "\t\t\t\t\t\"text\": {\n" +
-                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
-                        "\t\t\t\t\t\t\"text\": \"No Answer\",\n" +
-                        "\t\t\t\t\t\t\"emoji\": true\n" +
-                        "\t\t\t\t\t}\n" + thirdAdd +
-                        "\t\t\t\t}\n" +
-                        "\t\t\t]\n" +
-                        "\t\t}]";
+                if(!isMandatory()){
+                    resString +=
+                            "\t\t\t\t{\n" +
+                                    "\t\t\t\t\t\"type\": \"button\",\n" +
+                                    "\t\t\t\t\t\"text\": {\n" +
+                                    "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                    "\t\t\t\t\t\t\"text\": \"No Answer\",\n" +
+                                    "\t\t\t\t\t\t\"emoji\": true\n" +
+                                    "\t\t\t\t\t}\n" + thirdAdd +
+                                    "\t\t\t\t}\n" +
+                                    "\t\t\t]\n" +
+                                    "\t\t}]";
+                }
+                if(this.languageIsGerman()){
+                    resString = "[{\n" +
+                            "\t\t\t\"type\": \"section\",\n" +
+                            "\t\t\t\"text\": {\n" +
+                            "\t\t\t\t\"type\": \"mrkdwn\",\n" +
+                            "\t\t\t\t\"text\": \"" + questionText + "\"\n" +
+                            "\t\t\t}\n" +
+                            "\t\t},\n" +
+                            "\t\t{\n" +
+                            "\t\t\t\"type\": \"actions\",\n" +
+                            "\t\t\t\"elements\": [\n";
+                    resString +=
+                            "\t\t\t\t{\n" +
+                                    "\t\t\t\t\t\"type\": \"button\",\n" +
+                                    "\t\t\t\t\t\"text\": {\n" +
+                                    "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                    "\t\t\t\t\t\t\"text\": \"Ja\",\n" +
+                                    "\t\t\t\t\t\t\"emoji\": true\n" +
+                                    "\t\t\t\t\t}\n" + firstAdd +
+                                    "\t\t\t\t},\n";
+                    resString +=
+                            "\t\t\t\t{\n" +
+                                    "\t\t\t\t\t\"type\": \"button\",\n" +
+                                    "\t\t\t\t\t\"text\": {\n" +
+                                    "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                    "\t\t\t\t\t\t\"text\": \"Nein\",\n" +
+                                    "\t\t\t\t\t\t\"emoji\": true\n" +
+                                    "\t\t\t\t\t}\n" + secondAdd +
+                                    "\t\t\t\t},\n";
+                    resString +=
+                            "\t\t\t\t{\n" +
+                                    "\t\t\t\t\t\"type\": \"button\",\n" +
+                                    "\t\t\t\t\t\"text\": {\n" +
+                                    "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                                    "\t\t\t\t\t\t\"text\": \"Keine Antwort\",\n" +
+                                    "\t\t\t\t\t\t\"emoji\": true\n" +
+                                    "\t\t\t\t\t}\n" + thirdAdd +
+                                    "\t\t\t\t}\n" +
+                                    "\t\t\t]\n" +
+                                    "\t\t}]";
+                }
                 break;
             case "5":
                 System.out.println("5 point choice");
@@ -881,9 +971,9 @@ public class Question{
         String subString = "";
         int index = 1;
 
-        String exp = " Please choose one of the following options by sending the respective number as a response: \n";
+        String exp = "Please choose one of the following options by sending the respective number as a response: \n";
         if(this.languageIsGerman()){
-            exp = " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest: \n";
+            exp = "Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest: \n";
         }
 
         String questionText = this.text;
@@ -921,17 +1011,29 @@ public class Question{
         if (this.subquestionAl.size() > 0 && !this.type.equals(qType.ARRAY.toString())) {
             if(this.type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
                 if(this.languageIsGerman()){
-                    resString += "Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest sowie einen Kommentar zu deiner ausgewaehlten Option. Bitte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort. Wenn du keine Antwort auswaehlen willst, sende bitte \"-\". Wenn du mehr als eine Anwort auswaehlst antworte bitte in folgendem Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\";\"Nummer der zweiten ausgewaehlten Option\":\"Dein Kommentar zur zweiten ausgewaehlten Option\" und so weiter.";
+                    resString += " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest sowie einen Kommentar zu deiner ausgewaehlten Option. Bitte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort. Wenn du mehr als eine Anwort auswaehlst antworte bitte in folgendem Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\";\"Nummer der zweiten ausgewaehlten Option\":\"Dein Kommentar zur zweiten ausgewaehlten Option\" und so weiter.";
+                    if(!mandatory){
+                        resString += " Wenn du keine Antwort auswaehlen willst, sende bitte \"-\".";
+                    }
                 } else{
-                    resString += "Please choose from the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer. If you want to choose no option, please enter \"-\". If you choose more than one, please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\" and so on.";
+                    resString += " Please choose from the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer. If you choose more than one, please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\" and so on.";
+                    if(!mandatory){
+                        resString += " If you want to choose no option, please enter \"-\".";
+                    }
                 }
 
             } else{
                 // no comment required
                 if(this.languageIsGerman()){
-                    resString = " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest. Wenn du mehr als eine Antwort auswaehlst separiere die Nummern bitte mit einem Komma und keinem Leerzeichen. Wenn du keine Antwort auswaehlen willst, sende bitte \"-\".";
+                    resString += " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest. Wenn du mehr als eine Antwort auswaehlst separiere die Nummern bitte mit einem Komma und keinem Leerzeichen.";
+                    if(!mandatory){
+                        resString += " Wenn du keine Antwort auswaehlen willst, sende bitte \"-\".";
+                    }
                 } else{
-                    resString += "Please choose from the following options by sending the respective number as a response. If you choose more than one, please separate the numbers with a comma and no space. If you want to choose no option, please enter \"-\".";
+                    resString += " Please choose from the following options by sending the respective number as a response. If you choose more than one, please separate the numbers with a comma and no space.";
+                    if(!mandatory){
+                        resString += "If you want to choose no option, please enter \"-\".";
+                    }
                 }
             }
             for (Question subq : this.subquestionAl) {
@@ -969,10 +1071,22 @@ public class Question{
                 break;
             case "G":
                 System.out.println("Gender");
-                resString += exp;
-                resString += " 1. Female ";
-                resString += " 2. Male ";
-                resString += " 3. No Answer ";
+                if(languageIsGerman()){
+                    resString += exp;
+                    resString += " 1. Weiblich ";
+                    resString += " 2. Maennlich  ";
+                    if(!isMandatory()){
+                        resString += " 3. Keine Antwort ";
+                    }
+                }
+                else{
+                    resString += exp;
+                    resString += " 1. Female ";
+                    resString += " 2. Male ";
+                    if(!isMandatory()){
+                        resString += " 3. No Answer ";
+                    }
+                }
                 break;
             case "N":
                 System.out.println("Numerical input");
@@ -983,10 +1097,22 @@ public class Question{
                 break;
             case "Y":
                 System.out.println("Yes/No");
-                resString += exp;
-                resString += " 1. Yes ";
-                resString += " 2. No ";
-                resString += " 3. No Answer ";
+                if(languageIsGerman()){
+                    resString += exp;
+                    resString += " 1. Ja ";
+                    resString += " 2. Nein ";
+                    if(!isMandatory()){
+                        resString += " 3. Keine Antwort ";
+                    }
+                }
+                else{
+                    resString += exp;
+                    resString += " 1. Yes ";
+                    resString += " 2. No ";
+                    if(!isMandatory()){
+                        resString += " 3. No Answer ";
+                    }
+                }
                 break;
             case "5":
                 System.out.println("5 point choice");
@@ -1154,7 +1280,8 @@ public class Question{
             if(this.type.equals(qType.GENDER.toString())){
                 System.out.println("Question type gender recognized.");
                 // a gender question only has these three options
-                if(textAnswer.equals("Female") || textAnswer.equals("Male") || textAnswer.equals("No Answer")){
+                if(textAnswer.equals("Female") || textAnswer.equals("Male") || textAnswer.equals("No Answer")
+                || textAnswer.equals("Weiblich") || textAnswer.equals("Maennlich") || textAnswer.equals("Keine Antwort")){
                     System.out.println("Answer is valid.");
                     return true;
                 }
@@ -1163,7 +1290,8 @@ public class Question{
             if(this.type.equals(qType.YESNO.toString())){
                 System.out.println("Question type yesno recognized.");
                 // yes no question has only these three answers
-                if(textAnswer.equals("Yes") || textAnswer.equals("No") || textAnswer.equals("No Answer")){
+                if(textAnswer.equals("Yes") || textAnswer.equals("No") || textAnswer.equals("No Answer") ||
+                        textAnswer.equals("Ja") || textAnswer.equals("Nein") || textAnswer.equals("Keine Antwort")){
                     System.out.println("Answer is valid.");
                     return true;
                 }
@@ -1387,7 +1515,7 @@ public class Question{
 
             if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte wähle alle Checkboxes aus welche zutreffen und klicke dann auf den \"Submit\" button.";
+                    reason = "Bitte waehle alle Checkboxes aus welche zutreffen und klicke dann auf den \"Submit\" button.";
                 } else{
                     reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
                 }
@@ -1533,6 +1661,7 @@ public class Question{
         return null;
     }
 
+    /*
     public boolean isRelevant(Participant p){
         if(this.relevance.length() > 0){
             System.out.println("question has relevance: " + this.relevance);
@@ -1580,5 +1709,94 @@ public class Question{
         }
 
         return false;
+    }
+
+     */
+
+    public boolean isRelevant(Participant p){
+        boolean reqMet = true;
+        if(this.relevance.length() > 1){
+            System.out.println("question has relevance: " + this.relevance);
+            String[] checks = this.relevance.split("or");
+
+            for(String toCheck : checks){
+                toCheck = toCheck.replaceAll(" ", "");
+                toCheck = toCheck.replaceAll("\"","");
+                System.out.println("toCheck: " + toCheck);
+
+                ArrayList<String> relCode = getRelevanceReqAndCode(toCheck, p);
+
+                Question q = getQuestionForRelevanceCode(relCode.get(0));
+
+                if(q == null){
+                    System.out.println("the code field is set wrong, so not checking for requirement");
+                    return true;
+                }
+
+                reqMet = reqMet(relCode.get(1), q, p.getGivenAnswersAl());
+
+                if(!reqMet){
+                    return reqMet;
+                }
+            }
+
+        }
+
+        return reqMet;
+
+    }
+
+    private boolean reqMet(String req, Question q, ArrayList<Answer> answers){
+        for(Answer a : answers){
+            if(a.getQid().equals(q.getQid())){
+                System.out.println("found answer, now checking req...");
+                if(a.getText().equals(req)){
+                    System.out.println("req met");
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private Question getQuestionForRelevanceCode(String code){
+        if(code.contains("NAOK")){
+            // in form '((227314X480X4801.NAOK == "A2"))'
+            String codeQid = code.split("X")[2];
+            System.out.println("codeQid: " + codeQid);
+            codeQid = codeQid.replaceAll(".NAOK", "");
+            //codeQid = codeQid.split(".")[0];
+            System.out.println("codeQid2: " + codeQid);
+            return this.getSurvey().getQuestionByQid(codeQid, this.language);
+        }
+        else{
+            //check if answer for code matches requirement
+            System.out.println("survey: " + this.getSurvey());
+            return this.getSurvey().getQuestionByCode(code, this.language);
+
+        }
+    }
+
+    private ArrayList<String> getRelevanceReqAndCode(String string, Participant p){
+
+        // separate into parts
+        String code = string.split("==")[0];
+        System.out.println("code: " + code);
+
+        String requirement = string.split("==")[1];
+        System.out.println("req: " + requirement);
+
+        ArrayList<String> ret = new ArrayList<>();
+        ret.add(code);
+        ret.add(requirement);
+
+        for(String s : ret){
+            System.out.println("aaa " + s);
+        }
+        System.out.println("rettostring: " + ret.toString());
+
+        return ret;
+
     }
 }
