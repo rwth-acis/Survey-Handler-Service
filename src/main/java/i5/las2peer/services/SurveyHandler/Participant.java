@@ -899,7 +899,7 @@ public class Participant {
                             qidFromEditedMCC = s;
                             if(option != null){
                                 if(this.languageIsGerman()){
-                                    response.put("text", "Bitte schreibe einen Kommentar für die ausgewaehlte Option: \"" + option + "\"");
+                                    response.put("text", "Bitte schreibe einen Kommentar fuer die ausgewaehlte Option: \"" + option + "\"");
                                 } else{
                                     response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
                                 }
@@ -1511,7 +1511,7 @@ public class Participant {
                     String option = answerOptionForComment();
                     if(option != null){
                         if(this.languageIsGerman()){
-                            response.put("text", "Bitte schreibe einen Kommentar für die ausgewaehlte Option: \"" + option + "\"");
+                            response.put("text", "Bitte schreibe einen Kommentar fuer die ausgewaehlte Option: \"" + option + "\"");
                         } else{
                             response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
                         }
@@ -1997,7 +1997,7 @@ public class Participant {
                 String option = answerOptionForComment();
                 if(option != null){
                     if(this.languageIsGerman()){
-                        response.put("text", "Bitte schreibe einen Kommentar für die ausgewaehlte Option: \"" + option + "\"");
+                        response.put("text", "Bitte schreibe einen Kommentar fuer die ausgewaehlte Option: \"" + option + "\"");
                     } else{
                         response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
                     }

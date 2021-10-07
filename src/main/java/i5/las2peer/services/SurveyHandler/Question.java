@@ -971,9 +971,9 @@ public class Question{
         String subString = "";
         int index = 1;
 
-        String exp = "Please choose one of the following options by sending the respective number as a response: \n";
+        String exp = " Please choose one of the following options by sending the respective number as a response: \n";
         if(this.languageIsGerman()){
-            exp = "Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest: \n";
+            exp = " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest: \n";
         }
 
         String questionText = this.text;
@@ -1032,7 +1032,7 @@ public class Question{
                 } else{
                     resString += " Please choose from the following options by sending the respective number as a response. If you choose more than one, please separate the numbers with a comma and no space.";
                     if(!mandatory){
-                        resString += "If you want to choose no option, please enter \"-\".";
+                        resString += " If you want to choose no option, please enter \"-\".";
                     }
                 }
             }
@@ -1138,7 +1138,7 @@ public class Question{
         if((!(this.answerOptions.isEmpty()) && this.type.equals(qType.SINGLECHOICECOMMENT.toString()))){
             System.out.println("inside answeroptions with type singlechoicecomment");
             if(this.languageIsGerman()){
-                resString += "Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest sowie einen Kommentar zu deiner ausgewaehlten Option. Bitte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort.";
+                resString += " Bitte waehle eine der folgenden Optionen, indem du die entsprechende Nummer als Antwort sendest sowie einen Kommentar zu deiner ausgewaehlten Option. Bitte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort.";
 
             }
             resString += " Please choose one of the following options by sending the respective number as a response as well as a comment for your chosen option in the format \"number of your chosen answer option\":\"your comment\": \n";
@@ -1530,7 +1530,7 @@ public class Question{
                     type.equals(qType.YESNO.toString()) ||
                     type.equals(qType.ARRAY.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte antworte nur mit einer der Nummern vor der Antwortmöglichkeit.";
+                    reason = "Bitte antworte nur mit einer der Nummern vor der Antwortmoeglichkeit.";
                 } else{
                     reason = "Please only answer with one of the given numbers written before the answer option";
                 }
