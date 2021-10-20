@@ -20,6 +20,10 @@ public class Survey {
     private String startDT;
     private String title;
     private String adminLanguage;
+    private String welcomeText;
+
+    private String titleOtherLanguage;
+    private String welcomeTextOtherLanguage;
     SQLDatabase database;
     // end Database model identifier
 
@@ -58,6 +62,29 @@ public class Survey {
         this.title = title;
     }
 
+    public String getWelcomeText() {
+        return welcomeText;
+    }
+
+    public void setWelcomeText(String welcomeText) {
+        this.welcomeText = welcomeText;
+    }
+
+    public String getTitleOtherLanguage() {
+        return titleOtherLanguage;
+    }
+
+    public void setTitleOtherLanguage(String titleOtherLanguage) {
+        this.titleOtherLanguage = titleOtherLanguage;
+    }
+
+    public String getWelcomeTextOtherLanguage() {
+        return welcomeTextOtherLanguage;
+    }
+
+    public void setWelcomeTextOtherLanguage(String welcomeTextOtherLanguage) {
+        this.welcomeTextOtherLanguage = welcomeTextOtherLanguage;
+    }
 
     public Survey(String sid) {
         this.sid = sid;
@@ -138,11 +165,11 @@ public class Survey {
 
             // handle all subquestions and assign them to their parent question, no sub-sub questions possible, so ignore the possibility
             for(Question q : tempQuestionAl){
-                System.out.println("sizi: " + tempQuestionAl.size());
+                //System.out.println("sizi: " + tempQuestionAl.size());
                 if(q.getLanguage().equals(currLanguage)){
                     String questionParent = q.getParentQid();
                     Question parentQuestion = this.questionsHMLanguage.get(currLanguage).get(questionParent);
-                    System.out.println("pq: " + parentQuestion.getQid() + " . " + parentQuestion.getLanguage() + "." + q.getLanguage() + "." +  currLanguage);
+                    //System.out.println("pq: " + parentQuestion.getQid() + " . " + parentQuestion.getLanguage() + "." + q.getLanguage() + "." +  currLanguage);
                     parentQuestion.addSubquestion(q);
                 }
             }
@@ -408,6 +435,18 @@ public class Survey {
         return languages;
     }
 
+    public String getOtherLanguage(String currLanguage){
+        for(String s : questionALLanguage.keySet()){
+            //System.out.println("currlan: " + s);
+            if(!s.equals(currLanguage)){
+                return s;
+            }
+        }
+
+
+        return null;
+    }
+
     public boolean hasMoreThanOneLanguage(){
         return getLanguages().size() > 1;
     }
@@ -587,7 +626,18 @@ public class Survey {
     }
 
     public int numberOfQuestions(){
-        return getSortedQuestions(this.getLanguages().get(0)).size();
+        int size = 0;
+        //size = getSortedQuestions(this.getLanguages().get(0)).size();
+
+        for(Question q : this.getSortedQuestions(this.getLanguages().get(0))){
+            size++;
+            if(q.getType().equals(Question.qType.ARRAY.toString())){
+                // -1 since parent question does not count as singular question
+                size += q.getSubquestionAl().size() - 1;
+            }
+        }
+
+        return size;
     }
 
     public ArrayList<Question> getSortedQuestions(String language) {

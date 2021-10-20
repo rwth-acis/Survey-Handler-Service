@@ -370,43 +370,50 @@ public class Question{
         return false;
     }
 
-    public String encodeJsonBodyAsString(Participant participant, boolean slack){
-        return encodeJsonBodyAsString(false, false, "", participant, slack);
+    public String encodeJsonBodyAsString(Participant participant){
+        return encodeJsonBodyAsString(false, false, "", participant);
     }
 
-    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, boolean slack){
-        return encodeJsonBodyAsString(newQuestionGroup, edit, buttonToColor, participant, slack, null);
+    public String encodeJsonBodyAsString(boolean newQuestionGroup, Participant participant, Integer arrayNumber){
+        return encodeJsonBodyAsString(newQuestionGroup, false, "", participant, arrayNumber);
     }
 
-    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, boolean slack, Integer arrayNumber){
-        System.out.println("inside encodejsonbodyasstring. slack: " + slack);
-        if(slack){
-            return parseQuestion(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
+    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant){
+        return encodeJsonBodyAsString(newQuestionGroup, edit, buttonToColor, participant, null);
+    }
+
+    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
+        System.out.println("inside encodejsonbodyasstring. slack: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK));
+        System.out.println("inside encodejsonbodyasstring. telegram: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM));
+        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+            return parseQuestionForSlack(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
+        }
+        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+            return parseQuestionForTelegram(newQuestionGroup, participant, arrayNumber);
         }
         else{
             return parseQuestionAsText(newQuestionGroup, participant, arrayNumber);
         }
     }
 
-    public String parseQuestion(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
+    public String parseQuestionForTelegram(boolean newQuestionGroup, Participant participant, Integer arrayNumber){
         String resString = "";
         String subString = "";
         int index = 1;
 
         String questionText = this.text;
-        int questionsLeft = participant.getUnaskedQuestions().size() + 1;
-        // +1 because the question that is about to be sent is already removed from the list
+        int questionsLeft = this.questionsLeft(participant);
         String newQGroupText = "";
         if(questionsLeft > 1){
             if(this.languageIsGerman()){
-                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Fragen.";
+                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Fragen.\n";
             } else{
                 newQGroupText = "You completed a question group. There are " + questionsLeft + " questions left.\n";
             }
         }
         else{
             if(this.languageIsGerman()){
-                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Frage.";
+                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Frage.\n";
             } else{
                 newQGroupText = "You completed a question group. There is " + questionsLeft + " question left.\n";
             }
@@ -417,7 +424,171 @@ public class Question{
         }
 
 
-        if(this.isSubquestion && !this.getParentQuestion(participant.getLanguage()).getType().equals(qType.ARRAY.toString())){
+        if(this.isSubquestion && !this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
+            subString += "[{\"text\":\"" + questionText + "\",\"callback_data\": \"" + questionText + "\"}],";
+            return subString;
+        } else if(this.isSubquestion && this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
+            subString += "\n" + questionText;
+        }
+
+        // Check if multiple choice question
+        if (this.subquestionAl.size() > 0 && !this.type.equals(qType.ARRAY.toString())) {
+            resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [";
+            for (Question subq : this.subquestionAl) {
+                resString += subq.encodeJsonBodyAsString(participant);
+            }
+            resString += "[{\"text\":\"Submit\",\"callback_data\": \"Submit\"}]";
+            resString += "]}";
+        } else if(this.type.equals(qType.ARRAY.toString())){
+            resString = "{\"text\":\"" + questionText;
+
+            Question subq = this.getSubquestionByIndex(String.valueOf(arrayNumber));
+            resString += subq.encodeJsonBodyAsString(newQuestionGroup, participant, arrayNumber);
+
+            resString += "]}";
+
+            System.out.println("res: " + resString);
+        }
+
+        resString += questionText;
+        System.out.println(this.type);
+
+        if(this.isSubquestion && !this.getParentQuestion(this.language).answerOptions.isEmpty()){
+            resString = subString + "\",\"inline_keyboard\": [";
+            for(int i = 1; i < this.getParentQuestion(this.language).answerOptions.size() + 1; i++){
+                String currAnswerOption = "[{\"text\":\"" + this.getParentQuestion(this.language).getAnswerOptionByIndex(i).getText() + "\",\"callback_data\": \"" + this.getParentQuestion(this.language).getAnswerOptionByIndex(i).getText() + "\"}],";
+
+                resString += currAnswerOption;
+                index++;
+
+            }
+            if(!isMandatory()){
+                if(this.languageIsGerman()){
+                    resString += "[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]";
+                } else{
+                    resString += "[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]";
+                }
+            }
+            else{
+                // remove last comma after the options
+                resString = resString.substring(0, resString.length() - 1);
+            }
+
+        }
+
+        switch(this.type){
+            case "G":
+                System.out.println("Gender");
+                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Female\",\"callback_data\": \"Female\"}],[{\"text\":\"Male\",\"callback_data\": \"Male\"}]]}";
+                if(!isMandatory()){
+                    resString = resString.substring(0, resString.length() - 2);
+                    resString += ",[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]]}";
+                }
+                if(languageIsGerman()){
+                    resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Weiblich\",\"callback_data\": \"Weiblich\"}],[{\"text\":\"Maennlich\",\"callback_data\": \"Maennlich\"}]]}";
+                    if(!isMandatory()){
+                        resString = resString.substring(0, resString.length() - 2);
+                        resString += ",[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]]}";
+                    }
+                }
+                break;
+            case "Y":
+                System.out.println("Yes/No");
+                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Yes\",\"callback_data\": \"Yes\"}],[{\"text\":\"No\",\"callback_data\": \"No\"}]]}";
+                if(!isMandatory()){
+                    resString = resString.substring(0, resString.length() - 2);
+                    resString += ",[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]]}";
+                }
+                if(this.languageIsGerman()){
+                    resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Ja\",\"callback_data\": \"Ja\"}],[{\"text\":\"Nein\",\"callback_data\": \"Nein\"}]]}";
+                    if(!isMandatory()){
+                        resString = resString.substring(0, resString.length() - 2);
+                        resString += ",[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]]}";
+                    }
+                }
+                break;
+            case "5":
+                System.out.println("5 point choice");
+                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"1\",\"callback_data\": \"1\"}],[{\"text\":\"2\",\"callback_data\": \"2\"}],[{\"text\":\"3\",\"callback_data\": \"3\"}],[{\"text\":\"4\",\"callback_data\": \"4\"}],[{\"text\":\"5\",\"callback_data\": \"5\"}]]}";
+                if(!isMandatory()){
+                    resString = resString.substring(0, resString.length() - 2);
+                    if(this.languageIsGerman()){
+                        resString += ",[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]]}";
+                    } else{
+                        resString += ",[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]]}";
+                    }
+                }
+                break;
+
+        }
+        if((!(this.answerOptions.isEmpty()) && this.type.equals(qType.DICHOTOMOUS.toString())) ||
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.SCALE.toString())) ||
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTRADIO.toString())) ||
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.SINGLECHOICECOMMENT.toString())) ||
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTDROPDOWN.toString()))) {
+
+            System.out.println("inside answeroptions with type dichotomous, scale or ! or o or l");
+
+            String askForComment = "";
+            if(this.type.equals(qType.SINGLECHOICECOMMENT.toString())){
+                askForComment = " Please write a comment for your chosen option.";
+            }
+
+            resString = "{\"text\":\"" + questionText + askForComment + "\",\"inline_keyboard\": [";
+            for(int i = 1; i < answerOptions.size() + 1; i++){
+                String currAnswerOption = "[{\"text\":\"" + this.getAnswerOptionByIndex(i).getText() + "\",\"callback_data\": \"" + this.getAnswerOptionByIndex(i).getText() + "\"}],";
+                resString += currAnswerOption;
+                index++;
+            }
+
+            if(!isMandatory()){
+                if(this.languageIsGerman()){
+                    resString += "[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]";
+                } else{
+                    resString += "[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]";
+                }
+            }
+            else{
+                // remove last comma after the options
+                resString = resString.substring(0, resString.length() - 1);
+            }
+
+            resString += "]}";
+            System.out.println("resstring: " + resString);
+        }
+
+        return resString;
+    }
+
+    public String parseQuestionForSlack(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
+        String resString = "";
+        String subString = "";
+        int index = 1;
+
+        String questionText = this.text;
+        int questionsLeft = this.questionsLeft(participant);
+        String newQGroupText = "";
+        if(questionsLeft > 1){
+            if(this.languageIsGerman()){
+                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Fragen.\n";
+            } else{
+                newQGroupText = "You completed a question group. There are " + questionsLeft + " questions left.\n";
+            }
+        }
+        else{
+            if(this.languageIsGerman()){
+                newQGroupText = "Du hast eine Fragegruppe abgeschlossen. Es gibt noch " + questionsLeft + " weitere Frage.\n";
+            } else{
+                newQGroupText = "You completed a question group. There is " + questionsLeft + " question left.\n";
+            }
+        }
+
+        if(newQuestionGroup){
+            questionText = newQGroupText + questionText;
+        }
+
+
+        if(this.isSubquestion && !this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
             subString += "{\n" +
                     "\"text\": {\n" +
                     "\"type\": \"plain_text\",\n" +
@@ -427,7 +598,7 @@ public class Question{
                     "\"value\": \"" + this.qid + "\"\n" +
                     "},";
             return subString;
-        } else if(this.isSubquestion && this.getParentQuestion(participant.getLanguage()).getType().equals(qType.ARRAY.toString())){
+        } else if(this.isSubquestion && this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
             subString += "\n" + questionText;
             subString += "\",\n" +
                     "\"emoji\": true\n" +
@@ -455,7 +626,7 @@ public class Question{
                         "\"type\": \"checkboxes\",\n" +
                         "\"options\": [";
                 for (Question subq : this.subquestionAl) {
-                    resString += subq.encodeJsonBodyAsString(participant, true);
+                    resString += subq.encodeJsonBodyAsString(participant);
                 }
                 // remove last comma after the options
                 resString = resString.substring(0, resString.length() - 1);
@@ -489,7 +660,7 @@ public class Question{
                         "\"type\": \"checkboxes\",\n" +
                         "\"options\": [";
                 for (Question subq : this.subquestionAl) {
-                    resString += subq.encodeJsonBodyAsString(participant, true);
+                    resString += subq.encodeJsonBodyAsString(participant);
                 }
                 // remove last comma after the options
                 resString = resString.substring(0, resString.length() - 1);
@@ -523,7 +694,7 @@ public class Question{
                         "\"text\": \"" + questionText + "\n";
 
                 Question subq = this.getSubquestionByIndex(String.valueOf(arrayNumber));
-                resString += subq.encodeJsonBodyAsString(participant, true);
+                resString += subq.encodeJsonBodyAsString(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
 
                 resString += "\t\t\t]\n" +
                         "\t\t}]}]";
@@ -533,21 +704,24 @@ public class Question{
 
         }
 
-        resString += questionText;
+        if(resString.length() == 0){
+            resString += questionText;
+        }
         System.out.println(this.type);
+        System.out.println(resString);
 
-        if(this.isSubquestion && !this.getParentQuestion(participant.getLanguage()).answerOptions.isEmpty()){
+        if(this.isSubquestion && !this.getParentQuestion(this.language).answerOptions.isEmpty()){
             resString = subString + "\t\t{\n" +
                     "\t\t\t\"type\": \"actions\",\n" +
                     "\t\t\t\"elements\": [\n" +
                     "\t\t\t\t{\n" +
                     "\t\t\t\t\t\"type\": \"radio_buttons\",\n" +
                     "\t\t\t\t\t\"options\": [";
-            for(int i = 1; i < this.getParentQuestion(participant.getLanguage()).answerOptions.size() + 1; i++){
+            for(int i = 1; i < this.getParentQuestion(this.language).answerOptions.size() + 1; i++){
                 String currAnswerOption = "{\n" +
                         "\t\t\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
-                        "\t\t\t\t\t\t\t\t\"text\": \"" + this.getParentQuestion(participant.getLanguage()).getAnswerOptionByIndex(i).getText() + "\",\n" +
+                        "\t\t\t\t\t\t\t\t\"text\": \"" + this.getParentQuestion(this.language).getAnswerOptionByIndex(i).getText() + "\",\n" +
                         "\t\t\t\t\t\t\t\t\"emoji\": true\n" +
                         "\t\t\t\t\t\t\t},\n" +
                         "\t\t\t\t\t\t\t\"value\": \"" + index + "\"\n" +
@@ -952,13 +1126,14 @@ public class Question{
             System.out.println("resstring: " + resString);
         }
 
-
-
+        /*
         if(!this.isSubquestion){
             if(this.help.length() > 0){
                 resString += "\n This is the help: " + this.help + "";
             }
         }
+
+         */
         return resString;
     }
 
@@ -977,15 +1152,7 @@ public class Question{
         }
 
         String questionText = this.text;
-        int questionsLeft = participant.getUnaskedQuestions().size() + 1;
-        // +1 because the question that is about to be sent is already removed from the list
-
-        // if first question is array question, it is on the list even when part has been asked
-        if(!participant.getUnaskedQuestions().isEmpty()){
-            if(this.qid.equals(participant.getUnaskedQuestions().get(0))){
-                questionsLeft--;
-            }
-        }
+        int questionsLeft = this.questionsLeft(participant);
 
         String newQGroupText = "";
         if(questionsLeft > 1){
@@ -1037,7 +1204,7 @@ public class Question{
                 }
             }
             for (Question subq : this.subquestionAl) {
-                resString += "\n" + index + ". " + subq.encodeJsonBodyAsString(participant, false);
+                resString += "\n" + index + ". " + subq.encodeJsonBodyAsString(participant);
                 index++;
             }
 
@@ -1049,7 +1216,7 @@ public class Question{
 
             Integer one = 1;
             Question subq = this.subquestionAl.get(arrayNumber - one);
-            resString += exp + subq.encodeJsonBodyAsString(participant, false) + "\n";
+            resString += exp + subq.encodeJsonBodyAsString(participant) + "\n";
 
             //System.out.println("inside answeroptions with type array");
             for(int i = 1; i < answerOptions.size() + 1; i++){
@@ -1239,13 +1406,18 @@ public class Question{
         return returnValue;
     }
 
-    public boolean answerIsPlausible(String textAnswer, boolean slack){
+    public boolean answerIsPlausible(String textAnswer){
 
-        if(slack){
+        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) ||
+                SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
             if(this.type.equals(qType.SINGLECHOICECOMMENT.toString()) || this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString()) ||
-                    this.type.equals(qType.DICHOTOMOUS.toString()) || this.type.equals(qType.SCALE.toString())){
+                    this.type.equals(qType.DICHOTOMOUS.toString()) || this.type.equals(qType.SCALE.toString()) ||
+                    this.type.equals(qType.ARRAY.toString())){
                 System.out.println("Question type singlechoice recognized.");
                 // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
+                if(textAnswer.equals("Keine Antwort") || textAnswer.equals("No Answer")){
+                    return true;
+                }
                 for(AnswerOption ao : answerOptions){
                     if(ao.getText().equals(textAnswer)){
                         System.out.println("Answer is valid.");
@@ -1259,7 +1431,7 @@ public class Question{
                 // If it a mulitple choice question, check if textAnswer equals one answer option (which is saves as text from subquestion)
                 for(Question q : this.subquestionAl){
                     System.out.println("calling answer plausible recursively...");
-                    if(q.answerIsPlausible(textAnswer, slack)){
+                    if(q.answerIsPlausible(textAnswer)){
                         System.out.println("Answer is valid.");
                         return true;
                     }
@@ -1480,16 +1652,28 @@ public class Question{
             }
         }
 
-        System.out.println("answer is not plausible (function end)");
-        return false;
+        System.out.println("answer seems to be not plausible, check for other language");
+        boolean ok = false;
+        if(this.getSurvey().hasMoreThanOneLanguage()){
+            String otherLanguage = getSurvey().getOtherLanguage(this.language);
+            ok = this.getSurvey().getQuestionByQid(this.qid, otherLanguage).answerIsPlausible(textAnswer);
+        }
+        if(!ok){
+            System.out.println("answer is not plausible (function end)");
+        }
+        else{
+            System.out.println("answer is plausible for other language");
+        }
+        return ok;
     }
 
-    public String reasonAnswerNotPlausible(boolean slack){
+    public String reasonAnswerNotPlausible(){
 
         String type = this.type;
         String reason = "";
 
-        if(slack){
+        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) ||
+                SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
             if(type.equals(qType.LISTDROPDOWN.toString()) ||
                     type.equals(qType.LISTRADIO.toString()) ||
                     type.equals(qType.DICHOTOMOUS.toString()) ||
@@ -1645,6 +1829,7 @@ public class Question{
 
     public AnswerOption getAnswerOptionByIndex(Integer index){
         for(AnswerOption ao : answerOptions){
+            System.out.println("index: " + ao.getIndexi() + "..." + index);
             if(ao.getIndexi().equals(index)){
                 return ao;
             }
@@ -1798,5 +1983,27 @@ public class Question{
 
         return ret;
 
+    }
+
+    public int questionsLeft(Participant participant){
+        // +1 because the question that is about to be sent is already removed from the list
+        int questionsLeft = participant.getUnaskedQuestions().size() + 1;
+        // array question should not count as one, but count of subquestion is number of questions
+        for(String questionQIDString : participant.getUnaskedQuestions()){
+            Question q = this.getSurvey().getQuestionByQid(questionQIDString, this.language);
+            if(q.getType().equals(qType.ARRAY.toString())){
+                // -1 since parent question does not count as singular question
+                questionsLeft += q.getSubquestionAl().size() - 1;
+            }
+        }
+
+        // if first question is array question, it is on the list even when part has been asked
+        if(!participant.getUnaskedQuestions().isEmpty()){
+            if(this.qid.equals(participant.getUnaskedQuestions().get(0))){
+                questionsLeft--;
+            }
+        }
+
+        return questionsLeft;
     }
 }

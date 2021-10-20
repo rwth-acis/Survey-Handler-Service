@@ -91,6 +91,9 @@ public class SurveyHandlerServiceQueries {
                     query += "expires VARCHAR(50),";
                     query += "startdt VARCHAR(50),";
                     query += "title VARCHAR(150) NOT NULL,";
+                    query += "welcometext VARCHAR(1000),";
+                    query += "titleotherlanguage VARCHAR(150),";
+                    query += "welcometextotherlanguage VARCHAR(1000),";
                     query += "adminlanguage VARCHAR(50)";
                     break;
                 case "questions":
@@ -118,7 +121,8 @@ public class SurveyHandlerServiceQueries {
                     query += "surveyresponseid VARCHAR(50),";
                     query += "participantcontacted BOOL,";
                     query += "completedsurvey BOOL,";
-                    query += "language VARCHAR(50)";
+                    query += "language VARCHAR(50),";
+                    query += "languagetimestamp VARCHAR(50)";
                     break;
                 case "answers":
                     query += "pid VARCHAR(256) NOT NULL,";
@@ -460,6 +464,9 @@ public class SurveyHandlerServiceQueries {
             String expires = rs.getString("expires");
             String startdt = rs.getString("startdt");
             String title = rs.getString("title");
+            String welcomeText = rs.getString("welcometext");
+            String titleOtherLanguage = rs.getString("titleotherlanguage");
+            String welcomeTextOtherLanguage = rs.getString("welcometextotherlanguage");
             String adminLanguage = rs.getString("adminlanguage");
 
 
@@ -468,6 +475,9 @@ public class SurveyHandlerServiceQueries {
             res.setExpires(expires);
             res.setStartDT(startdt);
             res.setTitle(title);
+            res.setWelcomeText(welcomeText);
+            res.setTitleOtherLanguage(titleOtherLanguage);
+            res.setWelcomeTextOtherLanguage(welcomeTextOtherLanguage);
             res.setAdminLanguage(adminLanguage);
 
             return res;
@@ -550,6 +560,7 @@ public class SurveyHandlerServiceQueries {
             boolean participantcontacted = rs.getBoolean("participantcontacted");
             boolean completedsurvey = rs.getBoolean("completedsurvey");
             String language = rs.getString("language");
+            String languagetimestamp = rs.getString("languagetimestamp");
 
             Participant res = new Participant(email);
             res.setPid(pid);
@@ -561,6 +572,7 @@ public class SurveyHandlerServiceQueries {
             res.setParticipantcontacted(participantcontacted);
             res.setCompletedsurvey(completedsurvey);
             res.setLanguage(language);
+            res.setLanguageTimestamp(languagetimestamp);
 
             return res;
 
@@ -611,14 +623,17 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO surveys(sid, adminmail, expires, startdt, title, adminlanguage) VALUES (?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO surveys(sid, adminmail, expires, startdt, title, welcometext, titleotherlanguage, welcometextotherlanguage, adminlanguage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, s.getSid());
             ps.setString(2, s.getAdminmail());
             ps.setString(3,s.getExpires());
             ps.setString(4,s.getStartDT());
             ps.setString(5,s.getTitle());
-            ps.setString(6, s.getAdminLanguage());
+            ps.setString(6, s.getWelcomeText());
+            ps.setString(7,s.getTitleOtherLanguage());
+            ps.setString(8, s.getWelcomeTextOtherLanguage());
+            ps.setString(9, s.getAdminLanguage());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;
@@ -685,7 +700,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO participants(channel, email, pid, sid, lastquestion, lasttimeactive, surveyresponseid, participantcontacted, completedsurvey, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO participants(channel, email, pid, sid, lastquestion, lasttimeactive, surveyresponseid, participantcontacted, completedsurvey, language, languagetimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, p.getChannel());
             ps.setString(2, p.getEmail());
@@ -697,6 +712,7 @@ public class SurveyHandlerServiceQueries {
             ps.setBoolean(8, p.isParticipantcontacted());
             ps.setBoolean(9, p.isCompletedsurvey());
             ps.setString(10, p.getLanguage());
+            ps.setString(11, p.getLanguageTimestamp());
 
             int rs = ps.executeUpdate();
 
@@ -803,7 +819,7 @@ public class SurveyHandlerServiceQueries {
             if (rs.first()) {
                 // Found the participant, so update the entry
                 ps.close();
-                ps = con.prepareStatement("UPDATE participants SET channel = ?, email = ?, pid = ?, sid = ?, lastquestion = ?, lasttimeactive = ?, surveyresponseid = ?, participantcontacted = ?, completedsurvey = ?, language = ? WHERE sid = ? AND pid = ?");
+                ps = con.prepareStatement("UPDATE participants SET channel = ?, email = ?, pid = ?, sid = ?, lastquestion = ?, lasttimeactive = ?, surveyresponseid = ?, participantcontacted = ?, completedsurvey = ?, language = ?, languagetimestamp = ? WHERE sid = ? AND pid = ?");
                 ps.setString(1, p.getChannel());
                 ps.setString(2, p.getEmail());
                 ps.setString(3, p.getPid());
@@ -814,9 +830,10 @@ public class SurveyHandlerServiceQueries {
                 ps.setBoolean(8, p.isParticipantcontacted());
                 ps.setBoolean(9, p.isCompletedsurvey());
                 ps.setString(10, p.getLanguage());
+                ps.setString(11, p.getLanguageTimestamp());
                 // where clause
-                ps.setString(11, p.getSid());
-                ps.setString(12,p.getPid());
+                ps.setString(12, p.getSid());
+                ps.setString(13,p.getPid());
                 ps.executeUpdate();
                 updated = true;
             } else {

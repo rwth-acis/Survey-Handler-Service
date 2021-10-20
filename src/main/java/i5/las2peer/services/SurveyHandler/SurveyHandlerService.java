@@ -93,7 +93,23 @@ public class SurveyHandlerService extends RESTService {
 	private String url = "";
 	private int databaseTypeInt;
 	private int databasePort;
+	public static messenger messenger;
 
+	public static enum messenger{
+		SLACK("Slack"),
+		ROCKETCHAT("Rocket.Chat"),
+		TELEGRAM("Telegram");
+
+		private final String name;
+		private messenger(String name){
+			this.name= name;
+		}
+
+		@Override
+		public String toString(){
+			return this.name;
+		}
+	}
 	// for logging
 	private Context l2pcontext = null;
 	public void setL2pcontext(Context l2pcontext) {
@@ -280,7 +296,18 @@ public class SurveyHandlerService extends RESTService {
 			String token = ""; // for rocket chat none in this service is needed, so length 0
 			if(bodyInput.containsKey("slackToken")){
 				token = bodyInput.getAsString("slackToken");
+				messenger = SurveyHandlerService.messenger.SLACK;
 			}
+			else if(bodyInput.getAsString("email") == null){
+				// telegram msg does not contain user email, so its null
+				messenger = SurveyHandlerService.messenger.TELEGRAM;
+			}
+			else{
+				messenger = SurveyHandlerService.messenger.ROCKETCHAT;
+			}
+
+			System.out.println("messenger: " + messenger.toString());
+
 			String messageTs = bodyInput.getAsString("time");
 			boolean ls = bodyInput.containsKey("NameOfUser");
 
@@ -443,14 +470,7 @@ public class SurveyHandlerService extends RESTService {
 			boolean secondSurvey = false;
 			System.out.println("token: " + token + " size: " + token.length());
 
-			// check which messenger is used
-			boolean slack = false;
-			if(token.length() > 0){
-				// a slack token is set
-				slack = true;
-			}
-
-			System.out.println("using slack: " + slack);
+			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK));
 
 			// check if there is a followup survey, if not sid is ""
 			if(followUpSurvey.getSid().length() > 0){
@@ -462,7 +482,7 @@ public class SurveyHandlerService extends RESTService {
 						if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
 							String changedAnswer = "Your answer has been changed sucessfully.";
 							String answerNotFittingQuestion = "";
-							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token, slack);
+							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
 						}
 					}
 
@@ -529,8 +549,12 @@ public class SurveyHandlerService extends RESTService {
 		return Response.ok().entity(response).build();
 	}
 
-	private void setUpLimeSurvey(String username, String password, String surveyID, String uri, String adminmail){
+	private boolean setUpLimeSurvey(String username, String password, String surveyID, String uri, String adminmail){
 		try{
+			// Create a new survey object
+			Survey newSurvey = new Survey(surveyID);
+			allSurveys.add(newSurvey);
+
 			JSONParser p = new JSONParser();
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
@@ -611,10 +635,25 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 
-			// Create a new survey object
-			Survey newSurvey = new Survey(surveyID);
+			// set adminmail and init question properties
 			newSurvey.setAdminmail(adminmail);
 			newSurvey.initLimeSurveyData(qlProperties);
+
+			// Get survey welcometext and add to survey
+			ClientResponse res = mini.sendRequest("POST", uri, ("{\"method\": \"get_language_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", null, \"" + mainLanguage + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject jores = (JSONObject) p.parse(res.getResponse());
+			JSONObject result = (JSONObject) jores.get("result");
+			newSurvey.setTitle(result.getAsString("surveyls_title").replaceAll("<.*?>",""));
+			newSurvey.setWelcomeText(result.getAsString("surveyls_welcometext").replaceAll("<.*?>",""));
+			String sfdnbuj = newSurvey.getWelcomeText();
+			String fndjsk = newSurvey.getTitle();
+
+			// Get for additional language too
+			ClientResponse res2 = mini.sendRequest("POST", uri, ("{\"method\": \"get_language_properties\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", null, \"" + additionalLanguage + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject jores2 = (JSONObject) p.parse(res2.getResponse());
+			JSONObject result2 = (JSONObject) jores2.get("result");
+			newSurvey.setTitleOtherLanguage(result2.getAsString("surveyls_title").replaceAll("<.*?>",""));
+			newSurvey.setWelcomeTextOtherLanguage(result2.getAsString("surveyls_welcometext").replaceAll("<.*?>",""));
 
 			// Get survey title and add to survey
 			ClientResponse minires4 = mini.sendRequest("POST", uri, ("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
@@ -622,7 +661,7 @@ public class SurveyHandlerService extends RESTService {
 			JSONArray sl = (JSONArray) minire4.get("result");
 			for (Object i : sl) {
 				if (((JSONObject) i).getAsString("sid").equals(surveyID)) {
-					newSurvey.addTitle( ((JSONObject) i).getAsString("surveyls_title"));
+					//newSurvey.addTitle( ((JSONObject) i).getAsString("surveyls_title"));
 					newSurvey.setExpires( ((JSONObject) i).getAsString("expires"));
 					newSurvey.setStartDT(((JSONObject) i).getAsString("startdate"));
 					break;
@@ -635,19 +674,32 @@ public class SurveyHandlerService extends RESTService {
 			} else {
 				System.out.println(newSurvey.getTitle());
 				//surveyGlobal = newSurvey;
-				allSurveys.add(newSurvey);
-				SurveyHandlerServiceQueries.addSurveyToDB(newSurvey, database);
+				boolean addedSurveyToDB = SurveyHandlerServiceQueries.addSurveyToDB(newSurvey, database);
 				newSurvey.safeQuestionsToDB(database);
 				newSurvey.setDatabase(database);
-				System.out.println("Survey successfully initialized.");
+				if(!addedSurveyToDB){
+					System.out.println("Survey NOT successfully initialized.");
+					return false;
+				}
+				else{
+					System.out.println("Survey successfully initialized.");
+					return true;
+				}
 			}
 		} catch(Exception e){
+			if(Objects.nonNull(getSurveyBySurveyID(surveyID))){
+				// delete survey in case of non successful set up
+				Survey toDelete = getSurveyBySurveyID(surveyID);
+				toDelete = null;
+			}
 			e.printStackTrace();
 			System.out.println("api calls to limesurvey failed.");
 		}
+
+		return false;
 	}
 
-	private void setUpMobsosSurvey(String surveyID, String uri, String adminmail){
+	private boolean setUpMobsosSurvey(String surveyID, String uri, String adminmail){
 		try{
 			JSONParser p = new JSONParser();
 			MiniClient mini = new MiniClient();
@@ -707,18 +759,29 @@ public class SurveyHandlerService extends RESTService {
 				System.out.println(newSurvey.getTitle());
 				//surveyGlobal = newSurvey;
 				allSurveys.add(newSurvey);
-				SurveyHandlerServiceQueries.addSurveyToDB(newSurvey, database);
+				boolean addedSurveyToDB = SurveyHandlerServiceQueries.addSurveyToDB(newSurvey, database);
 				newSurvey.safeQuestionsToDB(database);
 				newSurvey.setDatabase(database);
-				System.out.println("Survey successfully initialized.");
+
+				if(!addedSurveyToDB){
+					System.out.println("Survey NOT successfully initialized.");
+					return false;
+				}
+				else{
+					System.out.println("Survey successfully initialized.");
+					return true;
+				}
 			}
 		} catch(Exception e){
 			e.printStackTrace();
 			System.out.println("calls to mobsos failed.");
 		}
+
+		return false;
 	}
 
-	private void setUpSurvey(String input){
+	private boolean setUpSurvey(String input){
+		boolean successful = true;
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 		try {
@@ -742,25 +805,31 @@ public class SurveyHandlerService extends RESTService {
 				System.out.println("fsid: " + followupSurveyID);
 				if(username.length() > 0){
 					// if a username was entered, it is a survey from limesurvey
-					setUpLimeSurvey(username, password, followupSurveyID, uri, adminmail);
+					successful = setUpLimeSurvey(username, password, followupSurveyID, uri, adminmail);
 				} else{
 					// if not it is from mobsos surveys
-					setUpMobsosSurvey(followupSurveyID, uri, adminmail);
+					successful = setUpMobsosSurvey(followupSurveyID, uri, adminmail);
 				}
 
 			}
 
+			if(!successful){
+				return false;
+			}
+
 			if(username.length() > 0){
 				// if a username was entered, it is a survey from limesurvey
-				setUpLimeSurvey(username, password, surveyID, uri, adminmail);
+				return setUpLimeSurvey(username, password, surveyID, uri, adminmail);
 			} else{
 				// if not it is from mobsos surveys
-				setUpMobsosSurvey(surveyID, uri, adminmail);
+				return setUpMobsosSurvey(surveyID, uri, adminmail);
 			}
 
 		} catch(Exception e){
 			e.printStackTrace();
 		}
+
+		return false;
 	}
 
 
@@ -821,10 +890,10 @@ public class SurveyHandlerService extends RESTService {
 				//set up survey
 				if(Objects.isNull(currSurvey)){
 					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-					setUpSurvey(input);
+					boolean setUp = setUpSurvey(input);
 					// See if survey is set up now
 					currSurvey = getSurveyBySurveyID(surveyID);
-					if (Objects.isNull(currSurvey)){
+					if (Objects.isNull(currSurvey) || !setUp){
 						System.out.println("ERROR: Could not set up survey, still null.");
 						response.put("text", "ERROR: Could not set up survey. Reason unknown.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
@@ -851,10 +920,10 @@ public class SurveyHandlerService extends RESTService {
 				//set up survey
 				if(Objects.isNull(currSurvey)){
 					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-					setUpSurvey(input);
+					boolean setUp = setUpSurvey(input);
 					// See if survey is set up now
 					currSurvey = getSurveyBySurveyID(surveyID);
-					if (Objects.isNull(currSurvey)){
+					if (Objects.isNull(currSurvey)|| !setUp){
 						System.out.println("ERROR: Could not set up follow up survey, still null.");
 						response.put("text", "ERROR: Could not set up follow up survey. Reason unknown.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
@@ -1458,9 +1527,18 @@ public class SurveyHandlerService extends RESTService {
 			String token = bodyInput.getAsString("slackToken");
 			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
-			boolean slack = false;
-			if(token.startsWith("xoxb-")){
-				slack = true;
+
+			// set messenger
+			if(bodyInput.containsKey("slackToken")){
+				token = bodyInput.getAsString("slackToken");
+				messenger = SurveyHandlerService.messenger.SLACK;
+			}
+			else if(bodyInput.getAsString("email") == null){
+				token = bodyInput.getAsString("telegramToken");
+				messenger = SurveyHandlerService.messenger.TELEGRAM;
+			}
+			else{
+				messenger = SurveyHandlerService.messenger.ROCKETCHAT;
 			}
 
 			String adminmail = bodyInput.getAsString("adminmail");
@@ -1538,7 +1616,7 @@ public class SurveyHandlerService extends RESTService {
 								msg = "Hello again! Please continue with your survey. There are only " + unansweredQuestions + " questions left. :slightly_smiling_face:";
 							}
 
-							if(slack){
+							if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
 								// post request to sbfmanager to send slack message
 								String SBFManagerURL = "SBFManager";
 								String uri = SBFManagerURL + "/sendMessageToSlack/" + token + "/" + mail;
