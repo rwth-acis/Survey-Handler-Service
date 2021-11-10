@@ -94,6 +94,17 @@ public class SurveyHandlerService extends RESTService {
 	private int databaseTypeInt;
 	private int databasePort;
 	public static messenger messenger;
+	public static String sbfmURL = "";
+	// symbol to check telegram buttons
+	public static String check = ":check:";
+
+	public static String getSbfmURL() {
+		return sbfmURL;
+	}
+
+	public static void setSbfmURL(String sbfmURL) {
+		SurveyHandlerService.sbfmURL = sbfmURL;
+	}
 
 	public static enum messenger{
 		SLACK("Slack"),
@@ -281,6 +292,7 @@ public class SurveyHandlerService extends RESTService {
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
+			sbfmURL = bodyInput.getAsString("sbfmUrl");
 			String beginningTextEN = "";
 			String beginningTextDE = "";
 			if(bodyInput.containsKey("beginningText")){
@@ -300,6 +312,7 @@ public class SurveyHandlerService extends RESTService {
 			}
 			else if(bodyInput.getAsString("email") == null){
 				// telegram msg does not contain user email, so its null
+				token = bodyInput.getAsString("telegramToken");
 				messenger = SurveyHandlerService.messenger.TELEGRAM;
 			}
 			else{
@@ -457,6 +470,7 @@ public class SurveyHandlerService extends RESTService {
 			}
 			System.out.println(currParticipant.getChannel());
 			String message = bodyInput.getAsString("msg");
+			String messageId = bodyInput.getAsString("message_id");
 			System.out.println("ts: " + messageTs);
 			JSONObject currMessage = new JSONObject();
 			JSONObject prevMessage = new JSONObject();
@@ -539,7 +553,7 @@ public class SurveyHandlerService extends RESTService {
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
 
 
 		} catch (ParseException e) {
@@ -1525,7 +1539,7 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
-			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
+			setSbfmURL(bodyInput.getAsString("sbfmUrl"));
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			// set messenger
@@ -1623,7 +1637,7 @@ public class SurveyHandlerService extends RESTService {
 								HashMap<String, String> head = new HashMap<>();
 
 								MiniClient client = new MiniClient();
-								client.setConnectorEndpoint(sbfmUrl);
+								client.setConnectorEndpoint(sbfmURL);
 
 								ClientResponse result = client.sendRequest("POST", uri, "{\"msg\":\"" + msg + "\"}", "application/json", "*/*", head);
 								String resString = result.getResponse();
@@ -1636,7 +1650,7 @@ public class SurveyHandlerService extends RESTService {
 								HashMap<String, String> head = new HashMap<>();
 
 								MiniClient client = new MiniClient();
-								client.setConnectorEndpoint(sbfmUrl);
+								client.setConnectorEndpoint(sbfmURL);
 
 								ClientResponse result = client.sendRequest("POST", uri, "{\"msg\":\"" + msg + "\"}", "application/json", "*/*", head);
 								String resString = result.getResponse();
@@ -1659,7 +1673,7 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
-			String sbfmUrl = bodyInput.getAsString("sbfmUrl");
+			setSbfmURL(bodyInput.getAsString("sbfmUrl"));
 			String senderEmail = bodyInput.getAsString("email");
 
 			if(senderEmail != null){
@@ -1725,7 +1739,7 @@ public class SurveyHandlerService extends RESTService {
 								HashMap<String, String> head = new HashMap<>();
 
 								MiniClient client = new MiniClient();
-								client.setConnectorEndpoint(sbfmUrl);
+								client.setConnectorEndpoint(sbfmURL);
 
 								ClientResponse result = client.sendRequest("POST", uri, "{\"msg\":\"" + msg + "\"}", "application/json", "*/*", head);
 								String resString = result.getResponse();

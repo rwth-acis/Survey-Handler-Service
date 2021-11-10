@@ -133,6 +133,7 @@ public class SurveyHandlerServiceQueries {
                     query += "comment VARCHAR(900),";
                     query += "dtanswered VARCHAR(50),";
                     query += "messagets VARCHAR(50),";
+                    query += "messageid VARCHAR(50),";
                     query += "prevmessagets VARCHAR(50),";
                     query += "commentts VARCHAR(50),";
                     query += "finalized BOOL,";
@@ -591,6 +592,7 @@ public class SurveyHandlerServiceQueries {
             String comment = rs.getString("comment");
             String dtanswered = rs.getString("dtanswered");
             String messagets = rs.getString("messagets");
+            String messageid = rs.getString("messageid");
             String prevmessagets = rs.getString("prevmessagets");
             String commentts = rs.getString("commentts");
             boolean finalized = rs.getBoolean("finalized");
@@ -605,6 +607,7 @@ public class SurveyHandlerServiceQueries {
             res.setComment(comment);
             res.setDtanswered(dtanswered);
             res.setMessageTs(messagets);
+            res.setMessageId(messageid);
             res.setPrevMessageTs(prevmessagets);
             res.setCommentTs(commentts);
             res.setFinalized(finalized);
@@ -737,7 +740,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO answers(pid, sid, qid, gid, text, comment, dtanswered, messagets, prevmessagets, commentts, finalized, isskipped) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO answers(pid, sid, qid, gid, text, comment, dtanswered, messagets, messageid, prevmessagets, commentts, finalized, isskipped) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, answer.getPid());
             ps.setString(2, answer.getSid());
@@ -747,10 +750,11 @@ public class SurveyHandlerServiceQueries {
             ps.setString(6, answer.getComment());
             ps.setString(7, answer.getDtanswered());
             ps.setString(8, answer.getMessageTs());
-            ps.setString(9, answer.getPrevMessageTs());
-            ps.setString(10, answer.getCommentTs());
-            ps.setBoolean(11, answer.isFinalized());
-            ps.setBoolean(12, answer.isSkipped());
+            ps.setString(9, answer.getMessageId());
+            ps.setString(10, answer.getPrevMessageTs());
+            ps.setString(11, answer.getCommentTs());
+            ps.setBoolean(12, answer.isFinalized());
+            ps.setBoolean(13, answer.isSkipped());
             int rs = ps.executeUpdate();
 
             boolean inserted = false;

@@ -2,14 +2,18 @@ package i5.las2peer.services.SurveyHandler;
 
 import i5.las2peer.api.Context;
 import i5.las2peer.api.logging.MonitoringEvent;
+import i5.las2peer.connectors.webConnector.client.ClientResponse;
+import i5.las2peer.connectors.webConnector.client.MiniClient;
 import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
+import org.bouncycastle.util.encoders.UTF8;
 import org.web3j.abi.datatypes.Array;
 import org.web3j.abi.datatypes.Bool;
 
 
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
@@ -67,7 +71,7 @@ public class Participant {
     }
 
     // Based on the intent, decide what is sent back to the participant
-    public Response calculateNextAction(String intent, String message, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String token, boolean secondSurvey, String beginningTextEN, String beginningTextDE){
+    public Response calculateNextAction(String intent, String message, String messageId, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String token, boolean secondSurvey, String beginningTextEN, String beginningTextDE){
 
         String beginningText = "";
         JSONObject response = new JSONObject();
@@ -167,9 +171,7 @@ public class Participant {
         String submittButtonPressedMessage = "Submit";
 
         if(this.language != null){
-            System.out.println("1" + this.language);
             if(languageSet()){
-                System.out.println("2" + this.language);
                 if(languageIsGerman()){
                     System.out.println("language de");
                     hello = "Hallo :slightly_smiling_face: \n";
@@ -252,7 +254,7 @@ public class Participant {
             return Response.ok().entity(response).build();
         }
 
-        return calcNextResponse(intent, message, buttonIntent, messageTs, currMessage, prevMessage, surveyDoneString, submittButtonPressedMessage, token);
+        return calcNextResponse(intent, message, buttonIntent, messageTs, messageId, currMessage, prevMessage, surveyDoneString, submittButtonPressedMessage, token);
 
 
     }
@@ -677,12 +679,11 @@ public class Participant {
     public Answer getAnswerByTS(String messageTs){
         System.out.println("trying to find answer for ts: " + messageTs);
         for(Answer a : this.givenAnswersAl){
-            System.out.println("curranswer ts: " + a.getMessageTs());
+            //System.out.println("curranswer ts: " + a.getMessageTs());
             if(a.getMessageTs() != null){
-                System.out.println("aaaaaaaa");
-                System.out.println("if" + a.getMessageTs().contains(messageTs));
+                //System.out.println("if" + a.getMessageTs().contains(messageTs));
                 if(a.getMessageTs().equals(messageTs)){
-                    System.out.println("found answer that has been edited");
+                    //System.out.println("found answer that has been edited");
                     return a;
                 }
             }
@@ -834,6 +835,7 @@ public class Participant {
     public Response updateAnswer(String intent, String message, String messageTs, JSONObject currMessage, JSONObject prevMessage, String changedAnswer, String token){
         // check if it is a skipped message, if yes ignore
         System.out.println("now updating answer");
+        String check = SurveyHandlerService.check;
         Answer a = getAnswerByTS(messageTs);
         if(a != null){
             if(a.isSkipped()){
@@ -874,16 +876,18 @@ public class Participant {
             return updateButtonAnswer(intent, message, messageTs, changedAnswer, token);
         }
         else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT)){
-            return updateTextAnswer(intent, message, messageTs, changedAnswer);
+            return updateTextAnswer(intent, message, messageTs, changedAnswer, token);
         }
         else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
-            return updateTextAnswer(intent, message, messageTs, changedAnswer);
+            return updateTextAnswer(intent, message, messageTs, changedAnswer, token);
         }
         return null;
     }
 
     public Response updateButtonAnswer(String intent, String message, String messageTs, String changedAnswer, String token){
+        System.out.println("updating button answer...");
         JSONObject response = new JSONObject();
+        String check = SurveyHandlerService.check;
         Answer answer = getAnswerByTS(messageTs);
 
         System.out.println("parent qid: " + this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language));
@@ -919,6 +923,10 @@ public class Participant {
             System.out.println("answertext: " + answer.getText());
             SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
 
+            // mark the chosen button for telegram
+            if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+                editMessage(q, answer, token, message);
+            }
         }
         else if(this.currentSurvey.getQuestionByQid(answer.getQid(), this.language).getType().equals(Question.qType.FIVESCALE.toString()) ||
                 this.currentSurvey.getQuestionByQid(answer.getQid(), this.language).getType().equals(Question.qType.SCALE.toString())){
@@ -930,8 +938,8 @@ public class Participant {
             SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
 
             // color the chosen button
-            String messageText = currentSurvey.getQuestionByQid(answer.getQid(), this.language).encodeJsonBodyAsString(false, true, message, this);
-            editSlackMessage(token, messageTs, messageText);
+            Question q = this.currentSurvey.getQuestionByQid(answer.getQid(), this.language);
+            editMessage(q, answer, token, message);
 
         }
         else if(this.currentSurvey.getQuestionByQid(answer.getQid(), this.language).getType().equals(Question.qType.GENDER.toString()) ||
@@ -948,8 +956,8 @@ public class Participant {
             SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
 
             // color the chosen button
-            String messageText = currentSurvey.getQuestionByQid(answer.getQid(), this.language).encodeJsonBodyAsString(false, true, message, this);
-            editSlackMessage(token, messageTs, messageText);
+            Question q = this.currentSurvey.getQuestionByQid(answer.getQid(), this.language);
+            editMessage(q, answer, token, message);
 
         }
         else if(this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.ARRAY.toString())){
@@ -977,8 +985,9 @@ public class Participant {
             SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
         }
         // check the type of the parent question, since the subquestions of mc questions are of type text
-        else if(this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
-                this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString())) {
+        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) &&
+                (this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
+                this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString()))) {
             System.out.println("inside mc");
             try{
                 JSONParser p = new JSONParser();
@@ -1056,7 +1065,38 @@ public class Participant {
                 return null;
             }
         }
+        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM) &&
+                (this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
+                this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString()))) {
+            System.out.println("inside mc telegram");
 
+            // get subquestion that was clicked
+            Question subq = null;
+            for(Question sub : this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).getSubquestionAl()){
+                System.out.println("subqgetetxt: " + sub.getText() + " and " + message);
+                // TODO delete contains later after finding solution
+                if(message.equals(sub.getText()) || message.equals(check + sub.getText())  || message.contains(sub.getText())){
+                    subq = sub;
+                    break;
+                }
+            }
+            System.out.println("question: " + subq + " ");
+
+            // get answer
+            answer = getAnswer(subq.getQid());
+
+            // update answer
+            System.out.println("curr text " + answer.getText());
+            if(answer.getText().startsWith(check)){
+                answer.setText("N");
+            } else{
+                answer.setText("Y");
+            }
+            System.out.println("and now " + answer.getText());
+
+            SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
+
+        }
 
         String questionText = "";
         Question edited = this.currentSurvey.getQuestionByQid(answer.getQid(), this.language);
@@ -1080,7 +1120,7 @@ public class Participant {
 
     }
 
-    public Response updateTextAnswer(String intent, String message, String messageTs, String changedAnswer){
+    public Response updateTextAnswer(String intent, String message, String messageTs, String changedAnswer, String token){
         // Rocket chat text answer edited
         JSONObject response = new JSONObject();
         // the participant edited a text answer
@@ -1097,10 +1137,22 @@ public class Participant {
         }
 
         Question answerEdited = this.currentSurvey.getQuestionByQid(answer.getQid(), this.language);
+
+        System.out.println("blocks: " + answerEdited.isBlocksQuestion() + " messenger telegram: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM) +
+                " qid " + answerEdited.getQid() + " type: " + answerEdited.getType());
+        System.out.println("subq: " + answerEdited.isSubquestion() + " parent qid: " + answerEdited.getParentQid());
+        boolean blocksQuestion = answerEdited.isBlocksQuestion();
+        if(answerEdited.isSubquestion() && answerEdited.getParentQuestion().isBlocksQuestion()){
+            blocksQuestion = true;
+        }
+        if(blocksQuestion && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+            updateButtonAnswer(intent, message, messageTs, changedAnswer, token);
+        }
+
         if(answerEdited.isSubquestion()){
             answerEdited = this.currentSurvey.getQuestionByQid(answerEdited.getParentQid(), this.language);
         }
-        if(!answerEdited.answerIsPlausible(message)){
+        if(!answerEdited.answerIsPlausible(message, SurveyHandlerService.check)){
             response.put("text", answerEdited.reasonAnswerNotPlausible());
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
@@ -1287,6 +1339,7 @@ public class Participant {
     public Response updateTextAnswer(String intent, String message, String messageTs, JSONObject currMessage, JSONObject prevMessage, String changedAnswer){
         // Slack text answer edited
         JSONObject response = new JSONObject();
+        String check = SurveyHandlerService.check;
         // the participant edited a text answer
         System.out.println("text answer editing detected...");
 
@@ -1310,7 +1363,7 @@ public class Participant {
 
         Question answerEdited = this.currentSurvey.getQuestionByQid(answer.getQid(), this.language);
         //Question.getQuestionById(answer.getQid(), currentSurvey.getQuestionAL());
-        if(!answerEdited.answerIsPlausible(message)){
+        if(!answerEdited.answerIsPlausible(message, check)){
             response.put("text", answerEdited.reasonAnswerNotPlausible());
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
@@ -1349,7 +1402,7 @@ public class Participant {
         return Response.ok().entity(response).build();
     }
 
-    public Response calcNextResponse(String intent, String message, String buttonIntent, String messageTs, JSONObject currMessage, JSONObject prevMessage, String surveyDoneString, String submittButtonPressedMessage, String token){
+    public Response calcNextResponse(String intent, String message, String buttonIntent, String messageTs, String messageId, JSONObject currMessage, JSONObject prevMessage, String surveyDoneString, String submittButtonPressedMessage, String token){
         JSONObject response = new JSONObject();
         Response res = null;
 
@@ -1366,6 +1419,8 @@ public class Participant {
             newAnswer.setDtanswered(LocalDateTime.now().toString());
             newAnswer.setSkipped(true);
             newAnswer.setFinalized(true);
+            newAnswer.setMessageId(messageId);
+            newAnswer.setMessageTs(messageTs);
 
             //newAnswer.setQid(this.lastquestion);
 
@@ -1433,13 +1488,18 @@ public class Participant {
 
             if(!skipped){
                 if(intent.equals(buttonIntent)){
-                    res = newButtonAnswer(newAnswer, lastQuestion, token, message, messageTs, surveyDoneString, submittButtonPressedMessage);
+                    res = newButtonAnswer(newAnswer, lastQuestion, token, message, surveyDoneString, submittButtonPressedMessage);
                 }
-                else if(lastQuestion.isBlocksQuestion()){
-                    System.out.println("lastquestion was blcoks");
-                    res = newButtonAnswer(newAnswer, lastQuestion, token, message, messageTs, surveyDoneString, submittButtonPressedMessage);
+                else if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+                    // check if last question blocks but comment expected
+                    if(!this.currentSubquestionAnswers.isEmpty()){
+                        System.out.println("curent subquestiona nswers not empty, so expecting comment");
+                        res = newTextAnswer(newAnswer, lastQuestion, message, surveyDoneString, submittButtonPressedMessage);
+                    }
+                    System.out.println("lastquestion was blcoks and messenger telegram");
+                    res = newButtonAnswer(newAnswer, lastQuestion, token, message, surveyDoneString, submittButtonPressedMessage);
                 } else {
-                    res = newTextAnswer(newAnswer, lastQuestion, message, messageTs, surveyDoneString, submittButtonPressedMessage);
+                    res = newTextAnswer(newAnswer, lastQuestion, message, surveyDoneString, submittButtonPressedMessage);
                 }
             }
 
@@ -1472,18 +1532,23 @@ public class Participant {
         return this.AskNextQuestion(surveyDoneString);
     }
 
-    public Response newButtonAnswer(Answer newAnswer, Question lastQuestion, String token, String message, String messageTs, String surveyDoneString, String submittButtonPressedMessage){
+    public Response newButtonAnswer(Answer newAnswer, Question lastQuestion, String token, String message, String surveyDoneString, String submittButtonPressedMessage){
         JSONObject response = new JSONObject();
         System.out.println("inside newbuttonanswer...");
+        String check = SurveyHandlerService.check;
+        String messageTs = newAnswer.getMessageTs();
         // message is a list of selected options in json format or a simple text message
 
         if (lastQuestion.getType().equals(Question.qType.LISTDROPDOWN.toString()) || lastQuestion.getType().equals(Question.qType.LISTRADIO.toString()) ||
                 lastQuestion.getType().equals(Question.qType.DICHOTOMOUS.toString())){
             System.out.println("list question detected");
-            if(!lastQuestion.answerIsPlausible(message)){
+            if(!lastQuestion.answerIsPlausible(message, check)){
                 response.put("text", lastQuestion.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
+            }
+            if(message.equals("No Answer") || message.equals("Keine Antwort")){
+                newAnswer.setText("-");
             }
             // we receive the single choice answer as text directly, so find answer option code
             for(AnswerOption ao : lastQuestion.getAnswerOptions()){
@@ -1494,13 +1559,12 @@ public class Participant {
             newAnswer.setSkipped(false);
             newAnswer.setFinalized(true);
             newAnswer.setQid(this.lastquestion);
-            newAnswer.setMessageTs(messageTs);
             this.givenAnswersAl.add(newAnswer);
             System.out.println("saving new answer to database");
             SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
 
         } else if(lastQuestion.getType().equals(Question.qType.GENDER.toString()) || lastQuestion.getType().equals(Question.qType.YESNO.toString())){
-            if(!lastQuestion.answerIsPlausible(message)){
+            if(!lastQuestion.answerIsPlausible(message, check)){
                 response.put("text", lastQuestion.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
@@ -1509,7 +1573,6 @@ public class Participant {
             newAnswer.setSkipped(false);
             newAnswer.setFinalized(true);
             newAnswer.setQid(this.lastquestion);
-            newAnswer.setMessageTs(messageTs);
 
             if(message.equals("No Answer") || message.equals("Keine Antwort")){
                 newAnswer.setText("-");
@@ -1523,14 +1586,16 @@ public class Participant {
             SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
 
             // color the chosen button
-            String messageText = lastQuestion.encodeJsonBodyAsString(false, true, message, this);
-            editSlackMessage(token, messageTs, messageText);
+            editMessage(lastQuestion, newAnswer, token, message);
 
         } else if(lastQuestion.getType().equals(Question.qType.ARRAY.toString())){
-            if(!lastQuestion.answerIsPlausible(message)){
+            if(!lastQuestion.answerIsPlausible(message, check)){
                 response.put("text", lastQuestion.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
+            }
+            if(message.equals("No Answer") || message.equals("Keine Antwort")){
+                newAnswer.setText("-");
             }
             // we receive the single choice answer as text directly, so find answer option code
             for(AnswerOption ao : lastQuestion.getAnswerOptions()){
@@ -1555,14 +1620,13 @@ public class Participant {
             newAnswer.setSkipped(false);
             newAnswer.setFinalized(true);
             newAnswer.setQid(lastQuestion.getSubquestionByIndex(String.valueOf(index)).getQid());
-            newAnswer.setMessageTs(messageTs);
             this.givenAnswersAl.add(newAnswer);
             System.out.println("saving new answer to database");
             SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
 
         } else if(lastQuestion.getType().equals(Question.qType.FIVESCALE.toString()) ||
                 lastQuestion.getType().equals(Question.qType.SCALE.toString())) {
-            if (!lastQuestion.answerIsPlausible(message)) {
+            if (!lastQuestion.answerIsPlausible(message, check)) {
                 response.put("text", lastQuestion.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
@@ -1572,20 +1636,20 @@ public class Participant {
             newAnswer.setSkipped(false);
             newAnswer.setFinalized(true);
             newAnswer.setQid(this.lastquestion);
-            newAnswer.setMessageTs(messageTs);
             newAnswer.setText(message);
-
+            if(message.equals("No Answer") || message.equals("Keine Antwort")){
+                newAnswer.setText("-");
+            }
             this.givenAnswersAl.add(newAnswer);
 
             System.out.println("saving new answer to database");
             SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
 
             // color the chosen button
-            String messageText = lastQuestion.encodeJsonBodyAsString(false, true, message, this);
-            editSlackMessage(token, messageTs, messageText);
+            editMessage(lastQuestion, newAnswer, token, message);
 
         }else if(lastQuestion.getType().equals(Question.qType.SINGLECHOICECOMMENT.toString())){
-            if (!lastQuestion.answerIsPlausible(message)) {
+            if (!lastQuestion.answerIsPlausible(message, check)) {
                 response.put("text", lastQuestion.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
@@ -1604,20 +1668,24 @@ public class Participant {
             SurveyHandlerServiceQueries.deleteAnswerFromDB(objectToRemove, currentSurvey.database);
 
             newAnswer.setSkipped(false);
+            if(message.equals("No Answer") || message.equals("Keine Antwort")){
+                newAnswer.setText("-");
+            }
             for(AnswerOption ao : lastQuestion.getAnswerOptions()){
                 if(ao.getText().equals(message)){
                     newAnswer.setText(ao.getCode());
                 }
             }
             newAnswer.setQid(this.lastquestion);
-            newAnswer.setMessageTs(messageTs);
             newAnswer.setPrevMessageTs(messageTs);
             newAnswer.setFinalized(false);
             this.currentSubquestionAnswers.add(newAnswer);
             this.givenAnswersAl.add(newAnswer);
             SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
-            // return no content to wait for the comment
-            return Response.noContent().build();
+            if(!newAnswer.getText().equals("-")){
+                // return no content to wait for the comment
+                return Response.noContent().build();
+            }
 
         } else if(lastQuestion.getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
                 lastQuestion.getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString())) {
@@ -1655,7 +1723,6 @@ public class Participant {
                             currAnswer.setSkipped(false);
                             currAnswer.setDtanswered(LocalDateTime.now().toString());
                             currAnswer.setQid(q.getQid());
-                            currAnswer.setMessageTs(messageTs);
                             currAnswer.setText("N");
                             currAnswer.setFinalized(true);
 
@@ -1686,7 +1753,6 @@ public class Participant {
                             currAnswer.setSkipped(false);
                             currAnswer.setDtanswered(LocalDateTime.now().toString());
                             currAnswer.setQid(q.getQid());
-                            currAnswer.setMessageTs(messageTs);
                             currAnswer.setPrevMessageTs(messageTs);
                             currAnswer.setText("N");
                             currAnswer.setFinalized(true);
@@ -1711,78 +1777,133 @@ public class Participant {
                 }
 
                 // delete the submit button
-                //String messageText = lastQuestion.encodeJsonBodyAsString(false, true, "", this);
-                //editSlackMessage(token, messageTs, messageText);
-
+                String messageText = lastQuestion.encodeJsonBodyAsString(false, true, "", this);
+                editMessage(lastQuestion, newAnswer, token, messageText);
                 // submit button handling done
 
             } else {
-                // no submit button pressed, but update to chosen options and to db
-                try{
-                    selectedOptionsJson = (JSONArray) p.parse(message);}
-                catch (Exception e){
-                    e.printStackTrace();
-                    System.out.println("Failed parsing buttonIntent message.");
-                    return Response.serverError().build();
-                }
-
-
-                System.out.println("deleting currentsubquestionanswers...");
-                this.currentSubquestionAnswers.clear();
-                ArrayList<Answer> objectsToRemove = new ArrayList<>();
-                for(Answer a : givenAnswersAl){
-                    // find all answer objects to remove
-                    if(!a.isFinalized()){
-                        objectsToRemove.add(a);
-                    }
-                }
-                for(Answer a : objectsToRemove){
-                    // delete answer objects
-                    givenAnswersAl.remove(a);
-                    SurveyHandlerServiceQueries.deleteAnswerFromDB(a, currentSurvey.database);
-                }
-
-                // creating new answer objects
-                for(Object jarrayObject : selectedOptionsJson) {
-                    String text = "";
-                    JSONObject jO = (JSONObject) jarrayObject;
-                    String value = jO.getAsString("value");
-
+                if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+                    // no submit button pressed, but update to chosen options and to db
                     try{
-                        String textObjectString = jO.getAsString("text");
-                        JSONObject textJO = (JSONObject) p.parse(textObjectString);
-                        text = textJO.getAsString("text");
-
-                        if(!lastQuestion.answerIsPlausible(text)){
-                            response.put("text", lastQuestion.reasonAnswerNotPlausible());
-                            Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-                            return Response.ok().entity(response).build();
-                        }
-                    } catch(Exception e){
+                        selectedOptionsJson = (JSONArray) p.parse(message);}
+                    catch (Exception e){
                         e.printStackTrace();
-                        System.out.println("Failed to parse textObject.");
+                        System.out.println("Failed parsing buttonIntent message.");
                         return Response.serverError().build();
                     }
 
-                    System.out.println("parsing mesage got text: " + text);
-                    Answer currAnswer = new Answer();
-                    // Subquestions also have the same group id as the main question
-                    currAnswer.setGid(lastQuestion.getGid());
-                    currAnswer.setPid(this.pid);
-                    currAnswer.setSid(this.sid);
-                    currAnswer.setSkipped(false);
-                    currAnswer.setDtanswered(LocalDateTime.now().toString());
-                    currAnswer.setQid(value);
-                    currAnswer.setMessageTs(messageTs);
-                    currAnswer.setText("Y");
-                    currAnswer.setFinalized(false);
-                    this.currentSubquestionAnswers.add(currAnswer);
-                    this.givenAnswersAl.add(currAnswer);
-                    SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
-                    System.out.println("curr subquestion answers: " +this.currentSubquestionAnswers + "size: " + this.currentSubquestionAnswers.size());
+
+                    System.out.println("deleting currentsubquestionanswers...");
+                    this.currentSubquestionAnswers.clear();
+                    ArrayList<Answer> objectsToRemove = new ArrayList<>();
+                    for(Answer a : givenAnswersAl){
+                        // find all answer objects to remove
+                        if(!a.isFinalized()){
+                            objectsToRemove.add(a);
+                        }
+                    }
+                    for(Answer a : objectsToRemove){
+                        // delete answer objects
+                        givenAnswersAl.remove(a);
+                        SurveyHandlerServiceQueries.deleteAnswerFromDB(a, currentSurvey.database);
+                    }
+
+                    // creating new answer objects
+                    for(Object jarrayObject : selectedOptionsJson) {
+                        String text = "";
+                        JSONObject jO = (JSONObject) jarrayObject;
+                        String value = jO.getAsString("value");
+
+                        try{
+                            String textObjectString = jO.getAsString("text");
+                            JSONObject textJO = (JSONObject) p.parse(textObjectString);
+                            text = textJO.getAsString("text");
+
+                            if(!lastQuestion.answerIsPlausible(text, check)){
+                                response.put("text", lastQuestion.reasonAnswerNotPlausible());
+                                Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+                                return Response.ok().entity(response).build();
+                            }
+                        } catch(Exception e){
+                            e.printStackTrace();
+                            System.out.println("Failed to parse textObject.");
+                            return Response.serverError().build();
+                        }
+
+                        System.out.println("parsing mesage got text: " + text);
+                        Answer currAnswer = new Answer();
+                        // Subquestions also have the same group id as the main question
+                        currAnswer.setGid(lastQuestion.getGid());
+                        currAnswer.setPid(this.pid);
+                        currAnswer.setSid(this.sid);
+                        currAnswer.setSkipped(false);
+                        currAnswer.setDtanswered(LocalDateTime.now().toString());
+                        currAnswer.setQid(value);
+                        currAnswer.setText("Y");
+                        currAnswer.setFinalized(false);
+                        this.currentSubquestionAnswers.add(currAnswer);
+                        this.givenAnswersAl.add(currAnswer);
+                        SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
+                        System.out.println("curr subquestion answers: " +this.currentSubquestionAnswers + "size: " + this.currentSubquestionAnswers.size());
+                    }
+                    System.out.println("all subquestion answers: " +this.currentSubquestionAnswers);
+                    return Response.noContent().build();
                 }
-                System.out.println("all subquestion answers: " +this.currentSubquestionAnswers);
-                return Response.noContent().build();
+                else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+
+                    if (!lastQuestion.answerIsPlausible(message, check)) {
+                        response.put("text", lastQuestion.reasonAnswerNotPlausible());
+                        Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+                        return Response.ok().entity(response).build();
+                    }
+
+                    // get subquestion that was clicked
+                    Question subq = null;
+                    for(Question sub : this.currentSurvey.getQuestionByQid(this.lastquestion, this.language).getSubquestionAl()){
+                        System.out.println("subqgetetxt: " + sub.getText() + " and " + message);
+                        // TODO find solution for check check
+                        if(message.equals(sub.getText()) || message.equals(check + sub.getText()) || message.contains(sub.getText())){
+                            subq = sub;
+                            break;
+                        }
+                    }
+                    System.out.println("question: " + subq + " ");
+
+                    Answer answer = getAnswer(subq.getQid());
+                    if(answer != null){
+                        // update answer
+                        System.out.println("curr text " + answer.getText());
+                        if(answer.getText().startsWith(check)){
+                            answer.setText("N");
+                        } else{
+                            answer.setText("Y");
+                        }
+                        System.out.println("and now " + answer.getText());
+
+                        SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
+
+                        // color the chosen button
+                        editMessage(lastQuestion, answer, token, message);
+
+                    } else{
+                        newAnswer.setQid(subq.getQid());
+                        newAnswer.setSkipped(false);
+                        newAnswer.setFinalized(false);
+                        newAnswer.setText("Y");
+
+                        this.currentSubquestionAnswers.add(newAnswer);
+                        this.givenAnswersAl.add(newAnswer);
+
+                        System.out.println("saving new answer to database");
+                        SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
+
+                        // color the chosen button
+                        editMessage(lastQuestion, newAnswer, token, message);
+                    }
+
+                    System.out.println("all subquestion answers: " + this.currentSubquestionAnswers);
+                    return Response.noContent().build();
+                }
             }
         }
         else{
@@ -1794,8 +1915,12 @@ public class Participant {
 
     }
 
-    public Response newTextAnswer(Answer newAnswer, Question lastQuestion, String message, String messageTs, String surveyDoneString, String submittButtonPressedMessage){
+    public Response newTextAnswer(Answer newAnswer, Question lastQuestion, String message, String surveyDoneString, String submittButtonPressedMessage){
         JSONObject response = new JSONObject();
+        String check = SurveyHandlerService.check;
+        String messageId = newAnswer.getMessageId();
+        String messageTs = newAnswer.getMessageTs();
+
 
         System.out.println("has no currentsubquestionAnswers: " + this.currentSubquestionAnswers.isEmpty());
         System.out.println("type: " + lastQuestion.getType());
@@ -1825,7 +1950,7 @@ public class Participant {
         }
 
         // Check if it is a text answer for button questions in rocket chat
-        if(lastQuestion.isBlocksQuestion() && !SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+        if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT)){
             if(message.length() == 2 && String.valueOf(message.charAt(1)).equals(".")){
                 // check if message asking for a number contains a "."
                 JSONParser p = new JSONParser();
@@ -1838,7 +1963,7 @@ public class Participant {
             }
             System.out.println("blocks question and rocketchat recognized");
 
-            if(!lastQuestion.answerIsPlausible(message)){
+            if(!lastQuestion.answerIsPlausible(message, check)){
                 response.put("text", lastQuestion.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
@@ -1860,7 +1985,6 @@ public class Participant {
                 newAnswer.setSkipped(false);
                 newAnswer.setFinalized(true);
                 newAnswer.setQid(this.lastquestion);
-                newAnswer.setMessageTs(messageTs);
                 this.givenAnswersAl.add(newAnswer);
                 System.out.println("saving new answer to database");
                 SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
@@ -1899,7 +2023,6 @@ public class Participant {
                 newAnswer.setFinalized(true);
                 //System.out.println("qid: " + lastQuestion.getSubquestionByIndex(String.valueOf(index)).getQid());
                 newAnswer.setQid(lastQuestion.getSubquestionByIndex(String.valueOf(index)).getQid());
-                newAnswer.setMessageTs(messageTs);
                 //this.currentSubquestionAnswers.add(newAnswer);
                 this.givenAnswersAl.add(newAnswer);
                 System.out.println("saving new answer to database");
@@ -1915,7 +2038,6 @@ public class Participant {
                 newAnswer.setSkipped(false);
                 newAnswer.setFinalized(true);
                 newAnswer.setQid(this.lastquestion);
-                newAnswer.setMessageTs(messageTs);
                 this.givenAnswersAl.add(newAnswer);
                 System.out.println("saving new answer to database");
                 SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
@@ -1934,7 +2056,6 @@ public class Participant {
                 newAnswer.setSkipped(false);
                 newAnswer.setFinalized(true);
                 newAnswer.setQid(this.lastquestion);
-                newAnswer.setMessageTs(messageTs);
                 this.givenAnswersAl.add(newAnswer);
                 System.out.println("saving new answer to database");
                 SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
@@ -1954,7 +2075,6 @@ public class Participant {
                 newAnswer.setSkipped(false);
                 newAnswer.setFinalized(true);
                 newAnswer.setQid(this.lastquestion);
-                newAnswer.setMessageTs(messageTs);
                 this.givenAnswersAl.add(newAnswer);
                 System.out.println("saving new answer to database");
                 SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
@@ -1973,7 +2093,6 @@ public class Participant {
                 newAnswer.setSkipped(false);
                 newAnswer.setFinalized(true);
                 newAnswer.setQid(this.lastquestion);
-                newAnswer.setMessageTs(messageTs);
                 this.givenAnswersAl.add(newAnswer);
                 System.out.println("saving new answer to database");
                 SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
@@ -1995,7 +2114,6 @@ public class Participant {
                 newAnswer.setSkipped(false);
                 newAnswer.setFinalized(true);
                 newAnswer.setQid(this.lastquestion);
-                newAnswer.setMessageTs(messageTs);
                 newAnswer.setComment(comment);
                 newAnswer.setCommentTs(messageTs);
                 this.givenAnswersAl.add(newAnswer);
@@ -2039,7 +2157,6 @@ public class Participant {
                         newAnswer.setSkipped(false);
                         newAnswer.setFinalized(true);
                         newAnswer.setQid(co);
-                        newAnswer.setMessageTs(messageTs);
                         this.givenAnswersAl.add(newAnswer);
                         System.out.println("saving new answer to database");
                         SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
@@ -2058,6 +2175,7 @@ public class Participant {
                     currAnswer.setDtanswered(LocalDateTime.now().toString());
                     currAnswer.setQid(q.getQid());
                     currAnswer.setMessageTs(messageTs);
+                    currAnswer.setMessageId(messageId);
                     currAnswer.setText("N");
                     currAnswer.setFinalized(true);
 
@@ -2109,7 +2227,6 @@ public class Participant {
                         newAnswer.setSkipped(false);
                         newAnswer.setFinalized(true);
                         newAnswer.setQid(lastQuestion.getSubquestionByIndex(co).getQid());
-                        newAnswer.setMessageTs(messageTs);
                         newAnswer.setComment(comments.get(0));
                         newAnswer.setCommentTs(messageTs);
                         this.givenAnswersAl.add(newAnswer);
@@ -2131,6 +2248,7 @@ public class Participant {
                     currAnswer.setDtanswered(LocalDateTime.now().toString());
                     currAnswer.setQid(q.getQid());
                     currAnswer.setMessageTs(messageTs);
+                    currAnswer.setMessageId(messageId);
                     currAnswer.setText("N");
                     currAnswer.setCommentTs(messageTs);
                     currAnswer.setComment("");
@@ -2208,6 +2326,7 @@ public class Participant {
                             currAnswer.setDtanswered(LocalDateTime.now().toString());
                             currAnswer.setQid(q.getQid());
                             currAnswer.setMessageTs(messageTs);
+                            currAnswer.setMessageId(messageId);
                             currAnswer.setText("N");
                             currAnswer.setFinalized(true);
 
@@ -2247,7 +2366,7 @@ public class Participant {
                 return Response.ok().entity(response).build();
             }
 
-            if(!lastQuestion.answerIsPlausible(message)){
+            if(!lastQuestion.answerIsPlausible(message, check)){
                 response.put("text", lastQuestion.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
@@ -2263,6 +2382,7 @@ public class Participant {
             newAnswer.setQid(this.lastquestion);
             newAnswer.setText(message);
             newAnswer.setMessageTs(messageTs);
+            newAnswer.setMessageId(messageId);
             this.givenAnswersAl.add(newAnswer);
 
             System.out.println("saving new answer to database at the end of function");
@@ -2291,36 +2411,66 @@ public class Participant {
         return (this.unaskedQuestions.size() == 0 && this.skippedQuestions.size() == 0);
     }
 
-    public void editSlackMessage(String token, String messageTs, String messageText){
-        try{
-            System.out.println("now editing the message...");
-            // slack api call to get email for user id
-            String urlParameters = "token=" + token + "&channel=" + channel + "&ts=" + messageTs + "&blocks=" + messageText;
-            System.out.println(urlParameters);
-            byte[] postData = urlParameters.getBytes( StandardCharsets.UTF_8 );
-            int postDataLength = postData.length;
-            String request = "https://slack.com/api/chat.update";
-            URL url = new URL( request );
-            HttpURLConnection conn= (HttpURLConnection) url.openConnection();
-            conn.setDoOutput(true);
-            conn.setInstanceFollowRedirects(false);
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            conn.setRequestProperty("charset", "utf-8");
-            conn.setRequestProperty("Content-Length", Integer.toString(postDataLength));
-            conn.setUseCaches(false);
-            try(DataOutputStream wr = new DataOutputStream(conn.getOutputStream())) {
-                wr.write(postData);
-            }
-            InputStream stream = conn.getInputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"), 8);
-            String result = reader.readLine();
-            System.out.println(result);
-
-        } catch(Exception e){
-            System.out.println("editing message did not work");
-            e.printStackTrace();
+    public void editMessage(Question q, Answer a, String token, String message){
+        String messageText = q.encodeJsonBodyAsString(false, false, message, this);
+        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+            String messageTs = a.getMessageTs();
+            editSlackMessage(token, messageTs, messageText);
         }
+        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+            String messageId = a.getMessageId();
+            editTelegramMessage(token, messageId, messageText);
+        }
+    }
+
+    public void editTelegramMessage(String token, String messageId, String messageText){
+        System.out.println("now editing telegram message...");
+        // post request to sbfmanager to edit slack message
+        JSONObject content = new JSONObject();
+        content.put("ts", messageId);
+        //messageText = messageText.replaceAll(":check:", "\u2713");
+        System.out.println("messagtext: " + messageText);
+        content.put("blocks", messageText);
+        System.out.println("beofre sendintg");
+
+        String SBFManagerURL = "SBFManager";
+        String uri = SBFManagerURL + "/editMessage/" + token + "/" + email;
+        HashMap<String, String> head = new HashMap<>();
+
+        MiniClient client = new MiniClient();
+        System.out.println("sbfmurl_ " + SurveyHandlerService.getSbfmURL());
+        client.setConnectorEndpoint(SurveyHandlerService.getSbfmURL());
+
+
+
+        ClientResponse result = client.sendRequest("POST", uri, content.toString(), "application/json", "*/*", head);
+        System.out.println("after sendintg");
+        String resString = result.getResponse();
+        System.out.println(resString);
+
+    }
+
+    public void editSlackMessage(String token, String messageTs, String messageText){
+
+        // post request to sbfmanager to edit slack message
+        String SBFManagerURL = "SBFManager";
+        String uri = SBFManagerURL + "/editMessage/" + token + "/" + email;
+        HashMap<String, String> head = new HashMap<>();
+
+        MiniClient client = new MiniClient();
+        System.out.println("sbfmurl_ " + SurveyHandlerService.getSbfmURL());
+        client.setConnectorEndpoint(SurveyHandlerService.getSbfmURL());
+
+        JSONObject content = new JSONObject();
+        content.put("ts", messageTs);
+        content.put("blocks", messageText);
+        System.out.println("beofre sendintg");
+
+        ClientResponse result = client.sendRequest("POST", uri, content.toString(), "application/json", "*/*", head);
+        System.out.println("after sendintg");
+        String resString = result.getResponse();
+        System.out.println(resString);
+
     }
 
 

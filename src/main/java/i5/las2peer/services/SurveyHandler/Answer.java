@@ -10,6 +10,7 @@ public class Answer {
     private String comment;
     private String dtanswered;
     private String prevMessageTs;
+    private String messageId;
     private boolean finalized;
 
     //used for unique identification of messages (unique per channel, provided by slack)
@@ -93,6 +94,14 @@ public class Answer {
 
     public void setMessageTs(String messageTs) {
         this.messageTs = messageTs;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
     }
 
     public String getCommentTs() {

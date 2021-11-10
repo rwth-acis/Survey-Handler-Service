@@ -3,6 +3,7 @@ package i5.las2peer.services.SurveyHandler;
 import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
+import org.web3j.abi.datatypes.Int;
 
 import javax.mail.Part;
 import java.text.DateFormat;
@@ -12,6 +13,7 @@ import java.util.HashMap;
 import java.util.Optional;
 
 public class Question{
+    String check = ":check:";
 
     // Database model identifier
     private String qid;
@@ -355,8 +357,8 @@ public class Question{
         return this.parentqid;
     }
 
-    public Question getParentQuestion(String language){
-        return this.getSurvey().getQuestionByQid(this.parentqid, language);
+    public Question getParentQuestion(){
+        return this.getSurvey().getQuestionByQid(this.parentqid, this.language);
     }
 
     public String getHelp() {
@@ -389,17 +391,20 @@ public class Question{
             return parseQuestionForSlack(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
         }
         else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
-            return parseQuestionForTelegram(newQuestionGroup, participant, arrayNumber);
+            return parseQuestionForTelegram(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
         }
         else{
             return parseQuestionAsText(newQuestionGroup, participant, arrayNumber);
         }
     }
 
-    public String parseQuestionForTelegram(boolean newQuestionGroup, Participant participant, Integer arrayNumber){
+    public String parseQuestionForTelegram(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
         String resString = "";
         String subString = "";
         int index = 1;
+
+        // check mark for chosen button
+        String check = SurveyHandlerService.check;
 
         String questionText = this.text;
         int questionsLeft = this.questionsLeft(participant);
@@ -424,10 +429,17 @@ public class Question{
         }
 
 
-        if(this.isSubquestion && !this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
+        if(this.isSubquestion && !this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
+            // for every button that was answered check button
+            // if answer with y exist add check
+            Answer a = participant.getAnswer(this.qid);
+            if(a != null)
+                if(a.getText().equals("Y"))
+                    questionText = check + questionText;
+
             subString += "[{\"text\":\"" + questionText + "\",\"callback_data\": \"" + questionText + "\"}],";
             return subString;
-        } else if(this.isSubquestion && this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
+        } else if(this.isSubquestion && this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
             subString += "\n" + questionText;
         }
 
@@ -437,7 +449,9 @@ public class Question{
             for (Question subq : this.subquestionAl) {
                 resString += subq.encodeJsonBodyAsString(participant);
             }
-            resString += "[{\"text\":\"Submit\",\"callback_data\": \"Submit\"}]";
+            if(!edit){
+                resString += "[{\"text\":\"Submit\",\"callback_data\": \"Submit\"}]";
+            }
             resString += "]}";
         } else if(this.type.equals(qType.ARRAY.toString())){
             resString = "{\"text\":\"" + questionText;
@@ -450,13 +464,20 @@ public class Question{
             System.out.println("res: " + resString);
         }
 
-        resString += questionText;
+        if(resString.length() == 0){
+            resString += questionText;
+        }
         System.out.println(this.type);
 
-        if(this.isSubquestion && !this.getParentQuestion(this.language).answerOptions.isEmpty()){
+        if(this.isSubquestion && !this.getParentQuestion().answerOptions.isEmpty()){
             resString = subString + "\",\"inline_keyboard\": [";
-            for(int i = 1; i < this.getParentQuestion(this.language).answerOptions.size() + 1; i++){
-                String currAnswerOption = "[{\"text\":\"" + this.getParentQuestion(this.language).getAnswerOptionByIndex(i).getText() + "\",\"callback_data\": \"" + this.getParentQuestion(this.language).getAnswerOptionByIndex(i).getText() + "\"}],";
+            for(int i = 1; i < this.getParentQuestion().answerOptions.size() + 1; i++){
+                String text = this.getParentQuestion().getAnswerOptionByIndex(i).getText();
+                if(buttonToColor.length() > 0){
+                    if(buttonToColor.equals(text))
+                        text = check + text;
+                }
+                String currAnswerOption = "[{\"text\":\"" + text + "\",\"callback_data\": \"" + text + "\"}],";
 
                 resString += currAnswerOption;
                 index++;
@@ -476,56 +497,86 @@ public class Question{
 
         }
 
+        String female = "Female";
+        String male = "Male";
+        String yes = "Yes";
+        String no = "No";
+        String noAnswer = "No Answer";
+        if(languageIsGerman()){
+            female = "Weiblich";
+            male = "Maennlich";
+            yes = "Ja";
+            no = "Nein";
+            noAnswer = "Keine Antwort";
+        }
+        if(buttonToColor.length() > 0){
+            if(buttonToColor.equals(female)){
+                female = check + female;
+            }
+            else if(buttonToColor.equals(male)){
+                male = check + male;
+            }
+            else if(buttonToColor.equals(yes)){
+                yes = check + yes;
+            }
+            else if(buttonToColor.equals(no)){
+                no = check + no;
+            }
+            else if(buttonToColor.equals(noAnswer)){
+                noAnswer = check + noAnswer;
+            }
+
+        }
         switch(this.type){
             case "G":
                 System.out.println("Gender");
-                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Female\",\"callback_data\": \"Female\"}],[{\"text\":\"Male\",\"callback_data\": \"Male\"}]]}";
+                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"" + female + "\",\"callback_data\": \"" + female + "\"},{\"text\":\"" + male + "\",\"callback_data\": \"" + male + "\"}]]}";
+
                 if(!isMandatory()){
-                    resString = resString.substring(0, resString.length() - 2);
-                    resString += ",[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]]}";
+                    resString = resString.substring(0, resString.length() - 3);
+                    resString += ",{\"text\":\"" + noAnswer + "\",\"callback_data\": \"No Answer\"}]]}";
                 }
-                if(languageIsGerman()){
-                    resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Weiblich\",\"callback_data\": \"Weiblich\"}],[{\"text\":\"Maennlich\",\"callback_data\": \"Maennlich\"}]]}";
-                    if(!isMandatory()){
-                        resString = resString.substring(0, resString.length() - 2);
-                        resString += ",[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]]}";
-                    }
-                }
+
                 break;
             case "Y":
                 System.out.println("Yes/No");
-                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Yes\",\"callback_data\": \"Yes\"}],[{\"text\":\"No\",\"callback_data\": \"No\"}]]}";
+                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"" + yes + "\",\"callback_data\": \"" + yes + "\"},{\"text\":\"" + no + "\",\"callback_data\": \"" + no + "\"}]]}";
                 if(!isMandatory()){
-                    resString = resString.substring(0, resString.length() - 2);
-                    resString += ",[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]]}";
-                }
-                if(this.languageIsGerman()){
-                    resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"Ja\",\"callback_data\": \"Ja\"}],[{\"text\":\"Nein\",\"callback_data\": \"Nein\"}]]}";
-                    if(!isMandatory()){
-                        resString = resString.substring(0, resString.length() - 2);
-                        resString += ",[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]]}";
-                    }
+                    resString = resString.substring(0, resString.length() - 3);
+                    resString += ",{\"text\":\"" + noAnswer + "\",\"callback_data\": \"" + noAnswer + "\"}]]}";
                 }
                 break;
             case "5":
                 System.out.println("5 point choice");
-                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[{\"text\":\"1\",\"callback_data\": \"1\"}],[{\"text\":\"2\",\"callback_data\": \"2\"}],[{\"text\":\"3\",\"callback_data\": \"3\"}],[{\"text\":\"4\",\"callback_data\": \"4\"}],[{\"text\":\"5\",\"callback_data\": \"5\"}]]}";
-                if(!isMandatory()){
-                    resString = resString.substring(0, resString.length() - 2);
-                    if(this.languageIsGerman()){
-                        resString += ",[{\"text\":\"Keine Antwort\",\"callback_data\": \"Keine Antwort\"}]]}";
-                    } else{
-                        resString += ",[{\"text\":\"No Answer\",\"callback_data\": \"No Answer\"}]]}";
+                resString = "{\"text\":\"" + questionText + "\",\"inline_keyboard\": [[";
+                for(int i = 1; i <= 5; i++){
+                    String add = String.valueOf(i);
+                    if(buttonToColor.length() > 0) {
+                        try {
+                            if (Integer.parseInt(buttonToColor) == i) {
+                                add = check + i;
+                            }
+                        } catch (Exception e) {
+                            System.out.println("button not a five point number");
+                        }
                     }
+                    resString += "{\"text\":\"" + add + "\",\"callback_data\": \"" + add + "\"},";
                 }
+                if(!isMandatory()){
+                    resString += "{\"text\":\"" + noAnswer + "\",\"callback_data\": \"" + noAnswer + "\"},";
+
+                }
+                // remove last comma
+                resString = resString.substring(0, resString.length() - 1);
+                resString += "]]}";
                 break;
 
         }
-        if((!(this.answerOptions.isEmpty()) && this.type.equals(qType.DICHOTOMOUS.toString())) ||
-                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.SCALE.toString())) ||
-                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTRADIO.toString())) ||
-                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.SINGLECHOICECOMMENT.toString())) ||
-                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTDROPDOWN.toString()))) {
+        if(this.type.equals(qType.DICHOTOMOUS.toString()) ||
+                (this.type.equals(qType.SCALE.toString())) ||
+                (this.type.equals(qType.LISTRADIO.toString())) ||
+                (this.type.equals(qType.SINGLECHOICECOMMENT.toString())) ||
+                (this.type.equals(qType.LISTDROPDOWN.toString()))) {
 
             System.out.println("inside answeroptions with type dichotomous, scale or ! or o or l");
 
@@ -536,7 +587,12 @@ public class Question{
 
             resString = "{\"text\":\"" + questionText + askForComment + "\",\"inline_keyboard\": [";
             for(int i = 1; i < answerOptions.size() + 1; i++){
-                String currAnswerOption = "[{\"text\":\"" + this.getAnswerOptionByIndex(i).getText() + "\",\"callback_data\": \"" + this.getAnswerOptionByIndex(i).getText() + "\"}],";
+                String text = this.getAnswerOptionByIndex(i).getText();
+                if(buttonToColor.length() > 0){
+                    if(buttonToColor.equals(text))
+                        text = check + text;
+                }
+                String currAnswerOption = "[{\"text\":\"" + text + "\",\"callback_data\": \"" + text + "\"}],";
                 resString += currAnswerOption;
                 index++;
             }
@@ -588,7 +644,7 @@ public class Question{
         }
 
 
-        if(this.isSubquestion && !this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
+        if(this.isSubquestion && !this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
             subString += "{\n" +
                     "\"text\": {\n" +
                     "\"type\": \"plain_text\",\n" +
@@ -598,7 +654,7 @@ public class Question{
                     "\"value\": \"" + this.qid + "\"\n" +
                     "},";
             return subString;
-        } else if(this.isSubquestion && this.getParentQuestion(this.language).getType().equals(qType.ARRAY.toString())){
+        } else if(this.isSubquestion && this.getParentQuestion().getType().equals(qType.ARRAY.toString())){
             subString += "\n" + questionText;
             subString += "\",\n" +
                     "\"emoji\": true\n" +
@@ -710,18 +766,18 @@ public class Question{
         System.out.println(this.type);
         System.out.println(resString);
 
-        if(this.isSubquestion && !this.getParentQuestion(this.language).answerOptions.isEmpty()){
+        if(this.isSubquestion && !this.getParentQuestion().answerOptions.isEmpty()){
             resString = subString + "\t\t{\n" +
                     "\t\t\t\"type\": \"actions\",\n" +
                     "\t\t\t\"elements\": [\n" +
                     "\t\t\t\t{\n" +
                     "\t\t\t\t\t\"type\": \"radio_buttons\",\n" +
                     "\t\t\t\t\t\"options\": [";
-            for(int i = 1; i < this.getParentQuestion(this.language).answerOptions.size() + 1; i++){
+            for(int i = 1; i < this.getParentQuestion().answerOptions.size() + 1; i++){
                 String currAnswerOption = "{\n" +
                         "\t\t\t\t\t\t\t\"text\": {\n" +
                         "\t\t\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
-                        "\t\t\t\t\t\t\t\t\"text\": \"" + this.getParentQuestion(this.language).getAnswerOptionByIndex(i).getText() + "\",\n" +
+                        "\t\t\t\t\t\t\t\t\"text\": \"" + this.getParentQuestion().getAnswerOptionByIndex(i).getText() + "\",\n" +
                         "\t\t\t\t\t\t\t\t\"emoji\": true\n" +
                         "\t\t\t\t\t\t\t},\n" +
                         "\t\t\t\t\t\t\t\"value\": \"" + index + "\"\n" +
@@ -1406,7 +1462,7 @@ public class Question{
         return returnValue;
     }
 
-    public boolean answerIsPlausible(String textAnswer){
+    public boolean answerIsPlausible(String textAnswer, String check){
 
         if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) ||
                 SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
@@ -1431,7 +1487,7 @@ public class Question{
                 // If it a mulitple choice question, check if textAnswer equals one answer option (which is saves as text from subquestion)
                 for(Question q : this.subquestionAl){
                     System.out.println("calling answer plausible recursively...");
-                    if(q.answerIsPlausible(textAnswer)){
+                    if(q.answerIsPlausible(textAnswer, check)){
                         System.out.println("Answer is valid.");
                         return true;
                     }
@@ -1440,8 +1496,9 @@ public class Question{
 
             if(this.isSubquestion){
                 System.out.println("Question type (multiple choice) subquestion recognized.");
+                System.out.println("check + textanswer: " + check + textAnswer + " and same: " + textAnswer.equals(check + this.text));
                 // if it is an answer to a mulitple choice question answer option, it is exactly that subquestion text
-                if(this.text.equals(textAnswer)){
+                if(this.text.equals(textAnswer) || textAnswer.equals(check + this.text)){
                     System.out.println("textanswer: " + textAnswer + " text: " + this.text);
                     System.out.println("Answer is valid.");
                     return true;
@@ -1656,7 +1713,7 @@ public class Question{
         boolean ok = false;
         if(this.getSurvey().hasMoreThanOneLanguage()){
             String otherLanguage = getSurvey().getOtherLanguage(this.language);
-            ok = this.getSurvey().getQuestionByQid(this.qid, otherLanguage).answerIsPlausible(textAnswer);
+            ok = this.getSurvey().getQuestionByQid(this.qid, otherLanguage).answerIsPlausible(textAnswer, check);
         }
         if(!ok){
             System.out.println("answer is not plausible (function end)");
@@ -1701,7 +1758,7 @@ public class Question{
                 if(this.languageIsGerman()){
                     reason = "Bitte waehle alle Checkboxes aus welche zutreffen und klicke dann auf den \"Submit\" button.";
                 } else{
-                    reason = "Please check all the boxes of answers that aply and then click on the \"Submit\" button";
+                    reason = "Please check all the boxes of answers that apply and then click on the \"Submit\" button";
                 }
             }
         }
