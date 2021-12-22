@@ -450,7 +450,7 @@ public class Question{
                 resString += subq.encodeJsonBodyAsString(participant);
             }
             if(!edit){
-                resString += "[{\"text\":\"Submit\",\"callback_data\": \"Submit\"}]";
+                resString += "[{\"text\":\"" + SurveyHandlerService.texts.get("submitButton") + "\",\"callback_data\": \"" + SurveyHandlerService.texts.get("submitButton") + "\"}]";
             }
             resString += "]}";
         } else if(this.type.equals(qType.ARRAY.toString())){
@@ -732,10 +732,10 @@ public class Question{
                         "\"type\": \"button\",\n" +
                         "\"text\": {\n" +
                         "\"type\": \"plain_text\",\n" +
-                        "\"text\": \"Submit\",\n" +
+                        "\"text\": \"" + SurveyHandlerService.texts.get("submitButton") + "\",\n" +
                         "\"emoji\": true\n" +
                         "},\n" +
-                        "\"value\": \"submit\",\n" +
+                        "\"value\": \"" + SurveyHandlerService.texts.get("submitButton") + "\",\n" +
                         "\"action_id\": \"" + this.qid + "\"\n" +
                         "}\n" +
                         "]\n" +
@@ -1471,7 +1471,7 @@ public class Question{
                     this.type.equals(qType.ARRAY.toString())){
                 System.out.println("Question type singlechoice recognized.");
                 // for these types, a answeroptionslist is available, only answers equal to one of these options is ok
-                if(textAnswer.equals("Keine Antwort") || textAnswer.equals("No Answer")){
+                if(!this.mandatory && (textAnswer.equals("Keine Antwort") || textAnswer.equals("No Answer"))){
                     return true;
                 }
                 for(AnswerOption ao : answerOptions){
@@ -1479,6 +1479,15 @@ public class Question{
                         System.out.println("Answer is valid.");
                         return true;
                     }
+                }
+
+                // check if it a reasonable comment for a singlechoice question
+                if(this.type.equals(qType.SINGLECHOICECOMMENT.toString())){
+                    // check if this is actually the comment
+
+                    // check if ao was chosen
+                    //if(getA)
+
                 }
             }
 
@@ -1509,8 +1518,8 @@ public class Question{
             if(this.type.equals(qType.GENDER.toString())){
                 System.out.println("Question type gender recognized.");
                 // a gender question only has these three options
-                if(textAnswer.equals("Female") || textAnswer.equals("Male") || textAnswer.equals("No Answer")
-                || textAnswer.equals("Weiblich") || textAnswer.equals("Maennlich") || textAnswer.equals("Keine Antwort")){
+                if(textAnswer.equals("Female") || textAnswer.equals("Male") || (!this.mandatory && textAnswer.equals("No Answer"))
+                || textAnswer.equals("Weiblich") || textAnswer.equals("Maennlich") || (!this.mandatory && textAnswer.equals("Keine Antwort"))){
                     System.out.println("Answer is valid.");
                     return true;
                 }
@@ -1519,8 +1528,8 @@ public class Question{
             if(this.type.equals(qType.YESNO.toString())){
                 System.out.println("Question type yesno recognized.");
                 // yes no question has only these three answers
-                if(textAnswer.equals("Yes") || textAnswer.equals("No") || textAnswer.equals("No Answer") ||
-                        textAnswer.equals("Ja") || textAnswer.equals("Nein") || textAnswer.equals("Keine Antwort")){
+                if(textAnswer.equals("Yes") || textAnswer.equals("No") || (!this.mandatory && textAnswer.equals("No Answer")) ||
+                        textAnswer.equals("Ja") || textAnswer.equals("Nein") || (!this.mandatory && textAnswer.equals("Keine Antwort"))){
                     System.out.println("Answer is valid.");
                     return true;
                 }
@@ -1674,6 +1683,9 @@ public class Question{
         if(this.type.equals(qType.FIVESCALE.toString())){
             System.out.println("Question type 5 scale rating recognized.");
             try{
+                if(!this.mandatory && (textAnswer.equals("Keine Antwort") || textAnswer.equals("No Answer"))){
+                    return true;
+                }
                 int var = Integer.parseInt(textAnswer);
                 if(var < 6 && 0 < var){
                     System.out.println("Answer is valid.");
@@ -1738,9 +1750,9 @@ public class Question{
                     type.equals(qType.GENDER.toString()) ||
                     type.equals(qType.YESNO.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte antworte, indem du auf einen der dargestellten Buttons klickst.";
+                    reason = SurveyHandlerService.texts.get("reasonButtonDE");
                 } else{
-                    reason = "Please answer by clicking on one of the displayed buttons.";
+                    reason = SurveyHandlerService.texts.get("reasonButton");
                 }
             }
 
@@ -1748,17 +1760,17 @@ public class Question{
                     type.equals(qType.MULTIPLECHOICENOCOMMENT.toString()) ||
                     type.equals(qType.SINGLECHOICECOMMENT.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte antworte, indem du auf einen der dargestellten Buttons klickst.";
+                    reason = SurveyHandlerService.texts.get("reasonButtonDE");
                 } else{
-                    reason = "Please answer by clicking on one of the displayed buttons.";
+                    reason = SurveyHandlerService.texts.get("reasonButton");
                 }
             }
 
             if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte waehle alle Checkboxes aus welche zutreffen und klicke dann auf den \"Submit\" button.";
+                    reason = SurveyHandlerService.texts.get("reasonCheckboxesCommentDE").replaceAll("\\{submitButton\\}", SurveyHandlerService.texts.get("submitButton"));
                 } else{
-                    reason = "Please check all the boxes of answers that apply and then click on the \"Submit\" button";
+                    reason = SurveyHandlerService.texts.get("reasonCheckboxesComment").replaceAll("\\{submitButton\\}", SurveyHandlerService.texts.get("submitButton"));
                 }
             }
         }
@@ -1771,35 +1783,35 @@ public class Question{
                     type.equals(qType.YESNO.toString()) ||
                     type.equals(qType.ARRAY.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte antworte nur mit einer der Nummern vor der Antwortmoeglichkeit.";
+                    reason = SurveyHandlerService.texts.get("reasonButtonDefaultDE");
                 } else{
-                    reason = "Please only answer with one of the given numbers written before the answer option";
+                    reason = SurveyHandlerService.texts.get("reasonButtonDefault");
                 }
             }
 
             if(type.equals(qType.SINGLECHOICECOMMENT.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte antworte im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\". Bitte benutze kein : in deiner Antwort.";
+                    reason = SurveyHandlerService.texts.get("reasonListCommentDefaultDE");
                 } else{
-                    reason = "Please answer in the format \"number of your chosen option\":\"your comment\" and do not use : in your answer.";
+                    reason = SurveyHandlerService.texts.get("reasonListCommentDefault");
                 }
 
             }
 
             if(type.equals(qType.MULTIPLECHOICENOCOMMENT.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte antworte nur mit Nummern welche vor einer Antowrtmoeglichkeit steht und separiere diese mit Kommata und keinen Leerzeichen.";
+                    reason = SurveyHandlerService.texts.get("reasonCheckboxesNoCommentDefaultDE");
                 } else{
-                    reason = "Please only answer with one of the given numbers written before the answer option and comma speparated with no spaces in between.";
+                    reason = SurveyHandlerService.texts.get("reasonCheckboxesNoCommentDefault");
                 }
 
             }
 
             if(type.equals(qType.MULTIPLECHOICEWITHCOMMENT.toString())){
                 if(this.languageIsGerman()){
-                    reason = "Bitte antworte nur im Format \"Nummer der ausgewaehlten Option\":\"Dein Kommentar zur ausgewaehlten Option\";\"Nummer der zweiten ausgewaehlten Option\":\"Dein Kommentar zur zweiten ausgewaehlten Option\" und so weiter.";
+                    reason = SurveyHandlerService.texts.get("reasonCheckboxesCommentDefaultDE");
                 } else{
-                    reason = "Please answer in the format \"number of your chosen option\":\"your comment\";\"number of your second chosen option\":\"your second comment\"...";
+                    reason = SurveyHandlerService.texts.get("reasonCheckboxesCommentDefault");
 
                 }
             }
@@ -1809,30 +1821,35 @@ public class Question{
         if(type.equals(qType.SHORTFREETEXT.toString()) ||
            type.equals(qType.HUGEFREETEXT.toString()) ||
            type.equals(qType.LONGFREETEXT.toString())){
-            reason = "Your answer is too long, please shorten it and send again.";
+            if(this.languageIsGerman()){
+                reason = SurveyHandlerService.texts.get("reasonTextDE");
+            } else{
+                reason = SurveyHandlerService.texts.get("reasonText");
+
+            }
         }
 
         if(type.equals(qType.DATETIME.toString())){
             if(this.languageIsGerman()){
-                reason = "Bitte antworte nur mit einem Datum im Format tt.mm.jjjj.";
+                reason = SurveyHandlerService.texts.get("reasonDateDE");
             } else{
-                reason = "Please answer with a date in the format dd.mm.yyyy.";
+                reason = SurveyHandlerService.texts.get("reasonDate");
             }
         }
 
         if(type.equals(qType.FIVESCALE.toString())){
             if(this.languageIsGerman()){
-                reason = "Bitte antworte nur mit einer Nummer zwischen 1 und 5.";
+                reason = SurveyHandlerService.texts.get("reasonFiveScaleDE");
             } else{
-                reason = "Please only answer with a number between 1 and 5.";
+                reason = SurveyHandlerService.texts.get("reasonFiveScale");
             }
         }
 
         if(type.equals(qType.NUMERICALINPUT.toString())){
             if(this.languageIsGerman()){
-                reason = "Bitte antworte nur mit einer Nummer.";
+                reason = SurveyHandlerService.texts.get("reasonNumber");
             } else{
-                reason = "Please answer with a number.";
+                reason = SurveyHandlerService.texts.get("reasonNumberDE");
             }
         }
 
@@ -1869,6 +1886,17 @@ public class Question{
             return false;
         } else{
             return true;
+        }
+    }
+
+    public boolean isTextQuestion(){
+        if(this.type.equals(qType.SHORTFREETEXT.toString()) ||
+                this.type.equals(qType.LONGFREETEXT.toString()) ||
+                this.type.equals(qType.HUGEFREETEXT.toString())){
+            System.out.println("istextquestion true");
+            return true;
+        } else{
+            return false;
         }
     }
 

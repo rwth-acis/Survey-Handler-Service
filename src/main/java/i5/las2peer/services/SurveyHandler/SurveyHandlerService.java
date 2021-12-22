@@ -7,6 +7,7 @@ import i5.las2peer.logging.L2pLogger;
 import i5.las2peer.restMapper.RESTService;
 import i5.las2peer.connectors.webConnector.client.ClientResponse;
 import i5.las2peer.connectors.webConnector.client.MiniClient;
+import i5.las2peer.services.SurveyHandler.Participant;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -47,6 +48,7 @@ import io.swagger.annotations.Contact;
 import io.swagger.annotations.Info;
 import io.swagger.annotations.License;
 import io.swagger.annotations.SwaggerDefinition;
+import org.apache.commons.io.IOUtils;
 import org.glassfish.jersey.server.JSONP;
 import org.junit.Assert;
 
@@ -96,15 +98,10 @@ public class SurveyHandlerService extends RESTService {
 	public static messenger messenger;
 	public static String sbfmURL = "";
 	// symbol to check telegram buttons
-	public static String check = ":check:";
+	public static String check = ":check: ";
 
-	public static String getSbfmURL() {
-		return sbfmURL;
-	}
-
-	public static void setSbfmURL(String sbfmURL) {
-		SurveyHandlerService.sbfmURL = sbfmURL;
-	}
+	// contains all texts displayed during the survey when talking as the bot
+	public static HashMap<String, String> texts = new HashMap<>();
 
 	public static enum messenger{
 		SLACK("Slack"),
@@ -150,7 +147,15 @@ public class SurveyHandlerService extends RESTService {
 		return null;
 	}
 
-	public static void deleteSurvey(String surveyID, String language){
+	public static HashMap<String, String> getTexts() {
+		return texts;
+	}
+
+	public static void setTexts(HashMap<String, String> texts) {
+		SurveyHandlerService.texts = texts;
+	}
+
+	public static void deleteSurvey(String surveyID){
 		for (Survey s : allSurveys){
 			if (s.getSid().equals(surveyID)){
 				SurveyHandlerServiceQueries.deleteSurveyFromDB(getSurveyBySurveyID(surveyID), database);
@@ -229,6 +234,7 @@ public class SurveyHandlerService extends RESTService {
 	public SurveyHandlerService(){
 		// Read and set properties values
 		setFieldValues();
+		setParticipantTextValues();
 	}
 
 	@GET
@@ -292,7 +298,6 @@ public class SurveyHandlerService extends RESTService {
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
-			sbfmURL = bodyInput.getAsString("sbfmUrl");
 			String beginningTextEN = "";
 			String beginningTextDE = "";
 			if(bodyInput.containsKey("beginningText")){
@@ -482,9 +487,10 @@ public class SurveyHandlerService extends RESTService {
 
 			//
 			boolean secondSurvey = false;
-			System.out.println("token: " + token + " size: " + token.length());
 
 			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK));
+			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM));
+			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT));
 
 			// check if there is a followup survey, if not sid is ""
 			if(followUpSurvey.getSid().length() > 0){
@@ -494,7 +500,10 @@ public class SurveyHandlerService extends RESTService {
 					if(Objects.isNull(currParticipant)){
 						currParticipant = currSurvey.findParticipant(senderEmail);
 						if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
-							String changedAnswer = "Your answer has been changed sucessfully.";
+							String changedAnswer = texts.get("changedAnswer");
+							if(currParticipant.languageIsGerman()){
+								changedAnswer = texts.get("changedAnswerDE");
+							}
 							String answerNotFittingQuestion = "";
 							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
 						}
@@ -603,6 +612,9 @@ public class SurveyHandlerService extends RESTService {
 				JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
 				JSONObject qProperties = (JSONObject) minire3.get("result");
 				qProperties.put("language", mainLanguage);
+				// the question text is not included anymore in the properties info
+				String question = ((JSONObject) jo).getAsString("question");
+				qProperties.put("question", question);
 				qlProperties.add(qProperties);
 				if(!gList.contains(qProperties.getAsString("gid"))){
 					gList.add(qProperties.getAsString("gid"));
@@ -1089,11 +1101,15 @@ public class SurveyHandlerService extends RESTService {
 
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.numberOfQuestions();
-					String welcomeString = "Hello :slightly_smiling_face: \n Just send me a message and I will conduct the survey \"" + currSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer. \n\n Here are some hints:\n";
-					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
-					String changeAnswerExplanation = "\nTo change your given answer edit your message, by clicking on the 3 points next to your text message and then choosing \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
-					String resultsGetSaved = "\nYour responses will be saved continuously.";
-					response.put("text", welcomeString + skipExplanation + changeAnswerExplanation + resultsGetSaved);
+					String hello = SurveyHandlerService.texts.get("helloDefaultDE");
+					if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+						hello = SurveyHandlerService.texts.get("helloTelegramDE");
+					}
+					String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
+					welcomeString = welcomeString.replaceAll("\\{title\\}", currSurvey.getTitle());
+					welcomeString = welcomeString.replaceAll("\\{questionsInSurvey\\}", String.valueOf(questionsInSurvey));
+					welcomeString = welcomeString.replaceAll("\\{welcomeText\\}", currSurvey.getWelcomeText());
+					response.put("text", welcomeString + texts.get("skipExplanation") + texts.get("changeAnswerExplanation") + texts.get("resultsGetSaved"));
 					response.put("contactList", emails);
 					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 					return Response.ok().entity(response).build();
@@ -1145,10 +1161,15 @@ public class SurveyHandlerService extends RESTService {
 
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.numberOfQuestions();
-					String welcomeString = "Hello :slightly_smiling_face: \nJust send me a message and I will conduct the survey \"" + currSurvey.getTitle() + "\" with you. There are " + questionsInSurvey + " questions for you to answer.\n \n Here are some hints:\n";
-					String skipExplanation = " To skip a question just send \"skip\", you will be able to answer them later if you want.";
-					String changeAnswerExplanation = " To change your answer, either click on the 3 points next to your text message, and then choose \"Edit Message\", or click on a button again. For multiple choice questions it is not neccessary to submit the answers again.";
-					response.put("text", welcomeString + skipExplanation + changeAnswerExplanation);
+					String hello = SurveyHandlerService.texts.get("helloDefaultDE");
+					if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+						hello = SurveyHandlerService.texts.get("helloTelegramDE");
+					}
+					String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
+					welcomeString = welcomeString.replaceAll("\\{title\\}", currSurvey.getTitle());
+					welcomeString = welcomeString.replaceAll("\\{questionsInSurvey\\}", String.valueOf(questionsInSurvey));
+					welcomeString = welcomeString.replaceAll("\\{welcomeText\\}", currSurvey.getWelcomeText());
+					response.put("text", welcomeString + texts.get("skipExplanation") + texts.get("changeAnswerExplanation"));
 					response.put("contactList", emails);
 					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 					return Response.ok().entity(response).build();
@@ -1539,7 +1560,6 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
-			setSbfmURL(bodyInput.getAsString("sbfmUrl"));
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			// set messenger
@@ -1622,12 +1642,12 @@ public class SurveyHandlerService extends RESTService {
 
 							if(unSize.equals(allSize)){
 								mail = pa.getEmail();
-								msg = "Hello again! It would be nice if you would start the survey. :slightly_smiling_face:";
+								msg = reminderComposing(pa, unansweredQuestions, false);
 							}
 							// Participant has started, but not finished survey
 							else {
 								mail = pa.getEmail();
-								msg = "Hello again! Please continue with your survey. There are only " + unansweredQuestions + " questions left. :slightly_smiling_face:";
+								msg = reminderComposing(pa, unansweredQuestions, true);
 							}
 
 							if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
@@ -1673,7 +1693,6 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
 			String token = bodyInput.getAsString("slackToken");
-			setSbfmURL(bodyInput.getAsString("sbfmUrl"));
 			String senderEmail = bodyInput.getAsString("email");
 
 			if(senderEmail != null){
@@ -1725,12 +1744,12 @@ public class SurveyHandlerService extends RESTService {
 
 								if(unSize.equals(allSize)){
 									mail = pa.getEmail();
-									msg = "Hello again! It would be nice if you would start the survey. :)";
+									msg = reminderComposing(pa, unansweredQuestions, false);
 								}
 								// Participant has started, but not finished survey
 								else {
 									mail = pa.getEmail();
-									msg = "Hello again! Please continue with your survey. There are only " + unansweredQuestions + " questions left. :)";
+									msg = reminderComposing(pa, unansweredQuestions, true);
 								}
 
 								// post request to sbfmanager to send message
@@ -1878,7 +1897,96 @@ public class SurveyHandlerService extends RESTService {
 	 */
 
 
+	private String reminderComposing(Participant pa, Integer unansweredQuestions, boolean started){
+		String msg = "";
+		if(started){
+			if(messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+				if(pa.languageIsGerman()){
+					msg = SurveyHandlerService.texts.get("reminderContinueTelegramDE").replaceAll("\\{unansweredQuestions\\}", String.valueOf(unansweredQuestions));
+				}
+				else{
+					msg = SurveyHandlerService.texts.get("reminderContinueTelegram").replaceAll("\\{unansweredQuestions\\}", String.valueOf(unansweredQuestions));
+				}
+			}
+			else{
+				if(pa.languageIsGerman()){
+					msg = SurveyHandlerService.texts.get("reminderContinueDefaultDE").replaceAll("\\{unansweredQuestions\\}", String.valueOf(unansweredQuestions));
+				}
+				else{
+					msg = SurveyHandlerService.texts.get("reminderContinueDefault").replaceAll("\\{unansweredQuestions\\}", String.valueOf(unansweredQuestions));
+				}
+			}
+			return msg;
+		}
+		else{
+			if(messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+				if(pa.languageIsGerman()){
+					msg = texts.get("reminderStartTelegramDE");
+				}
+				else{
+					msg = texts.get("reminderStartTelegram");
+				}
+			}
+			else{
+				if(pa.languageIsGerman()){
+					msg = texts.get("reminderStartDefaultDE");
+				}
+				else{
+					msg = texts.get("reminderStartDefault");
+				}
+			}
+		}
+
+		return msg;
+	}
 
 
+	private void setParticipantTextValues(){
+		System.out.println("inside setparticipanttextvaue");
+		try{
+			Properties properties = new Properties();
+			BufferedInputStream stream = new BufferedInputStream(new FileInputStream("etc/texts.properties"));
+			properties.load(stream);
+			stream.close();
 
+			for(Object key : properties.keySet()){
+				texts.put((String) key, properties.getProperty((String) key));
+			}
+
+			// ensure all relevant properties are set
+			if(!properties.containsKey("helloDefault") || !properties.containsKey("helloDefaultAgain") || !properties.containsKey("helloTelegramAgain")
+					|| !properties.containsKey("reminderStartDefault") || !properties.containsKey("reminderStartTelegram") || !properties.containsKey("reminderContinueDefault")
+					|| !properties.containsKey("reminderContinueTelegram") || !properties.containsKey("languageChoosing") || !properties.containsKey("skipExplanation")
+					|| !properties.containsKey("changeAnswerExplanation") || !properties.containsKey("changeAnswerExplanationButton") || !properties.containsKey("first")
+					|| !properties.containsKey("completedSurvey") || !properties.containsKey("submitButton") || !properties.containsKey("firstEdit")
+					|| !properties.containsKey("welcomeString") || !properties.containsKey("languageChangedEN") || !properties.containsKey("changed")
+					|| !properties.containsKey("reasonButton") || !properties.containsKey("reasonCheckboxesComment") || !properties.containsKey("changedAnswer")
+					|| !properties.containsKey("helloTelegram") || !properties.containsKey("resultsGetSaved") || !properties.containsKey("surveyDoneString")
+					|| !properties.containsKey("skipText") || !properties.containsKey("languageNotChangedEN") || !properties.containsKey("reasonButtonDefault")
+					|| !properties.containsKey("reasonListCommentDefault") || !properties.containsKey("reasonCheckboxesNoCommentDefault") || !properties.containsKey("reasonCheckboxesCommentDefault")
+					|| !properties.containsKey("reasonText") || !properties.containsKey("reasonDate") || !properties.containsKey("reasonFiveScale")
+					|| !properties.containsKey("reasonNumber")){
+				System.out.println("a text value is missing in the texts.properties file");
+				throw new IllegalStateException("Missing properties value in english part of texts.properties");
+			}
+
+			if(!properties.containsKey("helloDefaultDE") || !properties.containsKey("helloTelegramDE") || !properties.containsKey("helloDefaultAgainDE")
+					|| !properties.containsKey("helloTelegramAgainDE") || !properties.containsKey("reminderStartDefaultDE") || !properties.containsKey("reminderStartTelegramDE")
+					|| !properties.containsKey("reminderContinueDefaultDE") || !properties.containsKey("reminderContinueTelegramDE") || !properties.containsKey("skipExplanationDE")
+					|| !properties.containsKey("changeAnswerExplanationDE") || !properties.containsKey("changeAnswerExplanationButtonDE") || !properties.containsKey("firstDE")
+					|| !properties.containsKey("resultsGetSavedDE") || !properties.containsKey("completedSurveyDE") || !properties.containsKey("changedAnswerDE")
+					|| !properties.containsKey("surveyDoneStringDE") || !properties.containsKey("firstEditDE") || !properties.containsKey("welcomeStringDE")
+					|| !properties.containsKey("skipTextDE") || !properties.containsKey("languageNotChangedDE") || !properties.containsKey("languageChangedDE")
+					|| !properties.containsKey("changedDE") || !properties.containsKey("reasonButtonDE") || !properties.containsKey("reasonCheckboxesCommentDE")
+					|| !properties.containsKey("reasonButtonDefaultDE") || !properties.containsKey("reasonListCommentDefaultDE") || !properties.containsKey("reasonCheckboxesNoCommentDefaultDE")
+					|| !properties.containsKey("reasonCheckboxesCommentDefaultDE") || !properties.containsKey("reasonTextDE") || !properties.containsKey("reasonDateDE")
+					|| !properties.containsKey("reasonFiveScaleDE") || !properties.containsKey("reasonNumberDE")){
+				System.out.println("a german text value is missing in the texts.properties file");
+				throw new IllegalStateException("Missing properties value in german part of texts.properties");
+			}
+		}
+		catch (Exception ex){
+			ex.printStackTrace();
+		}
+	}
 }
