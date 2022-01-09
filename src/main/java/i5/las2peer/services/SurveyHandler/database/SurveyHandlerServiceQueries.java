@@ -804,7 +804,7 @@ public class SurveyHandlerServiceQueries {
 
         } catch (Exception e){
             e.printStackTrace();
-            System.out.println("Could not add answeroptions for question.");
+            System.out.println("Could not add answeroptions for question " + q.getQid() + " with type " + q.getType() + ".");
             return false;
         }
     }
@@ -901,6 +901,7 @@ public class SurveyHandlerServiceQueries {
         try{
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
+            System.out.println("querie: " + a.getMessageTs() + " prev: " + a.getPrevMessageTs() + " " + a.getSid() + " " + a.getQid() + " " + a.getPid());
 
             String query = "SELECT * FROM answers WHERE messagets = ? AND sid = ? AND qid = ? AND pid = ?";
             ps = con.prepareStatement(query);

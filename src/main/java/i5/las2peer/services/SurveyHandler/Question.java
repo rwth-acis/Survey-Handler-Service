@@ -48,7 +48,7 @@ public class Question{
         LONGFREETEXT("T"),
         SHORTFREETEXT("S"),
         HUGEFREETEXT("U"),
-        DICHOTOMOUS("D"),
+        DICHOTOMOUS("DI"),
         SCALE("SC");
 
         private final String name;
@@ -155,6 +155,7 @@ public class Question{
         this.help = "";
         this.relevance = "1";
         this.mandatory = false;
+        this.language = "default";
         this.setParentQid("0");
 
         // the question groups are not defined
@@ -186,13 +187,13 @@ public class Question{
                 newAnswerOption.setQid(this.qid);
                 newAnswerOption.setSid(this.sid);
                 newAnswerOption.setCode(String.valueOf(i));
-                newAnswerOption.setIndexi(i+1);
+                newAnswerOption.setIndexi(i);
                 newAnswerOption.setText(String.valueOf(i));
                 this.answerOptions.add(newAnswerOption);
             }
         }
         else if(q.getAsString("type").equals("qu:DichotomousQuestionPageType")){
-            this.type = "D";
+            this.type = "DI";
 
             // set answer option 1
             AnswerOption newAnswerOption1 = new AnswerOption();

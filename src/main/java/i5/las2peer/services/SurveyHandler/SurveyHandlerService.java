@@ -282,6 +282,7 @@ public class SurveyHandlerService extends RESTService {
 					message = "survey taking request handled")})
 	public Response takingSurvey(String input) {
 		System.out.println("url: " + url);
+		System.out.println("sbfmurl: " + sbfmURL);
 		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
 		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
 		System.out.println("log: " + Context.get());
@@ -322,6 +323,10 @@ public class SurveyHandlerService extends RESTService {
 			}
 			else{
 				messenger = SurveyHandlerService.messenger.ROCKETCHAT;
+			}
+
+			if(bodyInput.containsKey("sbfmURL")){
+				sbfmURL = bodyInput.getAsString("sbfmURL");
 			}
 
 			System.out.println("messenger: " + messenger.toString());
@@ -383,6 +388,7 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			// Check if survey has expiration date and if survey has expired
+			/*
 			if(currSurvey.getExpires() != null){
 				if(ls){
 					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
@@ -414,6 +420,8 @@ public class SurveyHandlerService extends RESTService {
 
 
 			}
+
+			 */
 
 			// Check if survey has expiration date and if survey has expired
 			if(currSurvey.getStartDT() != null){
@@ -906,7 +914,11 @@ public class SurveyHandlerService extends RESTService {
 				return res;
 			}
 
+			if(bodyInput.containsKey("sbfmURL")){
+				sbfmURL = bodyInput.getAsString("sbfmURL");
+			}
 
+			System.out.println(sbfmURL);
 			System.out.println("token is: " + token);
 
 			// find correct survey

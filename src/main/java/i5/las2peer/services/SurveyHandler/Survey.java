@@ -207,11 +207,11 @@ public class Survey {
                 if(this.questionALLanguage.get(newQuestion.getLanguage()) == null){
                     this.questionALLanguage.put(newQuestion.getLanguage(), new ArrayList<>());
                 }
-                qHM = this.questionsHMLanguage.get("default");
+                qHM = this.questionsHMLanguage.get(newQuestion.getLanguage());
                 qHM.put(newQuestion.getQid(), newQuestion);
 
                 // put non-subquestions into arraylist (they are all non subquestions)
-                qAL = this.questionALLanguage.get("default");
+                qAL = this.questionALLanguage.get(newQuestion.getLanguage());
                 qAL.add(newQuestion);
 
                 index++;

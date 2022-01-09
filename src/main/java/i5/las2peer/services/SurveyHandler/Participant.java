@@ -140,10 +140,14 @@ public class Participant {
         String welcomeText = "";
         if(this.currentSurvey.getLanguages().get(0).equals(this.language)){
             title = currentSurvey.getTitle();
-            welcomeText = currentSurvey.getWelcomeText();
+            if(currentSurvey.getWelcomeText() != null){
+                welcomeText = currentSurvey.getWelcomeText();
+            }
         } else{
             title = currentSurvey.getTitleOtherLanguage();
-            welcomeText = currentSurvey.getWelcomeTextOtherLanguage();
+            if(currentSurvey.getWelcomeText() != null){
+                welcomeText = currentSurvey.getWelcomeTextOtherLanguage();
+            }
         }
 
         String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
@@ -1651,6 +1655,12 @@ public class Participant {
             this.givenAnswersAl.add(newAnswer);
             System.out.println("a saving new answer to database");
             SurveyHandlerServiceQueries.addAnswerToDB(newAnswer, currentSurvey.database);
+
+
+            if(lastQuestion.getType().equals(Question.qType.DICHOTOMOUS.toString())){
+                // mark the chosen button for dichotomous question
+                editMessage(lastQuestion, newAnswer, token, message);
+            }
 
         } else if(lastQuestion.getType().equals(Question.qType.GENDER.toString()) || lastQuestion.getType().equals(Question.qType.YESNO.toString())){
             if(!lastQuestion.answerIsPlausible(message, check)){
