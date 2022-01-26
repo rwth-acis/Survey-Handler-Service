@@ -47,6 +47,8 @@ public class Participant {
     private String languageTimestamp;
     private boolean participantcontacted;
     private boolean completedsurvey;
+    private String lastChosenSurveyID;
+    private String lastChosenSurveyTimestamp;
     // end Database model identifier
 
     // in case multiple choice with comment edited and new comment should be received
@@ -292,7 +294,7 @@ public class Participant {
     }
 
     public boolean languageIsGerman(){
-        if(this.language.equals("de")){
+        if(this.language.equals("de")  || this.language.startsWith("de")){
             return true;
         }
 
@@ -578,6 +580,22 @@ public class Participant {
         return this.lasttimeactive;
     }
 
+    public String getLastChosenSurveyID() {
+        return lastChosenSurveyID;
+    }
+
+    public void setLastChosenSurveyID(String lastChosenSurveyID) {
+        this.lastChosenSurveyID = lastChosenSurveyID;
+    }
+
+    public String getLastChosenSurveyTimestamp() {
+        return lastChosenSurveyTimestamp;
+    }
+
+    public void setLastChosenSurveyTimestamp(String lastChosenSurveyTimestamp) {
+        this.lastChosenSurveyTimestamp = lastChosenSurveyTimestamp;
+    }
+
     public String getLSAnswersString(){
         String returnValue = "";
         for(Answer a : this.givenAnswersAl){
@@ -775,6 +793,16 @@ public class Participant {
         // Participant has not started the survey yet
         System.out.println("participant going to choose language");
         response.put("text", languageChoosing);
+        Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+        return Response.ok().entity(response).build();
+    }
+
+    public Response chooseSurvey(String titles){
+        JSONObject response = new JSONObject();
+        // Participant has not picked a survey yet
+        System.out.println("participant going to choose survey");
+        String surveyChoosing = SurveyHandlerService.texts.get("surveyChoosing") + titles + ".";
+        response.put("text", surveyChoosing);
         Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
         return Response.ok().entity(response).build();
     }

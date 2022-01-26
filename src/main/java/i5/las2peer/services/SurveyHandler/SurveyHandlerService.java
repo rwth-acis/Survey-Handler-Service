@@ -299,6 +299,7 @@ public class SurveyHandlerService extends RESTService {
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
 			String surveyID = bodyInput.getAsString("surveyID");
+			String[] surveyIDs = surveyID.split(",");
 			String beginningTextEN = "";
 			String beginningTextDE = "";
 			if(bodyInput.containsKey("beginningText")){
@@ -327,6 +328,12 @@ public class SurveyHandlerService extends RESTService {
 
 			if(bodyInput.containsKey("sbfmURL")){
 				sbfmURL = bodyInput.getAsString("sbfmURL");
+				System.out.println("\nsbfmurl_ " + sbfmURL);
+			}
+
+			if(bodyInput.containsKey("url")){
+				url = bodyInput.getAsString("url");
+				System.out.println("\nurl_ " + url);
 			}
 
 			System.out.println("messenger: " + messenger.toString());
@@ -337,17 +344,6 @@ public class SurveyHandlerService extends RESTService {
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
 			String buttonIntent = bodyInput.getAsString("buttonIntent");
 			System.out.println("buttonIntent: " + buttonIntent);
-
-			// find correct survey
-			Survey currSurvey = getSurveyBySurveyID(surveyID);
-
-			String followupSurveyID;
-			Survey followUpSurvey = new Survey("");
-
-			if(bodyInput.containsKey("followupSurveyID")){
-				followupSurveyID = bodyInput.getAsString("followupSurveyID");
-				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
-			}
 
 
 			try{
@@ -362,7 +358,14 @@ public class SurveyHandlerService extends RESTService {
 				}
 			} catch(Exception e){
 				try{
-					senderEmail = currSurvey.findParticipantByChannel(channel).getEmail();
+					for(String id : surveyIDs){
+						Survey s = getSurveyBySurveyID(id);
+
+						if(s.findParticipantByChannel(channel).getEmail() != null){
+							senderEmail = s.findParticipantByChannel(channel).getEmail();
+							break;
+						}
+					}
 				} catch (Exception ex){
 					// in case of telegram no email is passed on, so username is the 'email'
 					if(bodyInput.containsKey("user")){
@@ -375,6 +378,34 @@ public class SurveyHandlerService extends RESTService {
 
 				System.out.println("senderEMail: " + senderEmail);
 			}
+
+			// find correct survey
+			String lastChosenSurveyID = null;
+			for(String id : surveyIDs){
+				Survey s = getSurveyBySurveyID(id);
+
+				if(s.getParticipantByPID(senderEmail) != null){
+					// survey has participant, now check which survey is currently chosen
+					lastChosenSurveyID = s.getParticipantByPID(senderEmail).getLastChosenSurveyID();
+					break;
+				}
+			}
+
+			if(Objects.isNull(lastChosenSurveyID)){
+				// no survey chosen yet, use default
+				lastChosenSurveyID = surveyIDs[0];
+			}
+
+			Survey currSurvey = getSurveyBySurveyID(lastChosenSurveyID);
+
+			String followupSurveyID;
+			Survey followUpSurvey = new Survey("");
+
+			if(bodyInput.containsKey("followupSurveyID")){
+				followupSurveyID = bodyInput.getAsString("followupSurveyID");
+				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
+			}
+
 
 			System.out.println("survey: " + currSurvey);
 			System.out.println("followup: " + followUpSurvey);
@@ -472,6 +503,20 @@ public class SurveyHandlerService extends RESTService {
 				newParticipant.setLasttimeactive(LocalDateTime.now().toString());
 				currSurvey.addParticipant(newParticipant);
 				SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+
+				newParticipant.setLastChosenSurveyID("");
+				if(surveyIDs.length > 1){
+					System.out.println("more than one survey id and participant has not yet chosen");
+					// let participant choose which survey to take, since its first time messaging
+					String titles = "";
+					for(String id : surveyIDs){
+						titles += SurveyHandlerService.getSurveyBySurveyID(id).getTitle();
+						titles += ", ";
+					}
+					// remove last ,
+					titles = titles.substring(0, titles.length() - 2);
+					return newParticipant.chooseSurvey(titles);
+				}
 			}
 
 			// Get the existing participant
@@ -483,6 +528,93 @@ public class SurveyHandlerService extends RESTService {
 			}
 			System.out.println(currParticipant.getChannel());
 			String message = bodyInput.getAsString("msg");
+
+			// check if survey has been chosen yet
+			if(surveyIDs.length > 1 && currParticipant.getLastChosenSurveyID().length() < 1){
+				System.out.println("more than one survey id and participant has been asked to choose");
+				// participant has been asked which survey, this is the answer
+				for(String id : surveyIDs){
+					if(getSurveyBySurveyID(id).getTitle().equals(message)){
+						currParticipant.setLastChosenSurveyID(id);
+						System.out.println("setting chosen survey... \nto id : " + currParticipant.getLastChosenSurveyID());
+						currParticipant.setLastChosenSurveyTimestamp(messageTs);
+						System.out.println("ts... \n: " + currParticipant.getLastChosenSurveyTimestamp());
+
+						// TODO delete participant if survey chosen is not default and default survey not done
+
+
+
+					}
+				}
+				if(currParticipant.getLastChosenSurveyID().length() < 1){
+					// participant sent non existent title, ask again
+					String titles = "";
+					for(String id : surveyIDs){
+						titles += SurveyHandlerService.getSurveyBySurveyID(id).getTitle();
+						titles += ", ";
+					}
+					// remove last ,
+					titles = titles.substring(0, titles.length() - 2);
+					currParticipant.setLastChosenSurveyID("");
+					response.put("text", currParticipant.chooseSurvey(titles));
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+				else{
+					// participant chose valid option
+					currSurvey = getSurveyBySurveyID(currParticipant.getLastChosenSurveyID());
+
+					// add participant to chosen survey
+					Participant newParticipant = currParticipant;
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+				}
+			}
+
+			// check if participant is done with survey and can choose new one
+			if(surveyIDs.length > 1 && currParticipant.isCompletedsurvey()){
+				System.out.println("more than one survey id and participant finished survey");
+				// let participant choose which survey to take, since its first time messaging
+				String titles = "";
+				int count = 0;
+				String idOfSurvey = "";
+				for(String id : surveyIDs){
+					if(!SurveyHandlerService.getSurveyBySurveyID(id).getParticipantByPID(senderEmail).isCompletedsurvey()){
+						titles += SurveyHandlerService.getSurveyBySurveyID(id).getTitle();
+						titles += ", ";
+						count++;
+						idOfSurvey = id;
+					}
+				}
+				if(count < 1){
+					System.out.println("Participant has completed all surveys");
+					// no unfinished survey left
+					String changeAnswerExplanation = SurveyHandlerService.texts.get("changeAnswerExplanation");
+					String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
+					response.put("text", completedSurvey);
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+				else if(count < 2){
+					System.out.println("Participant has completed all but one survey");
+					// one survey left, participant has been notified that survey is done
+					currSurvey = getSurveyBySurveyID(idOfSurvey);
+					currParticipant.setLastChosenSurveyID(idOfSurvey);
+
+					// add participant to chosen survey
+					Participant newParticipant = currParticipant;
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+				}
+				else{
+					System.out.println("Participant has more than one open survey, is now asked which to do next");
+					// remove last , participant has been notified that survey is done
+					titles = titles.substring(0, titles.length() - 2);
+					return currParticipant.chooseSurvey(titles);
+				}
+			}
+
+
 			String messageId = bodyInput.getAsString("message_id");
 			System.out.println("ts: " + messageTs);
 			JSONObject currMessage = new JSONObject();
@@ -740,6 +872,26 @@ public class SurveyHandlerService extends RESTService {
 			mini.setConnectorEndpoint(uri);
 			HashMap<String, String> head = new HashMap<String, String>();
 
+			// Get survey title
+			String surveypath = "surveys/" + surveyID;
+			ClientResponse minicr = mini.sendRequest("GET", surveypath, "", MediaType.APPLICATION_JSON, MediaType.APPLICATION_JSON, head);
+			JSONObject minicrJO = (JSONObject) p.parse(minicr.getResponse());
+
+			System.out.println("\n\n minicrJO: " + minicrJO + "\n\n");
+
+			// Create a new survey object
+			Survey newSurvey = new Survey(surveyID);
+			newSurvey.setAdminmail(adminmail);
+
+			String title = minicrJO.getAsString("name");
+			// current fix, since mobsos surveys adds '%20' in spaces
+			title = title.replaceAll("%20", " ");
+
+			newSurvey.addTitle(title);
+			newSurvey.setExpires(minicrJO.getAsString("end"));
+			newSurvey.setStartDT(minicrJO.getAsString("start"));
+
+			String language = minicrJO.getAsString("lang");
 
 			// Get questions from mobsos
 			String questionpath = "surveys/" + surveyID + "/questions";
@@ -760,27 +912,13 @@ public class SurveyHandlerService extends RESTService {
 				JSONObject cjo = (JSONObject) co;
 				cjo.put("qid", keys.get(index));
 				cjo.put("sid", surveyID);
+				cjo.put("language", language);
 				ql.add(cjo);
 				index++;
 			}
 			JSONArray qlProperties = new JSONArray();
 			System.out.println("ql: " + ql.toString());
 			qlProperties = ql;
-
-			// Get survey title
-			String surveypath = "surveys/" + surveyID;
-			ClientResponse minicr = mini.sendRequest("GET", surveypath, "", MediaType.APPLICATION_JSON, MediaType.APPLICATION_JSON, head);
-			JSONObject minicrJO = (JSONObject) p.parse(minicr.getResponse());
-
-			// Create a new survey object
-			Survey newSurvey = new Survey(surveyID);
-			newSurvey.setAdminmail(adminmail);
-
-			newSurvey.addTitle(minicrJO.getAsString("name"));
-			newSurvey.setExpires(minicrJO.getAsString("end"));
-			newSurvey.setStartDT(minicrJO.getAsString("start"));
-
-
 
 
 			newSurvey.initMobsosData(qlProperties);
@@ -918,7 +1056,12 @@ public class SurveyHandlerService extends RESTService {
 				sbfmURL = bodyInput.getAsString("sbfmURL");
 			}
 
+			if(bodyInput.containsKey("url")){
+				url = bodyInput.getAsString("url");
+			}
+
 			System.out.println(sbfmURL);
+			System.out.println(url);
 			System.out.println("token is: " + token);
 
 			// find correct survey
@@ -1230,8 +1373,8 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			String surveyID = bodyInput.getAsString("surveyID");
 			String uri = url;
-			if(bodyInput.getAsString("uri") != null){
-				uri = bodyInput.getAsString("uri");
+			if(bodyInput.getAsString("url") != null){
+				uri = bodyInput.getAsString("url");
 			}
 
 
@@ -1337,8 +1480,8 @@ public class SurveyHandlerService extends RESTService {
 			String password = bodyInput.getAsString("Password");
 			String surveyID = bodyInput.getAsString("surveyID");
 			String uri = url;
-			if(bodyInput.getAsString("uri") != null){
-				uri = bodyInput.getAsString("uri");
+			if(bodyInput.getAsString("url") != null){
+				uri = bodyInput.getAsString("url");
 			}
 
 			String adminmail = bodyInput.getAsString("adminmail");

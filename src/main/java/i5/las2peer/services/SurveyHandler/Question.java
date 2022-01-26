@@ -148,14 +148,21 @@ public class Question{
     public void initMobsosData(JSONObject q, int index) throws Exception{
         JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
+        String language = q.getAsString("language");
+
         this.text = q.getAsString("instructions");
         this.sid = q.getAsString("sid");
 
         // the questions do not have a help text, relevance or are subquestions
         this.help = "";
         this.relevance = "1";
-        this.mandatory = false;
-        this.language = "default";
+        if(q.getAsString("required").equals("1")){
+            this.mandatory = true;
+        }
+        else{
+            this.mandatory = false;
+        }
+        this.language = language;
         this.setParentQid("0");
 
         // the question groups are not defined
@@ -189,6 +196,7 @@ public class Question{
                 newAnswerOption.setCode(String.valueOf(i));
                 newAnswerOption.setIndexi(i);
                 newAnswerOption.setText(String.valueOf(i));
+                newAnswerOption.setLanguage(language);
                 this.answerOptions.add(newAnswerOption);
             }
         }
@@ -201,6 +209,7 @@ public class Question{
             newAnswerOption1.setSid(this.sid);
             newAnswerOption1.setCode("0");
             newAnswerOption1.setIndexi(1);
+            newAnswerOption1.setLanguage(language);
             newAnswerOption1.setText(q.getAsString("minlabel"));
             this.answerOptions.add(newAnswerOption1);
 
@@ -210,6 +219,7 @@ public class Question{
             newAnswerOption2.setSid(this.sid);
             newAnswerOption2.setCode("1");
             newAnswerOption2.setIndexi(2);
+            newAnswerOption2.setLanguage(language);
             newAnswerOption2.setText(q.getAsString("maxlabel"));
             this.answerOptions.add(newAnswerOption2);
 
@@ -297,7 +307,7 @@ public class Question{
     }
 
     public boolean languageIsGerman(){
-        if(this.language.equals("de")){
+        if(this.language.equals("de") || this.language.startsWith("de")){
             return true;
         }
 
