@@ -34,6 +34,8 @@ public class Survey {
 
     private ArrayList<Participant> participants = new ArrayList<>();
 
+    private ArrayList<Admin> admins = new ArrayList<>();
+
     public String getAdminmail() {
         return adminmail;
     }
@@ -282,6 +284,13 @@ public class Survey {
         }
     }
 
+
+    public void initAdminsFromDB(ArrayList<Admin> AdminAL){
+        for(Admin a : AdminAL){
+            this.admins.add(a);
+        }
+    }
+
     public void initAnswerOptionsFromDB(Question q, ArrayList<AnswerOption> answerOptionsFromDB){
         ArrayList<AnswerOption> answerOptions = new ArrayList<>();
 
@@ -463,6 +472,10 @@ public class Survey {
         return this.participants;
     }
 
+    public ArrayList<Admin> getAdmins() {
+        return this.admins;
+    }
+
     public String getParticipantsEmails(){
         String response = "[";
         for(Participant p : this.participants){
@@ -493,6 +506,28 @@ public class Survey {
         return true;
     }
 
+    public boolean addAmin(Admin a){
+        System.out.println(a.getAid());
+        for (Admin ad : this.admins) {
+            if(ad.getAid().equals(ad.getAid())){
+                System.out.println(ad);
+                return false;
+            }
+        }
+        System.out.println(this.admins);
+        this.admins.add(a);
+        System.out.println(this.admins.size());
+        return true;
+    }
+
+    public Admin findAdmin(String aid){
+        for(Admin a : this.admins){
+            if(a.getAid().equals(aid)){
+                return a;
+            }
+        }
+        return null;
+    }
 
 
     public Participant findParticipant(String email){
@@ -513,6 +548,17 @@ public class Survey {
             System.out.println("Removing participant failed.");
         }
 
+    }
+
+    public void deleteAdmin(Admin a){
+        try{
+            System.out.println("Removing Admin " + a.getAid() + "...");
+            this.admins.remove(a);
+            System.out.println("Admin removed");
+        }
+        catch (Exception e){
+            e.printStackTrace();
+        }
     }
 
     public Participant findParticipantByChannel(String channel){

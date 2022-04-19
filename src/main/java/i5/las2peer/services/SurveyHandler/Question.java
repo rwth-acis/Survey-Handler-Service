@@ -151,6 +151,7 @@ public class Question{
         String language = q.getAsString("language");
 
         this.text = q.getAsString("instructions");
+        this.text = this.text.replaceAll("\"","\\\\\\\"");
         this.sid = q.getAsString("sid");
 
         // the questions do not have a help text, relevance or are subquestions
@@ -188,7 +189,11 @@ public class Question{
         }
         else if(q.getAsString("type").equals("qu:OrdinalScaleQuestionPageType")){
             this.type = "SC";
-            this.text += " Please rate on a scale of " + q.getAsString("minval") + " (" + q.getAsString("minlabel") + ") to " + q.getAsString("maxval") + " (" + q.getAsString("maxlabel") + ").";
+            if(languageIsGerman()){
+                this.text += SurveyHandlerService.texts.get("SCDE") + q.getAsString("minval") + " (" + q.getAsString("minlabel") + ") - " + q.getAsString("maxval") + " (" + q.getAsString("maxlabel") + ").";
+            } else{
+                this.text += SurveyHandlerService.texts.get("SC") + q.getAsString("minval") + " (" + q.getAsString("minlabel") + ") - " + q.getAsString("maxval") + " (" + q.getAsString("maxlabel") + ").";
+            }
             for(int i = Integer.parseInt(q.getAsString("minval")); i <= Integer.parseInt(q.getAsString("maxval")); i++){
                 AnswerOption newAnswerOption = new AnswerOption();
                 newAnswerOption.setQid(this.qid);

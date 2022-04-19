@@ -19,7 +19,8 @@ public class SurveyHandlerServiceQueries {
                                                                                         "questions",
                                                                                         "participants",
                                                                                         "answers",
-                                                                                        "answeroptions"));
+                                                                                        "answeroptions",
+                                                                                        "admins"));
 
     // utility functions
     public static boolean tablesExist(String tableName, SQLDatabase database){
@@ -122,7 +123,9 @@ public class SurveyHandlerServiceQueries {
                     query += "participantcontacted BOOL,";
                     query += "completedsurvey BOOL,";
                     query += "language VARCHAR(50),";
-                    query += "languagetimestamp VARCHAR(50)";
+                    query += "languagetimestamp VARCHAR(50),";
+                    query += "lastchosensurveyid VARCHAR(50),";
+                    query += "lastchosensurveytimestamp VARCHAR(50)";
                     break;
                 case "answers":
                     query += "pid VARCHAR(256) NOT NULL,";
@@ -145,6 +148,11 @@ public class SurveyHandlerServiceQueries {
                     query += "indexi INTEGER NOT NULL,";
                     query += "code VARCHAR(50),";
                     query += "text VARCHAR(700) NOT NULL,";
+                    query += "language VARCHAR(50)";
+                    break;
+                case "admins":
+                    query += "aid VARCHAR(50) NOT NULL,";
+                    query += "currAdministrating VARCHAR(50),";
                     query += "language VARCHAR(50)";
                     break;
 
@@ -363,6 +371,44 @@ public class SurveyHandlerServiceQueries {
         return null;
 
     }
+    public static ArrayList<Admin> getAdminsFromDB(SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM admins";
+            ps = con.prepareStatement(query);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (!rs.first()){
+                System.out.println("No admins found in database.");
+                ps.close();
+                con.close();
+                return new ArrayList<>();
+            } else{
+                System.out.println("Found admins in database.");
+            }
+
+            ArrayList<Admin> allA = new ArrayList<>();
+            while(!rs.isAfterLast()){
+                Admin tempA = SurveyHandlerServiceQueries.castToAdmin(rs);
+                allA.add(tempA);
+                System.out.println("Found and added admin with id: " + tempA.getAid());
+                rs.next();
+            }
+
+            ps.close();
+            con.close();
+            return allA;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+
+    }
     public static ArrayList<Answer> getAnswersForParticipantFromDB(String sid, String pid, SQLDatabase database){
         try{
             Connection con = database.getDataSource().getConnection();
@@ -562,6 +608,8 @@ public class SurveyHandlerServiceQueries {
             boolean completedsurvey = rs.getBoolean("completedsurvey");
             String language = rs.getString("language");
             String languagetimestamp = rs.getString("languagetimestamp");
+            String lastchosensurveyid = rs.getString("lastchosensurveyid");
+            String lastchosensurveytimestamp = rs.getString("lastchosensurveytimestamp");
 
             Participant res = new Participant(email);
             res.setPid(pid);
@@ -574,7 +622,8 @@ public class SurveyHandlerServiceQueries {
             res.setCompletedsurvey(completedsurvey);
             res.setLanguage(language);
             res.setLanguageTimestamp(languagetimestamp);
-
+            res.setLastChosenSurveyID(lastchosensurveyid);
+            res.setLastChosenSurveyTimestamp(lastchosensurveytimestamp);
             return res;
 
         } catch (Exception e){
@@ -612,6 +661,22 @@ public class SurveyHandlerServiceQueries {
             res.setCommentTs(commentts);
             res.setFinalized(finalized);
             res.setSkipped(isskipped);
+            return res;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            return null;
+        }
+    }
+    public static Admin castToAdmin(ResultSet rs){
+        try{
+            String aid = rs.getString("aid");
+            String language = rs.getString("language");
+            String currAdministrating = rs.getString("currAdministrating");
+
+            Admin res = new Admin(aid);
+            res.setLanguage(language);
+            res.setCurrAdministrating(currAdministrating);
             return res;
 
         } catch (Exception e){
@@ -703,7 +768,7 @@ public class SurveyHandlerServiceQueries {
             Connection con = database.getDataSource().getConnection();
             PreparedStatement ps = null;
 
-            String query = "INSERT INTO participants(channel, email, pid, sid, lastquestion, lasttimeactive, surveyresponseid, participantcontacted, completedsurvey, language, languagetimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String query = "INSERT INTO participants(channel, email, pid, sid, lastquestion, lasttimeactive, surveyresponseid, participantcontacted, completedsurvey, language, languagetimestamp, lastchosensurveyid, lastchosensurveytimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             ps = con.prepareStatement(query);
             ps.setString(1, p.getChannel());
             ps.setString(2, p.getEmail());
@@ -716,6 +781,8 @@ public class SurveyHandlerServiceQueries {
             ps.setBoolean(9, p.isCompletedsurvey());
             ps.setString(10, p.getLanguage());
             ps.setString(11, p.getLanguageTimestamp());
+            ps.setString(12, p.getLastChosenSurveyID());
+            ps.setString(13, p.getLastChosenSurveyTimestamp());
 
             int rs = ps.executeUpdate();
 
@@ -730,7 +797,36 @@ public class SurveyHandlerServiceQueries {
 
         } catch (Exception e){
             e.printStackTrace();
-            System.out.println("Could not add question.");
+            System.out.println("Could not add participant.");
+            return false;
+        }
+    }
+
+    public static boolean addAdminToDB(Admin admin, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "INSERT INTO admins(aid, currAdministrating, language) VALUES (?, ?, ?)";
+            ps = con.prepareStatement(query);
+            ps.setString(1, admin.getAid());
+            ps.setString(2, admin.getCurrAdministrating());
+            ps.setString(3, admin.getLanguage());
+
+            int rs = ps.executeUpdate();
+
+            boolean inserted = false;
+            if (rs > 0){
+                inserted = true;
+            }
+
+            ps.close();
+            con.close();
+            return inserted;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not add admin.");
             return false;
         }
     }
@@ -809,6 +905,44 @@ public class SurveyHandlerServiceQueries {
         }
     }
 
+    public static boolean updateParticipantsSIDInDB(Participant p, String oldSID, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM participants WHERE pid = ? AND sid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, p.getPid());
+            ps.setString(2, oldSID);
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the participant, so update the entry
+                ps.close();
+                ps = con.prepareStatement("UPDATE participants SET sid = ? WHERE sid = ? AND pid = ?");
+                ps.setString(1, p.getSid());
+                // where clause
+                ps.setString(2, oldSID);
+                ps.setString(3, p.getPid());
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("UPDATE SID - Did not find participant in database. Could not update.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not update participant.");
+            return false;
+        }
+    }
+
     public static boolean updateParticipantInDB(Participant p, SQLDatabase database){
         try{
             Connection con = database.getDataSource().getConnection();
@@ -823,7 +957,7 @@ public class SurveyHandlerServiceQueries {
             if (rs.first()) {
                 // Found the participant, so update the entry
                 ps.close();
-                ps = con.prepareStatement("UPDATE participants SET channel = ?, email = ?, pid = ?, sid = ?, lastquestion = ?, lasttimeactive = ?, surveyresponseid = ?, participantcontacted = ?, completedsurvey = ?, language = ?, languagetimestamp = ? WHERE sid = ? AND pid = ?");
+                ps = con.prepareStatement("UPDATE participants SET channel = ?, email = ?, pid = ?, sid = ?, lastquestion = ?, lasttimeactive = ?, surveyresponseid = ?, participantcontacted = ?, completedsurvey = ?, language = ?, languagetimestamp = ?,  lastchosensurveyid = ?, lastchosensurveytimestamp = ? WHERE sid = ? AND pid = ?");
                 ps.setString(1, p.getChannel());
                 ps.setString(2, p.getEmail());
                 ps.setString(3, p.getPid());
@@ -835,9 +969,11 @@ public class SurveyHandlerServiceQueries {
                 ps.setBoolean(9, p.isCompletedsurvey());
                 ps.setString(10, p.getLanguage());
                 ps.setString(11, p.getLanguageTimestamp());
+                ps.setString(12, p.getLastChosenSurveyID());
+                ps.setString(13, p.getLastChosenSurveyTimestamp());
                 // where clause
-                ps.setString(12, p.getSid());
-                ps.setString(13,p.getPid());
+                ps.setString(14, p.getSid());
+                ps.setString(15,p.getPid());
                 ps.executeUpdate();
                 updated = true;
             } else {
@@ -881,7 +1017,7 @@ public class SurveyHandlerServiceQueries {
                 ps.executeUpdate();
                 updated = true;
             } else {
-                System.out.println("Did not find participant in database. Could not update.");
+                System.out.println("UPDATE PID - Did not find participant in database. Could not update.");
                 updated = false;
             }
 
@@ -893,6 +1029,43 @@ public class SurveyHandlerServiceQueries {
         } catch (Exception e){
             e.printStackTrace();
             System.out.println("Could not update participant.");
+            return false;
+        }
+    }
+
+    public static boolean updateAdminInDB(Admin a, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM admins WHERE aid = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, a.getAid());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the answer, so update the entry
+                ps.close();
+                ps = con.prepareStatement("UPDATE admins SET currAdministrating = ?, language = ? WHERE aid = ?");
+                ps.setString(1, a.getCurrAdministrating());
+                ps.setString(2, a.getLanguage());
+                // where clause
+                ps.setString(3, a.getAid());
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find admin in database. Could not update.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not update admin.");
             return false;
         }
     }
@@ -1031,6 +1204,46 @@ public class SurveyHandlerServiceQueries {
         } catch (Exception e){
             e.printStackTrace();
             System.out.println("Could not delete participant.");
+            return false;
+        }
+    }
+
+    public static boolean deleteAdminFromDB(Admin a, SQLDatabase database){
+        try{
+            Connection con = database.getDataSource().getConnection();
+            PreparedStatement ps = null;
+
+            String query = "SELECT * FROM admins WHERE aid = ? AND currAdministrating = ? AND language = ?";
+            ps = con.prepareStatement(query);
+            ps.setString(1, a.getAid());
+            ps.setString(2, a.getCurrAdministrating());
+            ps.setString(3, a.getLanguage());
+            boolean updated = false;
+            ResultSet rs = ps.executeQuery();
+            if (rs.first()) {
+                // Found the admin, so deleting the entry
+                ps.close();
+                ps = con.prepareStatement("DELETE FROM admins WHERE aid = ? AND currAdministrating = ? AND language = ?");
+
+                ps.setString(1, a.getAid());
+                ps.setString(2, a.getCurrAdministrating());
+                ps.setString(3, a.getLanguage());
+
+                ps.executeUpdate();
+                updated = true;
+            } else {
+                System.out.println("Did not find admin in database. Could not delete.");
+                updated = false;
+            }
+
+
+            ps.close();
+            con.close();
+            return updated;
+
+        } catch (Exception e){
+            e.printStackTrace();
+            System.out.println("Could not delete admin.");
             return false;
         }
     }

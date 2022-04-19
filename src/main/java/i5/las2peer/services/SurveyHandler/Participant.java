@@ -8,6 +8,7 @@ import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
+import net.minidev.json.parser.ParseException;
 import org.bouncycastle.util.encoders.UTF8;
 import org.web3j.abi.datatypes.Array;
 import org.web3j.abi.datatypes.Bool;
@@ -24,12 +25,11 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Locale;
+import java.time.LocalTime;
+import java.util.*;
 
-import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.*;
 
@@ -582,6 +582,14 @@ public class Participant {
 
     public String getLastChosenSurveyID() {
         return lastChosenSurveyID;
+    }
+
+    public boolean hasLastChosenSurveyID(){
+        if(Objects.isNull(this.getLastChosenSurveyID())){
+            return false;
+        }
+
+        return true;
     }
 
     public void setLastChosenSurveyID(String lastChosenSurveyID) {
@@ -2563,12 +2571,13 @@ public class Participant {
         System.out.println("beofre sendintg");
 
         String SBFManagerURL = "SBFManager";
-        String uri = SBFManagerURL + "/editMessage/" + token + "/" + email;
+        String uri = SBFManagerURL + "/editMessage/" + token + "/" + channel;
         HashMap<String, String> head = new HashMap<>();
 
         MiniClient client = new MiniClient();
-        System.out.println("sbfmurl_ " + SurveyHandlerService.sbfmURL);
-        client.setConnectorEndpoint(SurveyHandlerService.sbfmURL);
+        SurveyHandlerService service = new SurveyHandlerService();
+        System.out.println("sbfmurl_ " + service.sbfmURL);
+        client.setConnectorEndpoint(service.sbfmURL);
 
 
 
@@ -2587,8 +2596,9 @@ public class Participant {
         HashMap<String, String> head = new HashMap<>();
 
         MiniClient client = new MiniClient();
-        System.out.println("sbfmurl_ " + SurveyHandlerService.sbfmURL);
-        client.setConnectorEndpoint(SurveyHandlerService.sbfmURL);
+        SurveyHandlerService service = new SurveyHandlerService();
+        System.out.println("sbfmurl_ " + service.sbfmURL);
+        client.setConnectorEndpoint(service.sbfmURL);
 
         JSONObject content = new JSONObject();
         content.put("ts", messageTs);
