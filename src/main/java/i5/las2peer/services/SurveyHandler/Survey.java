@@ -196,12 +196,11 @@ public class Survey {
         HashMap<String, Question> qHM = new HashMap<>();
         ArrayList<Question> qAL = new ArrayList<>();
         // Add questions to survey
-        int index = 0;
         for (Object jo : allQuestions) {
             JSONObject j = (JSONObject) jo;
             try {
                 Question newQuestion = new Question();
-                newQuestion.initMobsosData(j, index);
+                newQuestion.initMobsosData(j);
                 // put all questions into hashmap
                 if(this.questionsHMLanguage.get(newQuestion.getLanguage()) == null){
                     this.questionsHMLanguage.put(newQuestion.getLanguage(), new HashMap<>());
@@ -216,7 +215,6 @@ public class Survey {
                 qAL = this.questionALLanguage.get(newQuestion.getLanguage());
                 qAL.add(newQuestion);
 
-                index++;
             } catch (Exception e) {
                 e.printStackTrace();
                 System.out.println("Failed to parse a question from json.");

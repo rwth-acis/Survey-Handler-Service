@@ -564,13 +564,11 @@ public class SurveyHandlerService extends RESTService {
 					if(surveyIDs.length > 1){
 						System.out.println("more than one survey id and participant has not yet chosen");
 						// let participant choose which survey to take, since its first time messaging
-						String titles = " ";
+						HashMap<String, String> titles = new HashMap<>();
 						for(String id : surveyIDs){
-							titles += SurveyHandlerService.getSurveyBySurveyID(id).getTitle();
-							titles += ", ";
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
 						}
-						// remove last ,
-						titles = titles.substring(0, titles.length() - 2);
+
 						return newParticipant.chooseSurvey(titles);
 					}
 				}
@@ -594,13 +592,11 @@ public class SurveyHandlerService extends RESTService {
 
 					if(!set){
 						// participant sent non existent title, ask again
-						String titles = "";
+						HashMap<String, String> titles = new HashMap<>();
 						for(String id : surveyIDs){
-							titles += SurveyHandlerService.getSurveyBySurveyID(id).getTitle();
-							titles += ", ";
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
 						}
-						// remove last ,
-						titles = titles.substring(0, titles.length() - 2);
+
 						currParticipant.setLastChosenSurveyID("");
 
 						response.put("text", currParticipant.chooseSurvey(titles));
@@ -628,15 +624,11 @@ public class SurveyHandlerService extends RESTService {
 
 					if(!set){
 						// participant sent non existent title, ask to edit message again
-						String titles = "";
+						HashMap<String, String> titles = new HashMap<>();
 						for(String id : surveyIDs){
-							titles += SurveyHandlerService.getSurveyBySurveyID(id).getTitle();
-							titles += ", ";
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
 						}
-						// remove last ,
-						titles = titles.substring(0, titles.length() - 2);
 
-						response.put("text", currParticipant.chooseSurvey(titles));
 						response.put("text", currParticipant.chooseSurvey(titles));
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
@@ -661,22 +653,20 @@ public class SurveyHandlerService extends RESTService {
 			if(surveyIDs.length > 1 && currParticipant.isCompletedsurvey()){
 				System.out.println("more than one survey id and participant finished survey");
 				// let participant choose which survey to take
-				String titles = "";
+				HashMap<String, String> titles = new HashMap<>();
 				int count = 0;
 				String idOfSurvey = "";
 				for(String id : surveyIDs){
 					Survey survey = SurveyHandlerService.getSurveyBySurveyID(id);
 					if(survey.getParticipantByPID(senderEmail) == null){
-						titles += survey.getTitle();
-						titles += ", ";
+						titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
 						count++;
 						idOfSurvey = id;
 					}
 					else{
 						System.out.println("completed: " + id + " " + survey.getSid() + " " + survey.getParticipantByPID(senderEmail) + " " + survey.getParticipantByPID(senderEmail).getSid() + " " + survey.getParticipantByPID(senderEmail).isCompletedsurvey());
 						if(!survey.getParticipantByPID(senderEmail).isCompletedsurvey()){
-							titles += survey.getTitle();
-							titles += ", ";
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
 							count++;
 							idOfSurvey = id;
 						}
@@ -706,8 +696,6 @@ public class SurveyHandlerService extends RESTService {
 				}
 				else{
 					System.out.println("Participant has more than one open survey, is now asked which to do next");
-					// remove last , participant has been notified that survey is done
-					titles = titles.substring(0, titles.length() - 2);
 					return currParticipant.chooseSurvey(titles);
 				}
 			}

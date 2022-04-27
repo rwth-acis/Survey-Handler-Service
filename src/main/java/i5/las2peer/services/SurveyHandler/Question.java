@@ -98,6 +98,7 @@ public class Question{
         this.gid = q.getAsString("gid");
         this.qorder = q.getAsString("question_order");
         this.text = q.getAsString("question");
+        text = text.replaceAll("\"", "\\\\\"");
         if(text.contains("<b id=\"docs-internal-guid") || text.contains("<p>") || (text.contains("<") && text.contains(">"))){
             System.out.println("detected weird question text, fixing ...");
             System.out.println("before: " + text);
@@ -145,13 +146,13 @@ public class Question{
         return SurveyHandlerService.getSurveyBySurveyID(this.sid);
     }
 
-    public void initMobsosData(JSONObject q, int index) throws Exception{
+    public void initMobsosData(JSONObject q) throws Exception{
         JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
         String language = q.getAsString("language");
 
         this.text = q.getAsString("instructions");
-        this.text = this.text.replaceAll("\"","\\\\\\\"");
+        this.text = this.text.replaceAll("\"", "\\\\\"");
         this.sid = q.getAsString("sid");
 
         // the questions do not have a help text, relevance or are subquestions
@@ -170,14 +171,13 @@ public class Question{
         this.gid = "1";
         this.gorder = "1";
 
-        // the question code will be deined as the index, since its unique
-        this.code = String.valueOf(index);
-        this.qorder = String.valueOf(index);
+        this.code = q.getAsString("order");
+        this.qorder = q.getAsString("order");
 
 
          // check for type, since information text does not have qid
         if(q.getAsString("type").equals("qu:InformationPageType")){
-            this.qid = String.valueOf(index);
+            this.qid = q.getAsString("order");
         }
         else{
             // if not display of information, set qid

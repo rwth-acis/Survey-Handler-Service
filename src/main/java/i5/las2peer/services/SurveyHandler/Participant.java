@@ -805,14 +805,77 @@ public class Participant {
         return Response.ok().entity(response).build();
     }
 
-    public Response chooseSurvey(String titles){
+    public Response chooseSurvey(HashMap<String, String> IDsAndTitles){
         JSONObject response = new JSONObject();
         // Participant has not picked a survey yet
         System.out.println("participant going to choose survey");
-        String surveyChoosing = SurveyHandlerService.texts.get("surveyChoosing") + titles + ".";
-        response.put("text", surveyChoosing);
-        Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-        return Response.ok().entity(response).build();
+        String askToChoose = "";
+
+        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+
+            askToChoose = "[\n" +
+                    "\t\t{\n" +
+                    "\t\t\t\"type\": \"section\",\n" +
+                    "\t\t\t\"text\": {\n" +
+                    "\t\t\t\t\"type\": \"mrkdwn\",\n" +
+                    "\t\t\t\t\"text\": " + SurveyHandlerService.texts.get("surveyChoosingButton") +
+                    "\t\t\t}\n" +
+                    "\t\t},\n" +
+                    "\t\t{\n" +
+                    "\t\t\t\"type\": \"actions\",\n" +
+                    "\t\t\t\"elements\": [";
+            for(String id : IDsAndTitles.keySet()){
+                askToChoose += "{\n" +
+                        "\t\t\t\t\t\"type\": \"button\",\n" +
+                        "\t\t\t\t\t\"text\": {\n" +
+                        "\t\t\t\t\t\t\"type\": \"plain_text\",\n" +
+                        "\t\t\t\t\t\t\"text\": " + IDsAndTitles.get(id) + ",\n" +
+                        "\t\t\t\t\t\t\"emoji\": true\n" +
+                        "\t\t\t\t\t},\n" +
+                        "\t\t\t\t\t\"value\": " + id + "\n" +
+                        "\t\t\t\t},";
+            }
+            // remove last ,
+            askToChoose = askToChoose.substring(0, askToChoose.length() - 1);
+            askToChoose += "]\n" +
+                    "\t\t}\n" +
+                    "\t]";
+
+            response.put("blocks", askToChoose);
+            Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+            return Response.ok().entity(response).build();
+
+        }
+        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+
+            askToChoose = "{\"text\":\"" + SurveyHandlerService.texts.get("surveyChoosingButton") + "\",\"inline_keyboard\": [[";
+            for(String id : IDsAndTitles.keySet()){
+                askToChoose += "{\"text\":\"" + IDsAndTitles.get(id) + "\",\"callback_data\": \"" + id + "\"},";
+            }
+            // remove last ,
+            askToChoose = askToChoose.substring(0, askToChoose.length() - 1);
+            askToChoose += "]]}";
+
+            response.put("blocks", askToChoose);
+            Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+            return Response.ok().entity(response).build();
+
+        }
+        else { //SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT is default
+
+            String titles = "";
+            for(String id : IDsAndTitles.keySet()){
+                titles = IDsAndTitles.get(id) + ", ";
+            }
+            titles = titles.substring(0, titles.length() - 1);
+
+            String surveyChoosing = SurveyHandlerService.texts.get("surveyChoosing") + titles + ".";
+            response.put("text", surveyChoosing);
+            Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+            return Response.ok().entity(response).build();
+
+        }
+
     }
 
     public boolean participantChangedAnswer(String messageTs, JSONObject currMessage, JSONObject prevMessage){
