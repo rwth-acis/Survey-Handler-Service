@@ -282,6 +282,62 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	@POST
+	@Path("/getLimeSurveyResponses")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "Get results from LimeSurvey.",
+			notes = "")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "")})
+	public Response limesurveyConnector(String input) {
+		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+		System.out.println("log: " + Context.get());
+
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+		String decodedString = "";
+
+		try {
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+
+			String url = bodyInput.getAsString("url");
+			String loginName = bodyInput.getAsString("loginName");
+			String loginPassword = bodyInput.getAsString("loginPassword");
+
+			String surveyID = bodyInput.getAsString("surveyID");
+			String documentType = "json";
+
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint(url);
+			HashMap<String, String> head = new HashMap<String, String>();
+
+			ClientResponse miniClientResponse = mini.sendRequest("POST", url, ("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
+			String sessionKeyString = miniresJSON.getAsString("result");
+
+			ClientResponse clientResponse = mini.sendRequest("POST", url, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + documentType + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject clientResponseJSON = (JSONObject) p.parse(clientResponse.getResponse());
+			String encodedFile = clientResponseJSON.getAsString("result");
+
+			byte[] decodedBytes = Base64.getDecoder().decode(encodedFile);
+			decodedString = new String(decodedBytes);
+
+		} catch (Exception e){
+			e.printStackTrace();
+		}
+
+		response.put("text", decodedString);
+		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+		return Response.ok().entity(response).build();
+	}
+
+
+	@POST
 	@Path("/takingSurvey")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
