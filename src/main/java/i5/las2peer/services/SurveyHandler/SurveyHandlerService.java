@@ -301,6 +301,8 @@ public class SurveyHandlerService extends RESTService {
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 		String decodedString = "";
 
+		JSONArray completeReturnJSON = new JSONArray();
+
 		try {
 			JSONObject bodyInput = (JSONObject) p.parse(input);
 			System.out.println("received message: " + bodyInput);
@@ -320,6 +322,12 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
 			String sessionKeyString = miniresJSON.getAsString("result");
 
+			// now get question information, to add to response json object
+			ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url, ("{\"method\": \"list_questions\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			JSONObject questionInfoJSON = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
+			String questionInfo = questionInfoJSON.getAsString("result");
+			JSONArray questionListJSON = (JSONArray) p.parse(questionInfo);
+
 			ClientResponse clientResponse = mini.sendRequest("POST", url, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + documentType + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 			JSONObject clientResponseJSON = (JSONObject) p.parse(clientResponse.getResponse());
 			String encodedFile = clientResponseJSON.getAsString("result");
@@ -327,11 +335,85 @@ public class SurveyHandlerService extends RESTService {
 			byte[] decodedBytes = Base64.getDecoder().decode(encodedFile);
 			decodedString = new String(decodedBytes);
 
+			String decodedStringResponses = ((JSONObject) p.parse(decodedString)).getAsString("responses");
+			JSONArray decodedStringJSON = (JSONArray) p.parse(decodedStringResponses);
+
+			// go through all questions
+			for(Object keys : questionListJSON){
+				JSONObject key = (JSONObject) keys;
+
+				// only add to responses if not subquestion
+				if(!key.getAsString("parent_qid").equals("0")){
+					continue;
+				}
+
+				// will contain information for one question
+				JSONObject ret = new JSONObject();
+
+				ret.put("question",key.getAsString("question"));
+				ret.put("title",key.getAsString("title"));
+				ret.put("type",key.getAsString("type"));
+
+				JSONArray responses = new JSONArray();
+
+				// answeroptions given
+				ArrayList<String> answeroptions = new ArrayList<>();
+
+				// go through all responses and add answer for this question
+				for(Object resIds : decodedStringJSON){
+					JSONObject resKey = (JSONObject) resIds;
+					Set<String> keySet = resKey.keySet();
+
+					// iterate through all answers (its only one each time)
+					for(String s : keySet){
+						String currRes = resKey.getAsString(s);
+						JSONObject currResJSON = (JSONObject) p.parse(currRes);
+						String answer = currResJSON.getAsString(key.getAsString("title"));
+
+						// remove null answers, so parsing works
+						if(answer == null){
+							answer = "";
+						}
+
+						responses.add(answer);
+
+						if(!answeroptions.contains(answer)){
+							answeroptions.add(answer);
+						}
+					}
+
+				}
+
+				// now count occurences of each answer if list question
+				if(ret.get("type").equals("O")
+						|| ret.get("type").equals("!")
+						|| ret.get("type").equals("L")
+						|| ret.get("type").equals("G")
+						|| ret.get("type").equals("Y")
+						|| ret.get("type").equals("5")){
+					JSONObject occurences = new JSONObject();
+
+					for(String option : answeroptions){
+						int occ = Collections.frequency(responses, option);
+						occurences.put(option, occ);
+					}
+
+					ret.put("responses", occurences);
+				}
+				else{
+					ret.put("responses", responses);
+				}
+
+				completeReturnJSON.add(ret);
+
+			}
+
+
 		} catch (Exception e){
 			e.printStackTrace();
 		}
 
-		response.put("text", decodedString);
+		response.put("text", completeReturnJSON);
 		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 		return Response.ok().entity(response).build();
 	}
