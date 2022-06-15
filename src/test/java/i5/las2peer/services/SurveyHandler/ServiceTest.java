@@ -59,6 +59,8 @@ public class ServiceTest {
 	String NameOfUser = "testUsername";
 	String Password = "testPassword1";
 	String uri = "https://testsurveyurl.limesurvey.net/admin/remotecontrol";
+	String surveyID = "494668";
+	String secondSurveyID = "647979";
 
 
 
@@ -216,7 +218,6 @@ public class ServiceTest {
 
 		// define test survey values that gets passed on
 		JSONObject bodyInput = new JSONObject();
-		String surveyID = "494668";
 		String senderEmail = "testmail";
 		String adminmail = "testmail";
 		String intent = "set_up_survey";
@@ -233,12 +234,33 @@ public class ServiceTest {
 		return bodyInput;
 	}
 
-	private JSONObject setAddParticipantDefs(){
+	private JSONObject setDefsMultplIDS(){
+
+		// define test survey values that gets passed on
+		JSONObject bodyInput = new JSONObject();
+		String senderEmail = "testmail";
+		String adminmail = "testmail";
+		String intent = "set_up_survey";
+
+		// add to input for function
+		bodyInput.put("surveyID", surveyID + "," + secondSurveyID);
+		bodyInput.put("email", senderEmail);
+		bodyInput.put("adminmail", adminmail);
+		bodyInput.put("intent", intent);
+		bodyInput.put("NameOfUser", NameOfUser);
+		bodyInput.put("Password", Password);
+		bodyInput.put("uri", uri);
+
+		return bodyInput;
+	}
+
+	private JSONObject setAddParticipantDefs(String email){
 
 		JSONObject bodyInput = setDefs();
 
 		String intent = "add_participant";
 		bodyInput.put("intent", intent);
+		bodyInput.put("msg",email);
 
 		return bodyInput;
 	}
@@ -253,7 +275,7 @@ public class ServiceTest {
 		return bodyInput;
 	}
 
-/*
+
 	@Test
 	public void testAddingParticipant() {
 		// test to add participant and delete after
@@ -263,9 +285,16 @@ public class ServiceTest {
 			client.setLogin(testAgent.getIdentifier(), testPass);
 
 			// Survey defined in LimeSurvey with following values
-			String email = "testemail@email.de";
+			String email = "testemail@mail.de";
 
-			JSONObject defs = setAddParticipantDefs();
+			// set up survey
+			JSONObject preDefs = setDefs();
+			// choose administrating survey
+			preDefs.put("msg", surveyID);
+			ClientResponse secondResult = client.sendRequest("POST", mainPath + "adminSurvey", preDefs.toString());
+			ClientResponse preResult = client.sendRequest("POST", mainPath + "adminSurvey", preDefs.toString());
+
+			JSONObject defs = setAddParticipantDefs(email);
 
 			ClientResponse result = client.sendRequest("POST", mainPath + "adminSurvey", defs.toString());
 
@@ -282,9 +311,9 @@ public class ServiceTest {
 			try{
 				JSONParser p = new JSONParser();
 				JSONObject minires = (JSONObject) p.parse(result.getResponse());
-				String msgText = minires.getAsString("result");
+				String msgText = minires.getAsString("text");
 				String participants = testSurvey.getParticipants().toString();
-				if(msgText.contains(participants)){
+				if(msgText.contains("true")){
 					Assert.assertTrue(true);
 				} else{
 					Assert.assertFalse(true);
@@ -306,8 +335,6 @@ public class ServiceTest {
 	}
 
 
-
- */
 /*
 	@Test
 	public void testSendResultsToLimeSurvey() {
@@ -390,7 +417,7 @@ public class ServiceTest {
 		try{
 			JSONParser p = new JSONParser();
 			JSONObject minires = (JSONObject) p.parse(result.getResponse());
-			String msgText = minires.getAsString("result");
+			String msgText = minires.getAsString("text");
 			String hello = SurveyHandlerService.texts.get("helloDefaultDE");
 			String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
 			welcomeString = welcomeString.replaceAll("\\{title\\}", currSurvey.getTitle());
@@ -470,15 +497,15 @@ public class ServiceTest {
 		msg = answerOption;
 
 		JSONObject input4 = new JSONObject();
-		input3.put("surveyID", currSurvey.getSid());
-		input3.put("intent", intent);
-		input3.put("channel", channel);
-		input3.put("email", senderEmail);
-		input3.put("slackToken", token);
-		input3.put("time", messageTs);
-		input3.put("NameOfUser", NameOfUser);
-		input3.put("buttonIntent", buttonIntent);
-		input3.put("msg", msg);
+		input4.put("surveyID", currSurvey.getSid());
+		input4.put("intent", intent);
+		input4.put("channel", channel);
+		input4.put("email", senderEmail);
+		input4.put("slackToken", token);
+		input4.put("time", messageTs);
+		input4.put("NameOfUser", NameOfUser);
+		input4.put("buttonIntent", buttonIntent);
+		input4.put("msg", msg);
 
 		// fourth message should be second question
 		ClientResponse result4 = client.sendRequest("POST", mainPath + "takingSurvey", input4.toString());
@@ -499,15 +526,15 @@ public class ServiceTest {
 		msg = "skip";
 
 		JSONObject input5 = new JSONObject();
-		input3.put("surveyID", currSurvey.getSid());
-		input3.put("intent", intent);
-		input3.put("channel", channel);
-		input3.put("email", senderEmail);
-		input3.put("slackToken", token);
-		input3.put("time", messageTs);
-		input3.put("NameOfUser", NameOfUser);
-		input3.put("buttonIntent", buttonIntent);
-		input3.put("msg", msg);
+		input5.put("surveyID", currSurvey.getSid());
+		input5.put("intent", intent);
+		input5.put("channel", channel);
+		input5.put("email", senderEmail);
+		input5.put("slackToken", token);
+		input5.put("time", messageTs);
+		input5.put("NameOfUser", NameOfUser);
+		input5.put("buttonIntent", buttonIntent);
+		input5.put("msg", msg);
 
 		// fourth message should be second question
 		ClientResponse result5 = client.sendRequest("POST", mainPath + "takingSurvey", input5.toString());
@@ -517,6 +544,192 @@ public class ServiceTest {
 		System.out.println("size: " + p.getSkippedQuestions().size());
 		Assert.assertEquals("1", p.getSkippedQuestions().size());
 	}
+
+
+
+	@Test
+	public void testLimeSurveyConnector() {
+		try {
+			MiniClient client = new MiniClient();
+			client.setConnectorEndpoint(connector.getHttpEndpoint());
+			client.setLogin(testAgent.getIdentifier(), testPass);
+
+			ClientResponse result = client.sendRequest("POST", mainPath + "getLimeSurveyResponses", "{\"loginName\":" + NameOfUser + ",\"url\":" + uri + ",\"surveyID\":" + surveyID + ",\"loginPassword\":" + Password + "}");
+			JSONParser p = new JSONParser();
+			JSONObject resultJSON = (JSONObject) p.parse(result.getResponse());
+			String resultString = resultJSON.getAsString("text");
+
+			// check for correct form
+			try{
+				JSONArray resultArray = (JSONArray) p.parse(resultString);
+
+				for(int index= 0; index < resultArray.size(); index++){
+					JSONObject resultObject = (JSONObject) resultArray.get(index);
+
+					Assert.assertTrue(resultObject.containsKey("question"));
+					Assert.assertTrue(resultObject.containsKey("title"));
+					Assert.assertTrue(resultObject.containsKey("type"));
+					Assert.assertTrue(resultObject.containsKey("responses"));
+
+					// check for responses form
+					String responses = resultObject.getAsString("responses");
+					JSONObject responsesJSON = (JSONObject) p.parse(responses);
+
+				}
+
+			} catch(Exception e){
+				e.printStackTrace();
+				Assert.fail(e.toString());
+			}
+
+			System.out.println("Result of 'testGet': " + result.getResponse().trim());
+		} catch (Exception e) {
+			e.printStackTrace();
+			Assert.fail(e.toString());
+		}
+	}
+
+	@Test
+	public void testMultipleSurveyIds() {
+		// test to set up two dummy limesurvey survey and switching between them
+		try {
+			MiniClient client = new MiniClient();
+			client.setConnectorEndpoint(connector.getHttpEndpoint());
+			client.setLogin(testAgent.getIdentifier(), testPass);
+
+			JSONObject defs = setDefsMultplIDS();
+
+			ClientResponse result = client.sendRequest("POST", mainPath + "adminSurvey", defs.toString());
+
+			// choose administrating survey
+			defs.put("msg", surveyID);
+			ClientResponse secondResult = client.sendRequest("POST", mainPath + "adminSurvey", defs.toString());
+
+			// set up first survey
+			ClientResponse thirdResult = client.sendRequest("POST", mainPath + "adminSurvey", defs.toString());
+
+			// now switch survey
+			defs.put("intent", "change_administration");
+			defs.put("msg", secondSurveyID);
+			ClientResponse fourthResult = client.sendRequest("POST", mainPath + "adminSurvey", defs.toString());
+
+			// set up second survey
+			defs.put("intent", "set_up_survey");
+			ClientResponse fifthResult = client.sendRequest("POST", mainPath + "adminSurvey", defs.toString());
+
+			String[] sids = defs.getAsString("surveyID").split(",");
+			ArrayList<Survey> surveys = new ArrayList<>();
+			for(String sid : sids){
+				Survey testSurvey = SurveyHandlerService.getSurveyBySurveyID(sid);
+				surveys.add(testSurvey);
+
+				try{
+					testSurvey.getTitle();
+				} catch (Exception e){
+					e.printStackTrace();
+					Assert.fail(e.toString());
+				}
+
+			}
+
+			testSwitchingSurvey(surveys);
+
+			System.out.println("Result of 'testGet': " + result.getResponse().trim());
+
+			// now delete created surveys from db
+			for(String sid : sids){
+				SurveyHandlerService.deleteSurvey(sid);
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			Assert.fail(e.toString());
+		}
+	}
+
+	private void testSwitchingSurvey(ArrayList<Survey> surveys){
+		// Participant p = new Participant("testPartEmail");
+		try{
+			Survey currSurvey = surveys.get(0);
+			String currSurveyID = currSurvey.getSid();
+			MiniClient client = new MiniClient();
+			client.setConnectorEndpoint(connector.getHttpEndpoint());
+			client.setLogin(testAgent.getIdentifier(), testPass);
+
+			JSONObject defs = setDefsMultplIDS();
+
+			String intent = "answer";
+			String channel = "testchannel";
+			String senderEmail = "testemail@mail.de";
+			String messageTs = "testmessagets1";
+			String NameOfUser = "user";
+			String msg = "message1";
+
+			JSONObject input = new JSONObject();
+			input.put("surveyID", defs.getAsString("surveyID"));
+			input.put("intent", intent);
+			input.put("channel", channel);
+			input.put("email", senderEmail);
+			input.put("time", messageTs);
+			input.put("NameOfUser", NameOfUser);
+			input.put("msg", msg);
+
+			ClientResponse result = client.sendRequest("POST", mainPath + "takingSurvey", input.toString());
+
+			// choose survey
+			input.put("msg", currSurveyID);
+			input.put("time", "11");
+			ClientResponse result2 = client.sendRequest("POST", mainPath + "takingSurvey", input.toString());
+			JSONParser p = new JSONParser();
+			JSONObject resultJSON = (JSONObject) p.parse(result.getResponse());
+			String resultString = resultJSON.getAsString("text");
+
+			// store ts
+			String chooseSurveyTS = "11";
+
+			// check all participants
+			int participants = currSurvey.getParticipants().size();
+			Assert.assertEquals(1, participants);
+
+			// answer to greeting and answer one question
+			input.put("msg", msg);
+			input.put("time", "3");
+			ClientResponse result3 = client.sendRequest("POST", mainPath + "takingSurvey", input.toString());
+			input.put("msg", msg);
+			input.put("time", "4");
+			ClientResponse result4 = client.sendRequest("POST", mainPath + "takingSurvey", input.toString());
+
+			Survey secSurvey = surveys.get(1);
+			String secSurveyID = secSurvey.getSid();
+
+			// switch survey
+			input.put("msg", secSurveyID);
+			input.put("time", chooseSurveyTS);
+			ClientResponse result5 = client.sendRequest("POST", mainPath + "takingSurvey", input.toString());
+			// and answer to greeting
+			input.put("msg", msg);
+			input.put("time", "6");
+			ClientResponse result6 = client.sendRequest("POST", mainPath + "takingSurvey", input.toString());
+
+			// answer question
+			input.put("msg", msg);
+			input.put("time", "7");
+			ClientResponse result7 = client.sendRequest("POST", mainPath + "takingSurvey", input.toString());
+
+			// check all participants
+			participants = secSurvey.getParticipants().size();
+			Assert.assertEquals(1, participants);
+
+			// switch back
+			// ClientResponse result8 = client.sendRequest("POST", mainPath + "takingSurvey", defs.toString());
+
+		} catch (Exception e){
+			e.printStackTrace();
+			Assert.fail(e.toString());
+		}
+	}
+
+
 }
 
 

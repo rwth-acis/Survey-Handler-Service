@@ -1387,7 +1387,7 @@ public class Question{
             }
         }
 
-        if(!this.isSubquestion){
+        if(!this.isSubquestion && this.help != null){
             if(this.help.length() > 0){
                 resString += "\n This is the help: " + this.help + "";
             }
