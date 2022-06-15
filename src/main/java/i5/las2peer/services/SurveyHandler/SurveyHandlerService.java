@@ -364,11 +364,18 @@ public class SurveyHandlerService extends RESTService {
 					JSONObject resKey = (JSONObject) resIds;
 					Set<String> keySet = resKey.keySet();
 
-					// iterate through all answers (its only one each time)
+					// iterate through all answers
 					for(String s : keySet){
-						String currRes = resKey.getAsString(s);
-						JSONObject currResJSON = (JSONObject) p.parse(currRes);
-						String answer = currResJSON.getAsString(key.getAsString("title"));
+						String answer = "";
+						try{
+							String currRes = resKey.getAsString(s);
+							JSONObject currResJSON = (JSONObject) p.parse(currRes);
+							answer = currResJSON.getAsString(key.getAsString("title"));
+						} catch (Exception e){
+							//
+							answer = resKey.getAsString(key.getAsString("title"));
+						}
+
 
 						// remove null answers, so parsing works
 						if(answer == null){
@@ -384,25 +391,15 @@ public class SurveyHandlerService extends RESTService {
 
 				}
 
-				// now count occurences of each answer if list question
-				if(ret.get("type").equals("O")
-						|| ret.get("type").equals("!")
-						|| ret.get("type").equals("L")
-						|| ret.get("type").equals("G")
-						|| ret.get("type").equals("Y")
-						|| ret.get("type").equals("5")){
-					JSONObject occurences = new JSONObject();
+				// now count occurences of each answer
+				JSONObject occurences = new JSONObject();
 
-					for(String option : answeroptions){
-						int occ = Collections.frequency(responses, option);
-						occurences.put(option, occ);
-					}
+				for(String option : answeroptions){
+					int occ = Collections.frequency(responses, option);
+					occurences.put(option, occ);
+				}
 
-					ret.put("responses", occurences);
-				}
-				else{
-					ret.put("responses", responses);
-				}
+				ret.put("responses", occurences);
 
 				completeReturnJSON.add(ret);
 
