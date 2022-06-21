@@ -95,7 +95,7 @@ public class SurveyHandlerService extends RESTService {
 	private String databaseHost = "127.0.0.1";
 	private String url = "";
 	private int databaseTypeInt = 1;
-	private int databasePort;
+	private int databasePort = 3306;
 	public static messenger messenger;
 	public String sbfmURL = "";
 	// symbol to check telegram buttons
