@@ -8,7 +8,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      DB_DATABASE: LAS2PEERMON
+      DB_DATABASE: shs
       DB_USER: root
       DB_PASSWORD: root
     steps:
