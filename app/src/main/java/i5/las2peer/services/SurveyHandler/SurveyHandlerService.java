@@ -94,7 +94,7 @@ public class SurveyHandlerService extends RESTService {
 	private String databaseName = "shs";
 	private String databaseHost = "127.0.0.1";
 	private String url = "";
-	private int databaseTypeInt;
+	private int databaseTypeInt = 1;
 	private int databasePort;
 	public static messenger messenger;
 	public String sbfmURL = "";
