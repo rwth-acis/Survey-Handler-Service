@@ -1,12 +1,8 @@
-/template_project/output/
-/template_project/export/
 /node-storage/
 /.las2peer/
 /tmp/
 /log/
-/template_project/log/
 /lib/
-/etc/ivy/ivy.jar
 /service/
 /out/
 /.idea/
@@ -17,25 +13,17 @@
 /junit*.properties
 /etc/startup/
 *.secret
-archiva_credentials.xml
 .classpath
 .project
 .settings
-gradle/
 export/
-gradlew
-gradlew.bat
-settings.gradle
-build.gradle
-gradle.properties
-.github/
 etc/launcher-configuration.ini
 
 # Ignore Gradle project-specific cache directory
 .gradle
-
 # Ignore Gradle build output directory
 build
 .vscode/settings.json
 output
 bin
+app/log

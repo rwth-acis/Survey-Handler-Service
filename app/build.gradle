@@ -252,6 +252,7 @@ task cleanAll {
 
 test {
     finalizedBy jacocoTestReport // report is always generated after tests run
+    failfast = true
 
     jacoco {
         destinationFile = file("$projectDir/export/jacoco.exec")

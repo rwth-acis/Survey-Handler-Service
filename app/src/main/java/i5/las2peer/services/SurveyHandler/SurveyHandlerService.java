@@ -89,13 +89,13 @@ public class SurveyHandlerService extends RESTService {
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
 	private static ArrayList<Admin> allAdmins = new ArrayList<>();
 	private static boolean firstStartUp = true;
-	private String databaseUser = "";
-	private String databasePassword = "";
-	private String databaseName = "";
-	private String databaseHost = "";
+	private String databaseUser = "root";
+	private String databasePassword = "root";
+	private String databaseName = "shs";
+	private String databaseHost = "127.0.0.1";
 	private String url = "";
-	private int databaseTypeInt;
-	private int databasePort;
+	private int databaseTypeInt = 1;
+	private int databasePort = 3306;
 	public static messenger messenger;
 	public String sbfmURL = "";
 	// symbol to check telegram buttons
