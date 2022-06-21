@@ -250,6 +250,25 @@ task cleanAll {
     }
 }
 
+test {
+    finalizedBy jacocoTestReport // report is always generated after tests run
+
+    jacoco {
+        destinationFile = file("$projectDir/export/jacoco.exec")
+    }
+}
+
+jacocoTestReport {
+    dependsOn test // tests are required to run before generating the report
+
+    // enable the xml report (html is also enabled)
+    reports {
+        xml.enabled true
+    }
+}
+
+
+
 // Only required when using Eclipse:
 // configuration for eclipse (this allows to import the project as a gradle project in eclipse without any problems)
 /*eclipse {
