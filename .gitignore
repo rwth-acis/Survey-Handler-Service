@@ -38,3 +38,4 @@ etc/launcher-configuration.ini
 build
 .vscode/settings.json
 output
+bin
