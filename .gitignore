@@ -36,3 +36,5 @@ etc/launcher-configuration.ini
 
 # Ignore Gradle build output directory
 build
+.vscode/settings.json
+output
