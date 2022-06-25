@@ -90,7 +90,7 @@ public class SurveyHandlerService extends RESTService {
 	private static ArrayList<Admin> allAdmins = new ArrayList<>();
 	private static boolean firstStartUp = true;
 	private String databaseUser = "root";
-	private String databasePassword = "password";
+	private String databasePassword = "root";
 	private String databaseName = "shs";
 	private String databaseHost = "127.0.0.1";
 	private String url = "";
