@@ -2520,9 +2520,7 @@ public class SurveyHandlerService extends RESTService {
 
 	private void setParticipantTextValues(){
 		System.out.println("inside setparticipanttextvaue");
-		try{
-			String currentPath = new java.io.File(".").getCanonicalPath();
-			System.out.println("Current dir:" + currentPath);
+		try {
 			Properties properties = new Properties();
 			BufferedInputStream stream = new BufferedInputStream(new FileInputStream("../etc/texts.properties"));
 			properties.load(stream);
