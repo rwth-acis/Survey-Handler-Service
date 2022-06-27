@@ -2520,9 +2520,9 @@ public class SurveyHandlerService extends RESTService {
 
 	private void setParticipantTextValues(){
 		System.out.println("inside setparticipanttextvaue");
-		try{
+		try {
 			Properties properties = new Properties();
-			BufferedInputStream stream = new BufferedInputStream(new FileInputStream("etc/texts.properties"));
+			BufferedInputStream stream = new BufferedInputStream(new FileInputStream("../etc/texts.properties"));
 			properties.load(stream);
 			stream.close();
 
