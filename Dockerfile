@@ -1,8 +1,8 @@
 FROM openjdk:17-jdk-alpine
 
-ENV LAS2PEER_PORT=9012
+ENV LAS2PEER_PORT=9011
 ENV DATABASE_NAME=SHS
-ENV DATABASE_HOST=host.docker.internal 
+ENV DATABASE_HOST=127.0.0.1
 ENV DATABASE_PORT=3306
 ENV DATABASE_USER=root
 ENV DATABASE_PASSWORD=password
@@ -24,7 +24,7 @@ USER las2peer
 RUN dos2unix gradlew
 RUN dos2unix gradle.properties
 RUN dos2unix /src/docker-entrypoint.sh
-RUN chmod +x gradlew && ./gradlew cleanBuild --exclude-task test
+RUN chmod +x gradlew && ./gradlew build --exclude-task test
 RUN chmod +x /src/docker-entrypoint.sh
 RUN chmod +x docker-entrypoint.sh
 
