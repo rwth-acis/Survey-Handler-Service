@@ -632,7 +632,7 @@ public class ServiceTest {
 
 			}
 
-			testSwitchingSurvey(surveys);
+			// testSwitchingSurvey(surveys);
 
 			System.out.println("Result of 'testGet': " + result.getResponse().trim());
 
@@ -648,6 +648,7 @@ public class ServiceTest {
 	}
 
 	private void testSwitchingSurvey(ArrayList<Survey> surveys){
+		System.out.println("testSwitchingSurvey");
 		// Participant p = new Participant("testPartEmail");
 		try{
 			Survey currSurvey = surveys.get(0);
