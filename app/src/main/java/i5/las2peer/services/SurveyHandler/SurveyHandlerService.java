@@ -266,6 +266,110 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	@POST
+	@Path("/surveys")
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME", notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+	@ApiResponses(value = {
+			@ApiResponse(code = HttpURLConnection.HTTP_OK, message = "REPLACE THIS WITH YOUR OK MESSAGE") })
+	public Response getSurveys(String input) {
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		JSONArray completeReturnJSON = new JSONArray();
+
+		try {
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+
+			String url = bodyInput.getAsString("url");
+			String loginName = bodyInput.getAsString("loginName");
+			String loginPassword = bodyInput.getAsString("loginPassword");
+
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint(url);
+			HashMap<String, String> head = new HashMap<String, String>();
+
+			ClientResponse miniClientResponse = mini.sendRequest("POST", url,
+					("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
+							+ "\"], \"id\": 1}"),
+					MediaType.APPLICATION_JSON, "", head);
+			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
+			String sessionKeyString = miniresJSON.getAsString("result");
+
+			ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
+					("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"),
+					MediaType.APPLICATION_JSON, "", head);
+			JSONObject res = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
+			return Response.ok().entity(res.toJSONString()).build();
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		response.put("text", completeReturnJSON);
+		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+		return Response.ok().entity(response).build();
+	}
+
+	@POST
+	@Path("/limeSurveyFunction")
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME", notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+	@ApiResponses(value = {
+			@ApiResponse(code = HttpURLConnection.HTTP_OK, message = "REPLACE THIS WITH YOUR OK MESSAGE") })
+	public Response runLimesurveyFunction(String input) {
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		JSONArray completeReturnJSON = new JSONArray();
+
+		try {
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+
+			String url = bodyInput.getAsString("url");
+			String loginName = bodyInput.getAsString("loginName");
+			String loginPassword = bodyInput.getAsString("loginPassword");
+			String command = bodyInput.getAsString("command");
+			JSONArray params = (JSONArray) bodyInput.get("params");
+
+			MiniClient mini = new MiniClient();
+			mini.setConnectorEndpoint(url);
+			HashMap<String, String> head = new HashMap<String, String>();
+
+			ClientResponse miniClientResponse = mini.sendRequest("POST", url,
+					("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
+							+ "\"], \"id\": 1}"),
+					MediaType.APPLICATION_JSON, "", head);
+			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
+			String sessionKeyString = miniresJSON.getAsString("result");
+			params.add(0, sessionKeyString); // add session key to params
+
+			JSONObject request = new JSONObject();
+			request.put("method", command);
+			request.put("params", params);
+			request.put("id", 1);
+
+			ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
+					(request.toJSONString()),
+					MediaType.APPLICATION_JSON, "", head);
+			JSONObject res = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
+			return Response.ok().entity(res.toJSONString()).build();
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		response.put("text", completeReturnJSON);
+		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+		return Response.ok().entity(response).build();
+	}
+
+	@POST
 	@Path("/post/{input}")
 	@Produces(MediaType.TEXT_PLAIN)
 	@ApiResponses(
