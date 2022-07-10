@@ -554,7 +554,8 @@ public class ServiceTest {
 			client.setConnectorEndpoint(connector.getHttpEndpoint());
 			client.setLogin(testAgent.getIdentifier(), testPass);
 
-			ClientResponse result = client.sendRequest("POST", mainPath + "getLimeSurveyResponses", "{\"loginName\":" + NameOfUser + ",\"url\":" + uri + ",\"surveyID\":" + surveyID + ",\"loginPassword\":" + Password + "}");
+			ClientResponse result = client.sendRequest("POST", mainPath + "responses", "{\"loginName\":" + NameOfUser
+					+ ",\"url\":" + uri + ",\"surveyID\":" + surveyID + ",\"loginPassword\":" + Password + "}");
 			JSONParser p = new JSONParser();
 			JSONObject resultJSON = (JSONObject) p.parse(result.getResponse());
 			String resultString = resultJSON.getAsString("text");
