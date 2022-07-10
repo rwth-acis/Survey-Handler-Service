@@ -386,7 +386,7 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	@POST
-	@Path("/getLimeSurveyResponses")
+	@Path("/responses")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
