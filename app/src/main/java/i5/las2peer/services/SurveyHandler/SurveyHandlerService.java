@@ -392,7 +392,7 @@ public class SurveyHandlerService extends RESTService {
 
 	@POST
 	@Path("/responses")
-	@Consumes(MediaType.TEXT_PLAIN)
+	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
 			value = "Get results from LimeSurvey.",
@@ -423,6 +423,10 @@ public class SurveyHandlerService extends RESTService {
 			String surveyID = bodyInput.getAsString("surveyID");
 			String documentType = "json";
 
+			if (surveyID == null) {
+				return Response.status(HttpURLConnection.HTTP_BAD_REQUEST).entity("surveyID is null").build();
+			}
+
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(url);
 			HashMap<String, String> head = new HashMap<String, String>();
@@ -432,12 +436,25 @@ public class SurveyHandlerService extends RESTService {
 			String sessionKeyString = miniresJSON.getAsString("result");
 
 			// now get question information, to add to response json object
-			ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url, ("{\"method\": \"list_questions\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			ClientResponse clientResponseQuestionInfo = mini
+					.sendRequest(
+							"POST", url, ("{\"method\": \"list_questions\", \"params\": [ \"" + sessionKeyString
+									+ "\", \"" + surveyID + "\"], \"id\": 1}"),
+							MediaType.APPLICATION_JSON, "", head);
+
+			if (clientResponseQuestionInfo.getHttpCode() != 200) {
+				return Response.status(clientResponseQuestionInfo.getHttpCode())
+						.entity(clientResponseQuestionInfo.getResponse()).build();
+			}
+
 			JSONObject questionInfoJSON = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
 			String questionInfo = questionInfoJSON.getAsString("result");
 			JSONArray questionListJSON = (JSONArray) p.parse(questionInfo);
 
-			ClientResponse clientResponse = mini.sendRequest("POST", url, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + documentType + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
+			ClientResponse clientResponse = mini.sendRequest(
+					"POST", url, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \""
+							+ surveyID + "\", \"" + documentType + "\"], \"id\": 1}"),
+					MediaType.APPLICATION_JSON, "", head);
 			JSONObject clientResponseJSON = (JSONObject) p.parse(clientResponse.getResponse());
 			String encodedFile = clientResponseJSON.getAsString("result");
 
