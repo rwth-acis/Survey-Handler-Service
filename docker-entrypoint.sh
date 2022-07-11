@@ -39,7 +39,7 @@ echo "${DATABASE_HOST}:${DATABASE_PORT} is available. Continuing..."
 # Create and migrate the database on first run
 if ! mysql -h${DATABASE_HOST} -P${DATABASE_PORT} -u${DATABASE_USER} -p${DATABASE_PASSWORD} -e "desc ${DATABASE_NAME}.surveys" > /dev/null 2>&1; then
     echo "Creating database schema..."
-    mysql -h${DATABASE_HOST} -P${DATABASE_PORT} -u${DATABASE_USER} -p${DATABASE_PASSWORD} ${DATABASE_NAME} < ${CREATE_DB_SQL}
+    mysql -h${DATABASE_HOST} -P${DATABASE_PORT} -u${DATABASE_USER} -p${DATABASE_PASSWORD} < ${CREATE_DB_SQL}
 fi
 
 
