@@ -15,6 +15,8 @@ export SERVICE_NAME=$(awk -F "=" '/service.name/ {print $2}' gradle.properties)
 export SERVICE_CLASS=$(awk -F "=" '/service.class/ {print $2}' gradle.properties)
 export SERVICE=${SERVICE_NAME}.${SERVICE_CLASS}@${SERVICE_VERSION}
 
+export CREATE_DB_SQL="etc/initdb.sql"
+
 function set_in_service_config {
     sed -i "s?${1}[[:blank:]]*=.*?${1}=${2}?g" ${SERVICE_PROPERTY_FILE}
 }
@@ -35,10 +37,10 @@ done
 echo "${DATABASE_HOST}:${DATABASE_PORT} is available. Continuing..."
 
 # Create and migrate the database on first run
-#if ! mysql -h${DATABASE_HOST} -P${DATABASE_PORT} -u${DATABASE_USER} -p${DATABASE_PASSWORD} -e "desc ${DATABASE_NAME}.MESSAGE" > /dev/null 2>&1; then
-    #echo "Creating database schema..."
-    #mysql -h${DATABASE_HOST} -P${DATABASE_PORT} -u${DATABASE_USER} -p${DATABASE_PASSWORD} ${DATABASE_NAME} < ${CREATE_DB_SQL}
-#fi
+if ! mysql -h${DATABASE_HOST} -P${DATABASE_PORT} -u${DATABASE_USER} -p${DATABASE_PASSWORD} -e "desc ${DATABASE_NAME}.surveys" > /dev/null 2>&1; then
+    echo "Creating database schema..."
+    mysql -h${DATABASE_HOST} -P${DATABASE_PORT} -u${DATABASE_USER} -p${DATABASE_PASSWORD} ${DATABASE_NAME} < ${CREATE_DB_SQL}
+fi
 
 
 # set defaults for optional service parameters
