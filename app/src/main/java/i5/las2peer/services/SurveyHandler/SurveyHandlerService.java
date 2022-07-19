@@ -10,6 +10,7 @@ import i5.las2peer.connectors.webConnector.client.MiniClient;
 import i5.las2peer.services.SurveyHandler.Participant;
 
 import java.io.*;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -268,7 +269,7 @@ public class SurveyHandlerService extends RESTService {
 	@POST
 	@Path("/surveys")
 	@Produces(MediaType.APPLICATION_JSON)
-	@ApiOperation(value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME", notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+	@ApiOperation(value = "Returns a list of surveys that are available for the specified credentials", notes = "url, loginName, loginPassword need to be provided")
 	@ApiResponses(value = {
 			@ApiResponse(code = HttpURLConnection.HTTP_OK, message = "REPLACE THIS WITH YOUR OK MESSAGE") })
 	public Response getSurveys(String input) {
@@ -291,31 +292,37 @@ public class SurveyHandlerService extends RESTService {
 			mini.setConnectorEndpoint(url);
 			HashMap<String, String> head = new HashMap<String, String>();
 
-			ClientResponse miniClientResponse = mini.sendRequest("POST", url,
-					("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
-							+ "\"], \"id\": 1}"),
-					MediaType.APPLICATION_JSON, "", head);
-			if (miniClientResponse.getHttpCode() != 200) {
-				System.out.println("Error: " + miniClientResponse.getHttpCode());
-				return Response.status(miniClientResponse.getHttpCode()).build();
+			try {
+				ClientResponse miniClientResponse = mini.sendRequest("POST", url,
+						("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
+								+ "\"], \"id\": 1}"),
+						MediaType.APPLICATION_JSON, "", head);
+				if (miniClientResponse.getHttpCode() != 200) {
+					System.out.println("Error: " + miniClientResponse.getHttpCode());
 
+				}
+				JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
+				String sessionKeyString = miniresJSON.getAsString("result");
+
+				ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
+						("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"),
+						MediaType.APPLICATION_JSON, "", head);
+				JSONObject res = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
+				response.put("text", completeReturnJSON);
+				return Response.ok().entity(res.toJSONString()).build();
+
+				// return Response.ok().entity(response).build();
+			} catch (Exception e) {
+				e.printStackTrace();
+				return Response.status(400).entity(e.getMessage()).build();
 			}
-			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
-			String sessionKeyString = miniresJSON.getAsString("result");
-
-			ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
-					("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"),
-					MediaType.APPLICATION_JSON, "", head);
-			JSONObject res = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
-			return Response.ok().entity(res.toJSONString()).build();
 
 		} catch (Exception e) {
 			e.printStackTrace();
+			return Response.status(500).entity(e.getMessage()).build();
 		}
 
-		response.put("text", completeReturnJSON);
-		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-		return Response.ok().entity(response).build();
+
 	}
 
 	@POST
