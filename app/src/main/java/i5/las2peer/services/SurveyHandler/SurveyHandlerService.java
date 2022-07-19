@@ -297,9 +297,10 @@ public class SurveyHandlerService extends RESTService {
 						("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
 								+ "\"], \"id\": 1}"),
 						MediaType.APPLICATION_JSON, "", head);
-				if (miniClientResponse.getHttpCode() != 200) {
+				if (miniClientResponse == null || miniClientResponse.getHttpCode() != 200) {
 					System.out.println("Error: " + miniClientResponse.getHttpCode());
-
+					return Response.status(400).entity("Could not retrieve session key. Credentials might not be valid")
+							.build();
 				}
 				JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
 				String sessionKeyString = miniresJSON.getAsString("result");
