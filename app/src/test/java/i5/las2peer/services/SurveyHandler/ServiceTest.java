@@ -41,7 +41,7 @@ public class ServiceTest {
 
 	String NameOfUser = "testUsername";
 	String Password = "testPassword1";
-	String uri = "https://testsurveyurl.limesurvey.net/admin/remotecontrol";
+	String uri = "https://testsurveyurlb.limesurvey.net/admin/remotecontrol";
 	String surveyID = "494668";
 	String secondSurveyID = "647979";
 
