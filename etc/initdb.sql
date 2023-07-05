@@ -1,1 +1,1 @@
-create database shs
+CREATE DATABASE IF NOT EXISTS shs;
