@@ -3,14 +3,11 @@ package i5.las2peer.services.SurveyHandler;
 import i5.las2peer.api.ManualDeployment;
 import i5.las2peer.api.ServiceException;
 import i5.las2peer.api.logging.MonitoringEvent;
-import i5.las2peer.logging.L2pLogger;
 import i5.las2peer.restMapper.RESTService;
 import i5.las2peer.connectors.webConnector.client.ClientResponse;
 import i5.las2peer.connectors.webConnector.client.MiniClient;
-import i5.las2peer.services.SurveyHandler.Participant;
 
 import java.io.*;
-import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -49,25 +46,16 @@ import io.swagger.annotations.Contact;
 import io.swagger.annotations.Info;
 import io.swagger.annotations.License;
 import io.swagger.annotations.SwaggerDefinition;
-import org.apache.commons.io.IOUtils;
-import org.glassfish.jersey.server.JSONP;
-import org.junit.Assert;
 
 import java.util.Properties;
 import java.util.logging.Level;
 
-import java.util.concurrent.locks.ReentrantLock;
 /**
  * SurveyHandlerService
  *
  * A service to conduct surveys with a chatbot created with the SBF.
  *
  */
-
-
-
-
-
 @Api
 @SwaggerDefinition(
 		info = @Info(
@@ -2664,35 +2652,38 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			// ensure all relevant properties are set
-			if(!properties.containsKey("helloDefault") || !properties.containsKey("helloDefaultAgain") || !properties.containsKey("helloTelegramAgain")
-					|| !properties.containsKey("reminderStartDefault") || !properties.containsKey("reminderStartTelegram") || !properties.containsKey("reminderContinueDefault")
-					|| !properties.containsKey("reminderContinueTelegram") || !properties.containsKey("languageChoosing") || !properties.containsKey("skipExplanation")
-					|| !properties.containsKey("changeAnswerExplanation") || !properties.containsKey("changeAnswerExplanationButton") || !properties.containsKey("first")
-					|| !properties.containsKey("completedSurvey") || !properties.containsKey("submitButton") || !properties.containsKey("firstEdit")
-					|| !properties.containsKey("welcomeString") || !properties.containsKey("languageChangedEN") || !properties.containsKey("changed")
-					|| !properties.containsKey("reasonButton") || !properties.containsKey("reasonCheckboxesComment") || !properties.containsKey("changedAnswer")
-					|| !properties.containsKey("helloTelegram") || !properties.containsKey("resultsGetSaved") || !properties.containsKey("surveyDoneString")
-					|| !properties.containsKey("skipText") || !properties.containsKey("languageNotChangedEN") || !properties.containsKey("reasonButtonDefault")
-					|| !properties.containsKey("reasonListCommentDefault") || !properties.containsKey("reasonCheckboxesNoCommentDefault") || !properties.containsKey("reasonCheckboxesCommentDefault")
-					|| !properties.containsKey("reasonText") || !properties.containsKey("reasonDate") || !properties.containsKey("reasonFiveScale")
-					|| !properties.containsKey("reasonNumber")){
-				System.out.println("a text value is missing in the texts.properties file");
-				throw new IllegalStateException("Missing properties value in english part of texts.properties");
-			}
+			List<String> keys = Arrays.asList("helloDefault", "helloDefaultAgain", "helloTelegramAgain", "reminderStartDefault",
+											  "reminderStartTelegram", "reminderContinueDefault", "reminderContinueTelegram",
+											  "languageChoosing", "skipExplanation", "changeAnswerExplanation",
+											  "changeAnswerExplanationButton", "first", "completedSurvey", "submitButton",
+											  "firstEdit", "welcomeString", "languageChangedEN", "changed", "reasonButton",
+											  "reasonCheckboxesComment", "changedAnswer", "helloTelegram", "resultsGetSaved",
+											  "surveyDoneString", "skipText", "languageNotChangedEN", "reasonButtonDefault",
+											  "reasonListCommentDefault", "reasonCheckboxesNoCommentDefault",
+											  "reasonCheckboxesCommentDefault", "reasonText", "reasonDate", "reasonFiveScale",
+											  "reasonNumber");
 
-			if(!properties.containsKey("helloDefaultDE") || !properties.containsKey("helloTelegramDE") || !properties.containsKey("helloDefaultAgainDE")
-					|| !properties.containsKey("helloTelegramAgainDE") || !properties.containsKey("reminderStartDefaultDE") || !properties.containsKey("reminderStartTelegramDE")
-					|| !properties.containsKey("reminderContinueDefaultDE") || !properties.containsKey("reminderContinueTelegramDE") || !properties.containsKey("skipExplanationDE")
-					|| !properties.containsKey("changeAnswerExplanationDE") || !properties.containsKey("changeAnswerExplanationButtonDE") || !properties.containsKey("firstDE")
-					|| !properties.containsKey("resultsGetSavedDE") || !properties.containsKey("completedSurveyDE") || !properties.containsKey("changedAnswerDE")
-					|| !properties.containsKey("surveyDoneStringDE") || !properties.containsKey("firstEditDE") || !properties.containsKey("welcomeStringDE")
-					|| !properties.containsKey("skipTextDE") || !properties.containsKey("languageNotChangedDE") || !properties.containsKey("languageChangedDE")
-					|| !properties.containsKey("changedDE") || !properties.containsKey("reasonButtonDE") || !properties.containsKey("reasonCheckboxesCommentDE")
-					|| !properties.containsKey("reasonButtonDefaultDE") || !properties.containsKey("reasonListCommentDefaultDE") || !properties.containsKey("reasonCheckboxesNoCommentDefaultDE")
-					|| !properties.containsKey("reasonCheckboxesCommentDefaultDE") || !properties.containsKey("reasonTextDE") || !properties.containsKey("reasonDateDE")
-					|| !properties.containsKey("reasonFiveScaleDE") || !properties.containsKey("reasonNumberDE")){
-				System.out.println("a german text value is missing in the texts.properties file");
-				throw new IllegalStateException("Missing properties value in german part of texts.properties");
+			for (String key : keys) {
+				if (!properties.containsKey(key)) {
+					System.out.println("a text value is missing in the texts.properties file");
+					throw new IllegalStateException("Missing properties value in english part of texts.properties");
+				}
+			}
+			List<String> germanKeys = Arrays.asList("helloDefaultDE", "helloTelegramDE", "helloDefaultAgainDE", "helloTelegramAgainDE",
+											  "reminderStartDefaultDE", "reminderStartTelegramDE", "reminderContinueDefaultDE",
+											  "reminderContinueTelegramDE", "skipExplanationDE", "changeAnswerExplanationDE",
+											  "changeAnswerExplanationButtonDE", "firstDE", "resultsGetSavedDE", "completedSurveyDE",
+											  "changedAnswerDE", "surveyDoneStringDE", "firstEditDE", "welcomeStringDE", "skipTextDE",
+											  "languageNotChangedDE", "languageChangedDE", "changedDE", "reasonButtonDE",
+											  "reasonCheckboxesCommentDE", "reasonButtonDefaultDE", "reasonListCommentDefaultDE",
+											  "reasonCheckboxesNoCommentDefaultDE", "reasonCheckboxesCommentDefaultDE", "reasonTextDE",
+											  "reasonDateDE", "reasonFiveScaleDE", "reasonNumberDE");
+
+			for (String key : germanKeys) {
+				if (!properties.containsKey(key)) {
+					System.out.println("a german text value is missing in the texts.properties file");
+					throw new IllegalStateException("Missing properties value in german part of texts.properties");
+				}
 			}
 		}
 		catch (Exception ex){
