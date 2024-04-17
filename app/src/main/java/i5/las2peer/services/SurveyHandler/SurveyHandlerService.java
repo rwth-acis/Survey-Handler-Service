@@ -1,12 +1,26 @@
 package i5.las2peer.services.SurveyHandler;
 
+import i5.las2peer.api.Context;
 import i5.las2peer.api.ManualDeployment;
 import i5.las2peer.api.ServiceException;
 import i5.las2peer.api.logging.MonitoringEvent;
-import i5.las2peer.restMapper.RESTService;
+import i5.las2peer.api.security.UserAgent;
 import i5.las2peer.connectors.webConnector.client.ClientResponse;
 import i5.las2peer.connectors.webConnector.client.MiniClient;
+import i5.las2peer.restMapper.RESTService;
+import i5.las2peer.restMapper.annotations.ServicePath;
+import i5.las2peer.services.SurveyHandler.database.SQLDatabase;
+import i5.las2peer.services.SurveyHandler.database.SQLDatabaseType;
+import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
+import io.swagger.annotations.*;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
+import net.minidev.json.parser.JSONParser;
+import net.minidev.json.parser.ParseException;
 
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -18,35 +32,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-
-import net.minidev.json.JSONObject;
-import net.minidev.json.JSONArray;
-import net.minidev.json.parser.JSONParser;
-import net.minidev.json.parser.ParseException;
-
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.Consumes;
-
-import i5.las2peer.api.Context;
-import i5.las2peer.api.security.UserAgent;
-import i5.las2peer.restMapper.annotations.ServicePath;
-
-import i5.las2peer.services.SurveyHandler.database.*;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
-import io.swagger.annotations.Contact;
-import io.swagger.annotations.Info;
-import io.swagger.annotations.License;
-import io.swagger.annotations.SwaggerDefinition;
-
-import java.util.Properties;
 import java.util.logging.Level;
 
 /**
@@ -500,18 +485,7 @@ public class SurveyHandlerService extends RESTService {
 			boolean defualt = false;
 
 			String token = ""; // for rocket chat none in this service is needed, so length 0
-			if(bodyInput.containsKey("slackToken")){
-				token = bodyInput.getAsString("slackToken");
-				messenger = Messenger.SLACK;
-			}
-			else if(bodyInput.getAsString("email") == null){
-				// telegram msg does not contain user email, so its null
-				token = bodyInput.getAsString("telegramToken");
-				messenger = Messenger.TELEGRAM;
-			}
-			else{
-				messenger = Messenger.ROCKETCHAT;
-			}
+			token = selectMessenger(bodyInput, token);
 
 			if(bodyInput.containsKey("sbfmURL")){
 				sbfmURL = bodyInput.getAsString("sbfmURL");
@@ -906,6 +880,22 @@ public class SurveyHandlerService extends RESTService {
 		}
 		response.put("text", "Something went wrong in takingSurvey try block.");
 		return Response.ok().entity(response).build();
+	}
+
+	private String selectMessenger(JSONObject bodyInput, String token) {
+		if(bodyInput.containsKey("slackToken")){
+			token = bodyInput.getAsString("slackToken");
+			messenger = Messenger.SLACK;
+		}
+		else if(bodyInput.getAsString("email") == null){
+			// telegram msg does not contain user email, so its null
+			token = bodyInput.getAsString("telegramToken");
+			messenger = Messenger.TELEGRAM;
+		}
+		else{
+			messenger = Messenger.ROCKETCHAT;
+		}
+		return token;
 	}
 
 	private boolean setSurvey(String[] surveyIDs, String message, Participant currParticipant, String messageTs, Survey currSurvey, String senderEmail, boolean first){
@@ -2109,17 +2099,7 @@ public class SurveyHandlerService extends RESTService {
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			// set messenger
-			if(bodyInput.containsKey("slackToken")){
-				token = bodyInput.getAsString("slackToken");
-				messenger = Messenger.SLACK;
-			}
-			else if(bodyInput.getAsString("email") == null){
-				token = bodyInput.getAsString("telegramToken");
-				messenger = Messenger.TELEGRAM;
-			}
-			else{
-				messenger = Messenger.ROCKETCHAT;
-			}
+			token = selectMessenger(bodyInput, token);
 
 			String adminmail = bodyInput.getAsString("adminmail");
 
