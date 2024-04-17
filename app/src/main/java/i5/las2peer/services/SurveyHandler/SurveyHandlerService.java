@@ -77,30 +77,18 @@ public class SurveyHandlerService extends RESTService {
 
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
 	private static ArrayList<Admin> allAdmins = new ArrayList<>();
-	private static boolean firstStartUp = true;
-	private String databaseUser = "root";
-	private String databasePassword = "root";
-	private String databaseName = "shs";
-	private String databaseHost = "127.0.0.1";
-	private String url = "";
-	private int databaseTypeInt = 1;
-	private int databasePort = 3306;
+	private String databaseUser;
+	private String databasePassword;
+	private String databaseName;
+	private String databaseHost;
+	private String url;
+	private int databaseTypeInt;
+	private int databasePort;
 	public static Messenger messenger;
-	public String sbfmURL = "";
-	// symbol to check telegram buttons
-	public static String check = ":check: ";
-
+	public String sbfmURL;
+	public static String telegramButtonCheck = ":check: ";
 	// contains all texts displayed during the survey when talking as the bot
 	public static HashMap<String, String> texts = new HashMap<>();
-
-
-	// for logging
-	private Context l2pcontext = null;
-	public void setL2pcontext(Context l2pcontext) {
-		this.l2pcontext = l2pcontext;
-	}
-
-
 	private static SQLDatabase database; // The database instance to write to.
 
 	// Look through global survey list for surveyID, which is unique for each survey
@@ -122,24 +110,6 @@ public class SurveyHandlerService extends RESTService {
 		return null;
 	}
 
-	public static String setAdminlanguage(String surveyID, String language){
-		for (Survey s : allSurveys){
-			if (s.getSid().equals(surveyID)){
-				// all surveys with same id have the same admin, so same adminlanguage
-				s.setAdminLanguage(language);
-			}
-		}
-		return null;
-	}
-
-	public static HashMap<String, String> getTexts() {
-		return texts;
-	}
-
-	public static void setTexts(HashMap<String, String> texts) {
-		SurveyHandlerService.texts = texts;
-	}
-
 	public static void deleteSurvey(String surveyID){
 		for (Survey s : allSurveys){
 			if (s.getSid().equals(surveyID)){
@@ -147,10 +117,6 @@ public class SurveyHandlerService extends RESTService {
 			}
 		}
 		allSurveys.remove(getSurveyBySurveyID(surveyID));
-	}
-
-	public static ArrayList<Survey> getAllSurveys(){
-		return allSurveys;
 	}
 
 	@Override

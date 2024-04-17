@@ -1,16 +1,11 @@
 package i5.las2peer.services.SurveyHandler;
 
-import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
-import org.web3j.abi.datatypes.Int;
 
-import javax.mail.Part;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Optional;
 
 public class Question{
     String check = ":check:";
@@ -401,12 +396,12 @@ public class Question{
     }
 
     public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
-        System.out.println("inside encodejsonbodyasstring. slack: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK));
-        System.out.println("inside encodejsonbodyasstring. telegram: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM));
-        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+        System.out.println("inside encodejsonbodyasstring. slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
+        System.out.println("inside encodejsonbodyasstring. telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
+        if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
             return parseQuestionForSlack(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
         }
-        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        else if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             return parseQuestionForTelegram(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
         }
         else{
@@ -420,7 +415,7 @@ public class Question{
         int index = 1;
 
         // check mark for chosen button
-        String check = SurveyHandlerService.check;
+        String check = SurveyHandlerService.telegramButtonCheck;
 
         String questionText = this.text;
         int questionsLeft = this.questionsLeft(participant);
@@ -1480,8 +1475,8 @@ public class Question{
 
     public boolean answerIsPlausible(String textAnswer, String check){
 
-        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) ||
-                SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        if(SurveyHandlerService.messenger.equals(Messenger.SLACK) ||
+                SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             if(this.type.equals(qType.SINGLECHOICECOMMENT.toString()) || this.type.equals(qType.LISTRADIO.toString()) || this.type.equals(qType.LISTDROPDOWN.toString()) ||
                     this.type.equals(qType.DICHOTOMOUS.toString()) || this.type.equals(qType.SCALE.toString()) ||
                     this.type.equals(qType.ARRAY.toString())){
@@ -1757,8 +1752,8 @@ public class Question{
         String type = this.type;
         String reason = "";
 
-        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) ||
-                SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        if(SurveyHandlerService.messenger.equals(Messenger.SLACK) ||
+                SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             if(type.equals(qType.LISTDROPDOWN.toString()) ||
                     type.equals(qType.LISTRADIO.toString()) ||
                     type.equals(qType.DICHOTOMOUS.toString()) ||

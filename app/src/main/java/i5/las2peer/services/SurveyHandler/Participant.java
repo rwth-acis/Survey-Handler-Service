@@ -8,30 +8,11 @@ import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
-import net.minidev.json.parser.ParseException;
-import org.bouncycastle.util.encoders.UTF8;
-import org.web3j.abi.datatypes.Array;
-import org.web3j.abi.datatypes.Bool;
 
 
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.*;
-
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.regex.*;
 
 public class Participant {
 
@@ -128,12 +109,12 @@ public class Participant {
 
         int questionsInSurvey = this.currentSurvey.numberOfQuestions();
         String hello = SurveyHandlerService.texts.get("helloDefault");
-        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             hello = SurveyHandlerService.texts.get("helloTelegram");
         }
         if(secondSurvey){
             hello = SurveyHandlerService.texts.get("helloDefaultAgain");
-            if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+            if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
                 hello = SurveyHandlerService.texts.get("helloTelegramAgain");
             }
         }
@@ -185,12 +166,12 @@ public class Participant {
                 if(languageIsGerman()){
                     System.out.println("language de");
                     hello = SurveyHandlerService.texts.get("helloDefaultDE");
-                    if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+                    if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
                         hello = SurveyHandlerService.texts.get("helloTelegramDE");
                     }
                     if(secondSurvey){
                         hello = SurveyHandlerService.texts.get("helloDefaultAgainDE");
-                        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+                        if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
                             hello = SurveyHandlerService.texts.get("helloTelegramAgainDE");
                         }
                     }
@@ -455,8 +436,8 @@ public class Participant {
 
             if(this.currentSurvey.getQuestionByQid(nextId, this.language).isBlocksQuestion()){
                 // check if messenger is slack
-                if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) ||
-                        SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+                if(SurveyHandlerService.messenger.equals(Messenger.SLACK) ||
+                        SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
                     System.out.println("inside is blocks question, adding blocks...");
                     response.put("text", skipText);
                     response.put("blocks", messageText);
@@ -811,7 +792,7 @@ public class Participant {
         System.out.println("participant going to choose survey");
         String askToChoose = "";
 
-        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+        if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
 
             askToChoose = "[\n" +
                     "\t\t{\n" +
@@ -846,7 +827,7 @@ public class Participant {
             return Response.ok().entity(response).build();
 
         }
-        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        else if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
 
             askToChoose = "{\"text\":\"" + SurveyHandlerService.texts.get("surveyChoosingButton") + "\",\"inline_keyboard\": [[";
             for(String id : IDsAndTitles.keySet()){
@@ -973,7 +954,7 @@ public class Participant {
     public Response updateAnswer(String intent, String message, String messageTs, JSONObject currMessage, JSONObject prevMessage, String changedAnswer, String token){
         // check if it is a skipped message, if yes ignore
         System.out.println("now updating answer");
-        String check = SurveyHandlerService.check;
+        String check = SurveyHandlerService.telegramButtonCheck;
         Answer a = getAnswerByTS(messageTs);
         if(a != null){
             if(a.isSkipped()){
@@ -1007,16 +988,16 @@ public class Participant {
         }
 
 
-        if(participantChangedTextAnswer(currMessage, prevMessage) && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+        if(participantChangedTextAnswer(currMessage, prevMessage) && SurveyHandlerService.messenger.equals(Messenger.SLACK)){
             return updateTextAnswer(message, messageTs, currMessage, prevMessage, changedAnswer);
         }
-        else if(participantChangedButtonAnswer(messageTs) && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+        else if(participantChangedButtonAnswer(messageTs) && SurveyHandlerService.messenger.equals(Messenger.SLACK)){
             return updateButtonAnswer(message, messageTs, changedAnswer, token);
         }
-        else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT)){
+        else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT)){
             return updateTextAnswer(message, messageTs, changedAnswer, token);
         }
-        else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             return updateTextAnswer(message, messageTs, changedAnswer, token);
         }
         return null;
@@ -1025,7 +1006,7 @@ public class Participant {
     public Response updateButtonAnswer(String message, String messageTs, String changedAnswer, String token){
         System.out.println("updating button answer...");
         JSONObject response = new JSONObject();
-        String check = SurveyHandlerService.check;
+        String check = SurveyHandlerService.telegramButtonCheck;
         Answer answer = getAnswerByTS(messageTs);
 
         System.out.println("parent qid: " + this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language));
@@ -1062,7 +1043,7 @@ public class Participant {
             SurveyHandlerServiceQueries.updateAnswerInDB(answer, currentSurvey.getDatabase());
 
             // mark the chosen button for telegram
-            if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+            if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
                 editMessage(q, answer, token, message);
             }
         }
@@ -1126,7 +1107,7 @@ public class Participant {
             editMessage(q, answer, token, message);
         }
         // check the type of the parent question, since the subquestions of mc questions are of type text
-        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK) &&
+        else if(SurveyHandlerService.messenger.equals(Messenger.SLACK) &&
                 (this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
                 this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString()))) {
             System.out.println("inside mc");
@@ -1206,7 +1187,7 @@ public class Participant {
                 return null;
             }
         }
-        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM) &&
+        else if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM) &&
                 (this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
                 this.currentSurvey.getParentQuestionBySQQid(answer.getQid(), this.language).getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString()))) {
             System.out.println("inside mc telegram");
@@ -1284,7 +1265,7 @@ public class Participant {
 
         Question answerEdited = this.currentSurvey.getQuestionByQid(answer.getQid(), this.language);
 
-        System.out.println("blocks: " + answerEdited.isBlocksQuestion() + " messenger telegram: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM) +
+        System.out.println("blocks: " + answerEdited.isBlocksQuestion() + " messenger telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM) +
                 " qid " + answerEdited.getQid() + " type: " + answerEdited.getType());
         System.out.println("subq: " + answerEdited.isSubquestion() + " parent qid: " + answerEdited.getParentQid());
 
@@ -1294,7 +1275,7 @@ public class Participant {
         }
 
         boolean commentForBlocksQuestion = (getAnswerByCommentTS(messageTs) != null);
-        if(blocksQuestion && !commentForBlocksQuestion && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        if(blocksQuestion && !commentForBlocksQuestion && SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             System.out.println("\nis button answer from telegram instead\n");
             return updateButtonAnswer(message, messageTs, changedAnswer, token);
         }
@@ -1309,15 +1290,15 @@ public class Participant {
             type = this.currentSurvey.getQuestionByQid(answerEdited.getParentQid(), this.language).getType();
         }
 
-        if(blocksQuestion && commentForBlocksQuestion && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        if(blocksQuestion && commentForBlocksQuestion && SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             System.out.println("\nis comment for button answer\n");
             answer.setComment(message);
             answer.setPrevMessageTs(answer.getMessageTs());
         }
 
         // rocket chat
-        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT)){
-            if(!answerEdited.answerIsPlausible(message, SurveyHandlerService.check)){
+        if(SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT)){
+            if(!answerEdited.answerIsPlausible(message, SurveyHandlerService.telegramButtonCheck)){
                 response.put("text", answerEdited.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
@@ -1490,7 +1471,7 @@ public class Participant {
 
         // normal text
         if(answerEdited.isTextQuestion()){
-            if(!answerEdited.answerIsPlausible(message, SurveyHandlerService.check)){
+            if(!answerEdited.answerIsPlausible(message, SurveyHandlerService.telegramButtonCheck)){
                 response.put("text", answerEdited.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
@@ -1517,7 +1498,7 @@ public class Participant {
     public Response updateTextAnswer(String message, String messageTs, JSONObject currMessage, JSONObject prevMessage, String changedAnswer){
         // Slack text answer edited
         JSONObject response = new JSONObject();
-        String check = SurveyHandlerService.check;
+        String check = SurveyHandlerService.telegramButtonCheck;
         // the participant edited a text answer
         System.out.println("text answer editing detected...");
 
@@ -1584,7 +1565,7 @@ public class Participant {
         JSONObject response = new JSONObject();
         Response res = null;
 
-        System.out.println("slack is used: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK));
+        System.out.println("slack is used: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
 
         if(this.lastquestion != null){
             System.out.println("last question is not null recognized");
@@ -1668,7 +1649,7 @@ public class Participant {
                 if(intent.equals(buttonIntent)){
                     res = newButtonAnswer(newAnswer, lastQuestion, token, message, surveyDoneString, submitButton);
                 }
-                else if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+                else if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
                     // check if last question blocks but comment expected
                     if(!this.currentSubquestionAnswers.isEmpty() && lastQuestion.getType().equals(Question.qType.SINGLECHOICECOMMENT.toString())){
                         System.out.println("curent subquestion answers not empty, so expecting comment");
@@ -1726,7 +1707,7 @@ public class Participant {
     public Response newButtonAnswer(Answer newAnswer, Question lastQuestion, String token, String message, String surveyDoneString, String submitButton){
         JSONObject response = new JSONObject();
         System.out.println("inside newbuttonanswer...");
-        String check = SurveyHandlerService.check;
+        String check = SurveyHandlerService.telegramButtonCheck;
         String messageTs = newAnswer.getMessageTs();
         String messageId = newAnswer.getMessageId();
         // message is a list of selected options in json format or a simple text message
@@ -1982,7 +1963,7 @@ public class Participant {
                 // submit button handling done
 
             } else {
-                if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+                if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
                     // no submit button pressed, but update to chosen options and to db
                     try{
                         selectedOptionsJson = (JSONArray) p.parse(message);}
@@ -2049,7 +2030,7 @@ public class Participant {
                     System.out.println("all subquestion answers: " +this.currentSubquestionAnswers);
                     return Response.noContent().build();
                 }
-                else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+                else if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
 
                     if (!lastQuestion.answerIsPlausible(message, check)) {
                         response.put("text", lastQuestion.reasonAnswerNotPlausible());
@@ -2117,7 +2098,7 @@ public class Participant {
 
     public Response newTextAnswer(Answer newAnswer, Question lastQuestion, String message, String surveyDoneString, String submitButton){
         JSONObject response = new JSONObject();
-        String check = SurveyHandlerService.check;
+        String check = SurveyHandlerService.telegramButtonCheck;
         String messageId = newAnswer.getMessageId();
         String messageTs = newAnswer.getMessageTs();
 
@@ -2150,7 +2131,7 @@ public class Participant {
         }
 
         // Check if it is a text answer for button questions in rocket chat
-        if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT)){
+        if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT)){
             if(message.length() == 2 && String.valueOf(message.charAt(1)).equals(".")){
                 // check if message asking for a number contains a "."
                 JSONParser p = new JSONParser();
@@ -2613,11 +2594,11 @@ public class Participant {
 
     public void editMessage(Question q, Answer a, String token, String message){
         String messageText = q.encodeJsonBodyAsString(false, false, message, this);
-        if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+        if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
             String messageTs = a.getMessageTs();
             editSlackMessage(token, messageTs, messageText);
         }
-        else if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+        else if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
             String messageId = a.getMessageId();
             editTelegramMessage(token, messageId, messageText);
         }
