@@ -76,7 +76,7 @@ import java.util.logging.Level;
 public class SurveyHandlerService extends RESTService {
 
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
-	private static ArrayList<Admin> allAdmins = new ArrayList<>();
+	private ArrayList<Admin> allAdmins;
 	private String databaseUser;
 	private String databasePassword;
 	private String databaseName;
@@ -101,7 +101,7 @@ public class SurveyHandlerService extends RESTService {
 		return null;
 	}
 
-	public static Admin getAdminByAdminID(String adminID){
+	public Admin getAdminByAdminID(String adminID){
 		for(Admin a : allAdmins){
 			if(a.getAid().equals(adminID)){
 				return a;
@@ -132,7 +132,6 @@ public class SurveyHandlerService extends RESTService {
 
 			database = new SQLDatabase(databaseType, databaseUser, databasePassword, databaseName,
 					databaseHost, databasePort);
-
 			// Test database connection
 			try {
 				Connection con = database.getDataSource().getConnection();
@@ -140,48 +139,48 @@ public class SurveyHandlerService extends RESTService {
 			} catch (SQLException e) {
 				System.out.println("Failed to Connect: " + e.getMessage());
 			}
-
-			// TODO better handling, if tables are missing.
-			// Check if required table exists in our database
-			for (String tableName : SurveyHandlerServiceQueries.requiredTables){
-				if(!SurveyHandlerServiceQueries.tablesExist(tableName, database)){
-					System.out.println("Table " + tableName + " not found. Creating table...");
-					// Create table
-					boolean created = SurveyHandlerServiceQueries.createTable(tableName, database);
-					System.out.println("Created table had result: " + created);
-				}else{
-					System.out.println("Table " + tableName + " found.");
-				}
+			for (String tableName : SurveyHandlerServiceQueries.requiredTables) {
+				ensureTableExists(tableName, database);
 			}
-
 			// Load internal data structures with values from database
 			ArrayList<Survey> allSurveysFromDB = SurveyHandlerServiceQueries.getSurveysFromDB(database);
 			// init admins
-			ArrayList<Admin> allAdmins = SurveyHandlerServiceQueries.getAdminsFromDB(database);
+			allAdmins = SurveyHandlerServiceQueries.getAdminsFromDB(database);
 			for (Survey sur : allSurveysFromDB){
-				sur.setDatabase(database);
-				// init questions
-				ArrayList<Question> allQForSurvey = SurveyHandlerServiceQueries.getSurveyQuestionsFromDB(sur.getSid(), database);
-				//System.out.println(allQForSurvey);
-				sur.initQuestionsFromDB(allQForSurvey);
-				// init participants
-				ArrayList<Participant> allPForSurvey = SurveyHandlerServiceQueries.getSurveyParticipantsFromDB(sur.getSid(), database);
-				sur.initParticipantsFromDB(allPForSurvey);
-				// init answers for every participant
-				for (Participant tempP : sur.getParticipants()){
-					ArrayList<Answer> allAforP = SurveyHandlerServiceQueries.getAnswersForParticipantFromDB(sur.getSid(), tempP.getPid(), database);
-					System.out.println(allAforP);
-					sur.initAnswersForParticipantFromDB(tempP, allAforP);
-
-				}
-				// add new survey to global list
-				allSurveys.add(sur);
+				initSurvey(sur);
 			}
 		} catch (Exception e){
 			e.printStackTrace();
-			return;
 		}
 
+	}
+
+	private static void initSurvey(Survey sur) {
+		sur.setDatabase(database);
+		// init questions
+		ArrayList<Question> allQForSurvey = SurveyHandlerServiceQueries.getSurveyQuestionsFromDB(sur.getSid(), database);
+		//System.out.println(allQForSurvey);
+		sur.initQuestionsFromDB(allQForSurvey);
+		// init participants
+		ArrayList<Participant> allPForSurvey = SurveyHandlerServiceQueries.getSurveyParticipantsFromDB(sur.getSid(), database);
+		sur.initParticipantsFromDB(allPForSurvey);
+		// init answers for every participant
+		for (Participant tempP : sur.getParticipants()){
+			ArrayList<Answer> allAforP = SurveyHandlerServiceQueries.getAnswersForParticipantFromDB(sur.getSid(), tempP.getPid(), database);
+			sur.initAnswersForParticipantFromDB(tempP, allAforP);
+		}
+		// add new survey to global list
+		allSurveys.add(sur);
+	}
+
+	private void ensureTableExists(String tableName, SQLDatabase database) {
+		if (!SurveyHandlerServiceQueries.tablesExist(tableName, database)) {
+			System.out.println("Table " + tableName + " not found. Creating table...");
+			boolean created = SurveyHandlerServiceQueries.createTable(tableName, database);
+			System.out.println("Created table had result: " + created);
+		} else {
+			System.out.println("Table " + tableName + " found.");
+		}
 	}
 
 	public SurveyHandlerService(){
@@ -471,14 +470,9 @@ public class SurveyHandlerService extends RESTService {
 					int occ = Collections.frequency(responses, option);
 					occurences.put(option, occ);
 				}
-
 				ret.put("responses", occurences);
-
 				completeReturnJSON.add(ret);
-
 			}
-
-
 		} catch (Exception e){
 			e.printStackTrace();
 		}
@@ -536,15 +530,15 @@ public class SurveyHandlerService extends RESTService {
 			String token = ""; // for rocket chat none in this service is needed, so length 0
 			if(bodyInput.containsKey("slackToken")){
 				token = bodyInput.getAsString("slackToken");
-				messenger = SurveyHandlerService.messenger.SLACK;
+				messenger = Messenger.SLACK;
 			}
 			else if(bodyInput.getAsString("email") == null){
 				// telegram msg does not contain user email, so its null
 				token = bodyInput.getAsString("telegramToken");
-				messenger = SurveyHandlerService.messenger.TELEGRAM;
+				messenger = Messenger.TELEGRAM;
 			}
 			else{
-				messenger = SurveyHandlerService.messenger.ROCKETCHAT;
+				messenger = Messenger.ROCKETCHAT;
 			}
 
 			if(bodyInput.containsKey("sbfmURL")){
@@ -618,14 +612,6 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println("lastchosenid: " + lastChosenSurveyID);
 					break;
 				}
-				/*
-				else if(s.getParticipantByPID(channel) != null){
-					System.out.println("s.getParticipantByPID(channel): " + s.getParticipantByPID(channel) + s.getParticipantByPID(channel).getPid() + s.getParticipantByPID(channel).getSid());
-					lastChosenSurveyID = s.getParticipantByPID(channel).getLastChosenSurveyID();
-					System.out.println("lastchosenid: " + lastChosenSurveyID);
-					break;
-				}
-				 */
 				else{
 					System.out.println("participant not found in survey");
 				}
@@ -659,43 +645,7 @@ public class SurveyHandlerService extends RESTService {
 				return Response.ok().entity(response).build();
 			}
 
-			// Check if survey has expiration date and if survey has expired
-			/*
-			if(currSurvey.getExpires() != null){
-				if(ls){
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String expireDate = currSurvey.getExpires().split("\\s")[0];
-					String expireTime = currSurvey.getExpires().split("\\s")[1];
-					System.out.println(expireDate + " and expires at " + dateNow);
-					System.out.println(expireTime + " and expires at " + timeNow);
-					if(dateNow.isAfter(LocalDate.parse(expireDate))){
-						if(timeNow.isAfter(LocalTime.parse(expireTime)))
-							System.out.println("survey not active anymore");
-							response.put("text", "The survey is no longer active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-				} else{
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String expireDate = currSurvey.getExpires().split("T")[0];
-					String expireTime = currSurvey.getExpires().split("T")[1];
-					System.out.println(expireDate + " and expires at " + dateNow);
-					System.out.println(expireTime + " and expires at " + timeNow);
-					if(dateNow.isAfter(LocalDate.parse(expireDate))){
-						if(timeNow.isAfter(LocalTime.parse(expireTime)))
-							System.out.println("survey not active anymore");
-							response.put("text", "The survey is no longer active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-				}
-
-
-			}
-
-			 */
-
-			// Check if survey has expiration date and if survey has expired
+			// Check if survey has expiration date and has not started yet
 			if(currSurvey.getStartDT() != null){
 				if(ls){
 					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
@@ -703,12 +653,13 @@ public class SurveyHandlerService extends RESTService {
 					String startTime = currSurvey.getStartDT().split("\\s")[1];
 					System.out.println(startDate + " and starts at " + dateNow);
 					System.out.println(startTime + " and starts at " + timeNow);
-					if(dateNow.isBefore(LocalDate.parse(startDate))){
-						if(timeNow.isBefore(LocalTime.parse(startTime)))
+					if(dateNow.isBefore(LocalDate.parse(startDate))) {
+						if (timeNow.isBefore(LocalTime.parse(startTime))){
 							System.out.println("survey not yet active");
 							response.put("text", "The survey is not yet active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
+							Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+							return Response.ok().entity(response).build();
+						}
 					}
 				} else{
 					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
@@ -717,11 +668,12 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(startDate + " and starts at " + dateNow);
 					System.out.println(startTime + " and starts at " + timeNow);
 					if(dateNow.isBefore(LocalDate.parse(startDate))){
-						if(timeNow.isBefore(LocalTime.parse(startTime)))
+						if(timeNow.isBefore(LocalTime.parse(startTime))) {
 							System.out.println("survey not yet active");
 							response.put("text", "The survey is not yet active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
+							Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+							return Response.ok().entity(response).build();
+						}
 					}
 				}
 
@@ -812,17 +764,6 @@ public class SurveyHandlerService extends RESTService {
 						return Response.ok().entity(response).build();
 					}
 				}
-				else{
-					/*
-					System.out.println("here it should not be neccessary to switch, since correct survey is checked at beginning...");
-					// get participant of last chosen survey
-					System.out.println("setting correct survey and then find correct participant for that survey");
-
-					currSurvey = SurveyHandlerService.getSurveyBySurveyID(currParticipant.getLastChosenSurveyID());
-					String email = currParticipant.getEmail();
-					currParticipant = currSurvey.findParticipant(email);
-					 */
-				}
 
 
 				if(surveyChoosingEdited(currParticipant, messageTs, currMessage, prevMessage)){
@@ -911,9 +852,9 @@ public class SurveyHandlerService extends RESTService {
 			//
 			boolean secondSurvey = false;
 
-			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK));
-			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM));
-			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT));
+			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
+			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
+			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
 
 			// check if there is a followup survey, if not sid is ""
 			if(followUpSurvey.getSid().length() > 0){
@@ -1447,23 +1388,13 @@ public class SurveyHandlerService extends RESTService {
 			Admin admin = getAdminByAdminID(adminmail);
 
 			// TODO better handling for multiple admins
-			//ArrayList<Admin> admins = new ArrayList<>();
 
 			if(admin == null){
 				System.out.println("first time admin has sent message, so init");
 				// first time, create admin for surveys
 				admin = new Admin(adminmail);
 				SurveyHandlerServiceQueries.addAdminToDB(admin, database);
-				//admins.add(admin);
 				allAdmins.add(admin);
-				/*
-				for(String id : surveyIDs){
-					Survey survey = SurveyHandlerService.getSurveyBySurveyID(id);
-					admin.getSurveys().add(survey);
-					allAdmins.add(admin);
-					survey.initAdminsFromDB(admins);
-				}
-				 */
 			}
 
 			System.out.println("curr active admin: " + admin.getAid());
@@ -1752,7 +1683,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.numberOfQuestions();
 					String hello = SurveyHandlerService.texts.get("helloDefaultDE");
-					if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+					if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
 						hello = SurveyHandlerService.texts.get("helloTelegramDE");
 					}
 					String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
@@ -1812,7 +1743,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.numberOfQuestions();
 					String hello = SurveyHandlerService.texts.get("helloDefaultDE");
-					if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+					if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
 						hello = SurveyHandlerService.texts.get("helloTelegramDE");
 					}
 					String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
@@ -2027,13 +1958,6 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject minire = (JSONObject) p.parse(minires.getResponse());
 			String sessionKeyString = minire.getAsString("result");
 
-			/*
-			// Export the responses
-			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-			JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
-			String response3 = minire3.getAsString("result");
-			 */
-
 			for(Participant pa : currSurvey.getParticipants()) {
 				String surveyResponseID;
 
@@ -2215,14 +2139,14 @@ public class SurveyHandlerService extends RESTService {
 			// set messenger
 			if(bodyInput.containsKey("slackToken")){
 				token = bodyInput.getAsString("slackToken");
-				messenger = SurveyHandlerService.messenger.SLACK;
+				messenger = Messenger.SLACK;
 			}
 			else if(bodyInput.getAsString("email") == null){
 				token = bodyInput.getAsString("telegramToken");
-				messenger = SurveyHandlerService.messenger.TELEGRAM;
+				messenger = Messenger.TELEGRAM;
 			}
 			else{
-				messenger = SurveyHandlerService.messenger.ROCKETCHAT;
+				messenger = Messenger.ROCKETCHAT;
 			}
 
 			String adminmail = bodyInput.getAsString("adminmail");
@@ -2300,7 +2224,7 @@ public class SurveyHandlerService extends RESTService {
 								msg = reminderComposing(pa, unansweredQuestions, true);
 							}
 
-							if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+							if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
 								// post request to sbfmanager to send slack message
 								String SBFManagerURL = "SBFManager";
 								String uri = SBFManagerURL + "/sendMessageToSlack/" + token + "/" + mail;
@@ -2332,7 +2256,7 @@ public class SurveyHandlerService extends RESTService {
 				}
 			}
 
-			System.out.println(response.toString());
+			System.out.println(response);
 
 		} catch(Exception e){
 			e.printStackTrace();
@@ -2470,17 +2394,6 @@ public class SurveyHandlerService extends RESTService {
 			String result = reader.readLine();
 			System.out.println(result);
 
-			/*
-			MiniClient mini = new MiniClient();
-			mini.setConnectorEndpoint("https://slack.com/api/users.info");
-			HashMap<String, String> head = new HashMap<String, String>();
-
-			ClientResponse minires = mini.sendRequest("POST", "https://slack.com/api/users.info", "{\"token\":" + token + ", \"user\":" + userId + "}", MediaType.APPLICATION_FORM_URLENCODED, "", head);
-			System.out.println("minires: " + minires.getResponse());
-			String cResult = java.net.URLDecoder.decode(minires.getResponse(), StandardCharsets.UTF_8.name());
-			System.out.println(cResult);
-			 */
-
 			// getting email from json
 			JSONObject resultJ = (JSONObject) p.parse(result);
 			String userS = resultJ.getAsString("user");
@@ -2499,58 +2412,10 @@ public class SurveyHandlerService extends RESTService {
 
 	}
 
-	/*
-	private String getRocketChatEmailByUsername(String user, String token){
-		System.out.println("inside getSlackEMailbyuserid...");
-		JSONParser p = new JSONParser();
-		System.out.println(user);
-		//remove <@ and > at the beginning and end
-		if(user.contains("@")){
-			user = user.substring(1, user.length());
-		}
-
-		try{
-			// slack api call to get email for user id
-			String urlParameters = "token=" + token + "&user=" + user;
-			byte[] postData = urlParameters.getBytes( StandardCharsets.UTF_8 );
-			int postDataLength = postData.length;
-			String request = "https://chat.tech4comp.dbis.rwth-aachen.de";
-			MiniClient mini = new MiniClient();
-			mini.setConnectorEndpoint("");
-			HashMap<String, String> head = new HashMap<String, String>();
-
-			ClientResponse minires = mini.sendRequest("POST", request + "/api/v1/users.info", "{\"X-Auth-Token\":" + token + ", \"X-User_Id\":" + user + "}", MediaType.APPLICATION_FORM_URLENCODED, "", head);
-			System.out.println("minires: " + minires.getResponse());
-			String cResult = java.net.URLDecoder.decode(minires.getResponse(), StandardCharsets.UTF_8.name());
-			System.out.println(cResult);
-			//System.out.println(result);
-
-
-			// getting email from json
-			JSONObject resultJ = (JSONObject) p.parse(cResult);
-			String userS = resultJ.getAsString("user");
-			JSONObject userJson = (JSONObject) p.parse(userS);
-			String profileS = userJson.getAsString("profile");
-			JSONObject profileJson = (JSONObject) p.parse(profileS);
-			String email = profileJson.getAsString("email");
-			System.out.println("email: " + email);
-
-			return email;
-
-		} catch(Exception e){
-			e.printStackTrace();
-			return "";
-		}
-
-	}
-
-	 */
-
-
 	private String reminderComposing(Participant pa, Integer unansweredQuestions, boolean started){
 		String msg;
 		if(started){
-			if(messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+			if(messenger.equals(Messenger.TELEGRAM)){
 				if(pa.languageIsGerman()){
 					msg = SurveyHandlerService.texts.get("reminderContinueTelegramDE").replaceAll("\\{unansweredQuestions\\}", String.valueOf(unansweredQuestions));
 				}
@@ -2569,7 +2434,7 @@ public class SurveyHandlerService extends RESTService {
 			return msg;
 		}
 		else{
-			if(messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+			if(messenger.equals(Messenger.TELEGRAM)){
 				if(pa.languageIsGerman()){
 					msg = texts.get("reminderStartTelegramDE");
 				}
