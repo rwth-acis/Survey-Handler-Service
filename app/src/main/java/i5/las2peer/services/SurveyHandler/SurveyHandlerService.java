@@ -27,7 +27,6 @@ import net.minidev.json.parser.ParseException;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -193,16 +192,16 @@ public class SurveyHandlerService extends RESTService {
 	@Path("/get")
 	@Produces(MediaType.TEXT_PLAIN)
 	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+	  value = "Get User Login Name",
+	  notes = "This function returns the login name of the current user.")
 	@ApiResponses(
-			value = {@ApiResponse(
-					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
+	  value = {@ApiResponse(
+		code = HttpURLConnection.HTTP_OK,
+		message = "User login name retrieved successfully")})
 	public Response getTemplate() {
 		UserAgent userAgent = (UserAgent) Context.getCurrent().getMainAgent();
-		String name = userAgent.getLoginName();
-		return Response.ok().entity(name).build();
+	 	String name = userAgent.getLoginName();
+	 	return Response.ok().entity(name).build();
 	}
 
 	@POST
@@ -210,59 +209,56 @@ public class SurveyHandlerService extends RESTService {
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(value = "Returns a list of surveys that are available for the specified credentials", notes = "url, loginName, loginPassword need to be provided")
 	@ApiResponses(value = {
-			@ApiResponse(code = HttpURLConnection.HTTP_OK, message = "REPLACE THIS WITH YOUR OK MESSAGE") })
+	  @ApiResponse(code = HttpURLConnection.HTTP_OK, message = "Surveys sent successfully") })
 	public Response getSurveys(String input) {
-		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+	  try {
+		JSONObject bodyInput = parseJson(input);
+		String url = bodyInput.getAsString("url");
+		String loginName = bodyInput.getAsString("loginName");
+		String loginPassword = bodyInput.getAsString("loginPassword");
 
-		JSONObject response = new JSONObject();
-		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+		String sessionKeyString = getSessionKey(url, loginName, loginPassword);
+		JSONObject res = listSurveys(url, sessionKeyString);
 
-		JSONArray completeReturnJSON = new JSONArray();
+		return Response.ok().entity(res.toJSONString()).build();
+	  } catch (Exception e) {
+		return Response.status(500).entity(e.getMessage()).build();
+	  }
+	}
 
-		try {
-			JSONObject bodyInput = (JSONObject) p.parse(input);
-			System.out.println("received message: " + bodyInput);
+	private JSONObject parseJson(String input) throws ParseException {
+	  JSONParser parser = new JSONParser(JSONParser.MODE_PERMISSIVE);
+	  return (JSONObject) parser.parse(input);
+	}
 
-			String url = bodyInput.getAsString("url");
-			String loginName = bodyInput.getAsString("loginName");
-			String loginPassword = bodyInput.getAsString("loginPassword");
+	private String getSessionKey(String url, String loginName, String loginPassword) throws Exception {
+	  MiniClient mini = new MiniClient();
+	  mini.setConnectorEndpoint(url);
+	  HashMap<String, String> head = new HashMap<String, String>();
 
-			MiniClient mini = new MiniClient();
-			mini.setConnectorEndpoint(url);
-			HashMap<String, String> head = new HashMap<String, String>();
+	  ClientResponse miniClientResponse = mini.sendRequest("POST", url,
+		("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
+		  + "\"], \"id\": 1}"),
+		MediaType.APPLICATION_JSON, "", head);
 
-			try {
-				ClientResponse miniClientResponse = mini.sendRequest("POST", url,
-						("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
-								+ "\"], \"id\": 1}"),
-						MediaType.APPLICATION_JSON, "", head);
-				if (miniClientResponse == null || miniClientResponse.getHttpCode() != 200) {
-					System.out.println("Error: " + miniClientResponse.getHttpCode());
-					return Response.status(400).entity("Could not retrieve session key. Credentials might not be valid")
-							.build();
-				}
-				JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
-				String sessionKeyString = miniresJSON.getAsString("result");
+	  if (miniClientResponse == null || miniClientResponse.getHttpCode() != 200) {
+		throw new Exception("Could not retrieve session key. Credentials might not be valid");
+	  }
 
-				ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
-						("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"),
-						MediaType.APPLICATION_JSON, "", head);
-				JSONObject res = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
-				response.put("text", completeReturnJSON);
-				return Response.ok().entity(res.toJSONString()).build();
+	  JSONObject miniresJSON = (JSONObject) parseJson(miniClientResponse.getResponse());
+	  return miniresJSON.getAsString("result");
+	}
 
-				// return Response.ok().entity(response).build();
-			} catch (Exception e) {
-				e.printStackTrace();
-				return Response.status(400).entity(e.getMessage()).build();
-			}
+	private JSONObject listSurveys(String url, String sessionKeyString) throws Exception {
+	  MiniClient mini = new MiniClient();
+	  mini.setConnectorEndpoint(url);
+	  HashMap<String, String> head = new HashMap<String, String>();
 
-		} catch (Exception e) {
-			e.printStackTrace();
-			return Response.status(500).entity(e.getMessage()).build();
-		}
+	  ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
+		("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"),
+		MediaType.APPLICATION_JSON, "", head);
 
-
+	  return (JSONObject) parseJson(clientResponseQuestionInfo.getResponse());
 	}
 
 	@POST
@@ -293,12 +289,8 @@ public class SurveyHandlerService extends RESTService {
 			mini.setConnectorEndpoint(url);
 			HashMap<String, String> head = new HashMap<String, String>();
 
-			ClientResponse miniClientResponse = mini.sendRequest("POST", url,
-					("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
-							+ "\"], \"id\": 1}"),
-					MediaType.APPLICATION_JSON, "", head);
-			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
-			String sessionKeyString = miniresJSON.getAsString("result");
+			String sessionKeyString = getSessionKey(url, loginName, loginPassword);
+
 			params.add(0, sessionKeyString); // add session key to params
 
 			JSONObject request = new JSONObject();
@@ -322,22 +314,6 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	@POST
-	@Path("/post/{input}")
-	@Produces(MediaType.TEXT_PLAIN)
-	@ApiResponses(
-			value = {@ApiResponse(
-					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
-	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "Example method that returns a phrase containing the received input.")
-	public Response postTemplate(@PathParam("input") String myInput) {
-		String returnString = "";
-		returnString += "Input " + myInput;
-		return Response.ok().entity(returnString).build();
-	}
-
-	@POST
 	@Path("/responses")
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
@@ -348,7 +324,6 @@ public class SurveyHandlerService extends RESTService {
 					code = HttpURLConnection.HTTP_OK,
 					message = "")})
 	public Response limesurveyConnector(String input) {
-		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
 		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
 		System.out.println("log: " + Context.get());
 
@@ -376,10 +351,7 @@ public class SurveyHandlerService extends RESTService {
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(url);
 			HashMap<String, String> head = new HashMap<String, String>();
-
-			ClientResponse miniClientResponse = mini.sendRequest("POST", url, ("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
-			String sessionKeyString = miniresJSON.getAsString("result");
+			String sessionKeyString = getSessionKey(url, loginName, loginPassword);
 
 			// now get question information, to add to response json object
 			ClientResponse clientResponseQuestionInfo = mini
@@ -411,68 +383,7 @@ public class SurveyHandlerService extends RESTService {
 			JSONArray decodedStringJSON = (JSONArray) p.parse(decodedStringResponses);
 
 			// go through all questions
-			for(Object keys : questionListJSON){
-				JSONObject key = (JSONObject) keys;
-
-				// only add to responses if not subquestion
-				if(!key.getAsString("parent_qid").equals("0")){
-					continue;
-				}
-
-				// will contain information for one question
-				JSONObject ret = new JSONObject();
-
-				ret.put("question",key.getAsString("question"));
-				ret.put("title",key.getAsString("title"));
-				ret.put("type",key.getAsString("type"));
-
-				JSONArray responses = new JSONArray();
-
-				// answeroptions given
-				ArrayList<String> answeroptions = new ArrayList<>();
-
-				// go through all responses and add answer for this question
-				for(Object resIds : decodedStringJSON){
-					JSONObject resKey = (JSONObject) resIds;
-					Set<String> keySet = resKey.keySet();
-
-					// iterate through all answers
-					for(String s : keySet){
-						String answer = "";
-						try{
-							String currRes = resKey.getAsString(s);
-							JSONObject currResJSON = (JSONObject) p.parse(currRes);
-							answer = currResJSON.getAsString(key.getAsString("title"));
-						} catch (Exception e){
-							//
-							answer = resKey.getAsString(key.getAsString("title"));
-						}
-
-
-						// remove null answers, so parsing works
-						if(answer == null){
-							answer = "";
-						}
-
-						responses.add(answer);
-
-						if(!answeroptions.contains(answer)){
-							answeroptions.add(answer);
-						}
-					}
-
-				}
-
-				// now count occurences of each answer
-				JSONObject occurences = new JSONObject();
-
-				for(String option : answeroptions){
-					int occ = Collections.frequency(responses, option);
-					occurences.put(option, occ);
-				}
-				ret.put("responses", occurences);
-				completeReturnJSON.add(ret);
-			}
+			completeReturnJSON = iterateQuestions(p, completeReturnJSON, questionListJSON, decodedStringJSON);
 		} catch (Exception e){
 			e.printStackTrace();
 		}
@@ -480,6 +391,67 @@ public class SurveyHandlerService extends RESTService {
 		response.put("text", completeReturnJSON);
 		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 		return Response.ok().entity(response).build();
+	}
+
+	private static JSONArray iterateQuestions(JSONParser p, JSONArray completeReturnJSON, JSONArray questionListJSON, JSONArray decodedStringJSON) {
+		for(Object keys : questionListJSON){
+			JSONObject key = (JSONObject) keys;
+
+			// only add to responses if not subquestion
+			if(!key.getAsString("parent_qid").equals("0")){
+				continue;
+			}
+
+			// will contain information for one question
+			JSONObject ret = new JSONObject();
+
+			ret.put("question",key.getAsString("question"));
+			ret.put("title",key.getAsString("title"));
+			ret.put("type",key.getAsString("type"));
+
+			JSONArray responses = new JSONArray();
+
+			// answeroptions given
+			ArrayList<String> answeroptions = new ArrayList<>();
+
+			// go through all responses and add answer for this question
+			for(Object resIds : decodedStringJSON){
+				JSONObject resKey = (JSONObject) resIds;
+				Set<String> keySet = resKey.keySet();
+
+				// iterate through all answers
+				for(String s : keySet){
+					String answer = "";
+					try{
+						String currRes = resKey.getAsString(s);
+						JSONObject currResJSON = (JSONObject) p.parse(currRes);
+						answer = currResJSON.getAsString(key.getAsString("title"));
+					} catch (Exception e){
+						//
+						answer = resKey.getAsString(key.getAsString("title"));
+					}
+					// remove null answers, so parsing works
+					if(answer == null){
+						answer = "";
+					}
+					responses.add(answer);
+					if(!answeroptions.contains(answer)){
+						answeroptions.add(answer);
+					}
+				}
+			}
+
+			// now count occurences of each answer
+			JSONObject occurences = new JSONObject();
+
+			for(String option : answeroptions){
+				int occ = Collections.frequency(responses, option);
+				occurences.put(option, occ);
+			}
+			ret.put("responses", occurences);
+			completeReturnJSON.add(ret);
+		}
+		return completeReturnJSON;
 	}
 
 
