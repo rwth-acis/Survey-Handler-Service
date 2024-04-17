@@ -85,7 +85,7 @@ public class SurveyHandlerService extends RESTService {
 	private String url = "";
 	private int databaseTypeInt = 1;
 	private int databasePort = 3306;
-	public static messenger messenger;
+	public static Messenger messenger;
 	public String sbfmURL = "";
 	// symbol to check telegram buttons
 	public static String check = ":check: ";
@@ -93,21 +93,7 @@ public class SurveyHandlerService extends RESTService {
 	// contains all texts displayed during the survey when talking as the bot
 	public static HashMap<String, String> texts = new HashMap<>();
 
-	public static enum messenger{
-		SLACK("Slack"),
-		ROCKETCHAT("Rocket.Chat"),
-		TELEGRAM("Telegram");
 
-		private final String name;
-		private messenger(String name){
-			this.name= name;
-		}
-
-		@Override
-		public String toString(){
-			return this.name;
-		}
-	}
 	// for logging
 	private Context l2pcontext = null;
 	public void setL2pcontext(Context l2pcontext) {
@@ -2596,7 +2582,7 @@ public class SurveyHandlerService extends RESTService {
 
 
 	private String reminderComposing(Participant pa, Integer unansweredQuestions, boolean started){
-		String msg = "";
+		String msg;
 		if(started){
 			if(messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
 				if(pa.languageIsGerman()){
