@@ -60,7 +60,7 @@ import java.util.logging.Level;
 public class SurveyHandlerService extends RESTService {
 
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
-	private ArrayList<Admin> allAdmins;
+	private static ArrayList<Admin> allAdmins = new ArrayList<>();
 	private String databaseUser;
 	private String databasePassword;
 	private String databaseName;
@@ -439,6 +439,9 @@ public class SurveyHandlerService extends RESTService {
 		return completeReturnJSON;
 	}
 
+	private boolean empty ( String s ) {
+		return s == null || s.isBlank();
+	}
 
 	@POST
 	@Path("/takingSurvey")
@@ -563,7 +566,7 @@ public class SurveyHandlerService extends RESTService {
 				}
 			}
 
-			if(Objects.isNull(lastChosenSurveyID)){
+			if(empty(lastChosenSurveyID)){
 				// no survey chosen yet, use default
 				defualt = true;
 				lastChosenSurveyID = surveyIDs[0];
@@ -997,7 +1000,7 @@ public class SurveyHandlerService extends RESTService {
 			Survey newSurvey = new Survey(surveyID);
 			allSurveys.add(newSurvey);
 
-			JSONParser p = new JSONParser();
+			JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
 			HashMap<String, String> head = new HashMap<String, String>();
@@ -1146,7 +1149,7 @@ public class SurveyHandlerService extends RESTService {
 
 	private boolean setUpMobsosSurvey(String surveyID, String uri, String adminmail){
 		try{
-			JSONParser p = new JSONParser();
+			JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
 			HashMap<String, String> head = new HashMap<String, String>();
@@ -2315,7 +2318,7 @@ public class SurveyHandlerService extends RESTService {
 
 	private String getSlackEmailBySlackId(String userId, String token){
 		System.out.println("inside getSlackEMailbyuserid...");
-		JSONParser p = new JSONParser();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 		System.out.println(userId);
 		//remove <@ and > at the beginning and end
 		if(userId.contains("<")){
