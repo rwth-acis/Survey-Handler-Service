@@ -9,10 +9,11 @@ import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 
-
 import javax.ws.rs.core.Response;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Objects;
 
 public class Participant {
 
@@ -994,7 +995,7 @@ public class Participant {
         else if(participantChangedButtonAnswer(messageTs) && SurveyHandlerService.messenger.equals(Messenger.SLACK)){
             return updateButtonAnswer(message, messageTs, changedAnswer, token);
         }
-        else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT)){
+        else if(messageTsFromEarlierMessage(messageTs) && (SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT) || SurveyHandlerService.messenger.equals(Messenger.RESTFUL))){
             return updateTextAnswer(message, messageTs, changedAnswer, token);
         }
         else if(messageTsFromEarlierMessage(messageTs) && SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
@@ -1297,7 +1298,7 @@ public class Participant {
         }
 
         // rocket chat
-        if(SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT)){
+        if(SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT) || SurveyHandlerService.messenger.equals(Messenger.RESTFUL)){
             if(!answerEdited.answerIsPlausible(message, SurveyHandlerService.telegramButtonCheck)){
                 response.put("text", answerEdited.reasonAnswerNotPlausible());
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
@@ -2131,10 +2132,9 @@ public class Participant {
         }
 
         // Check if it is a text answer for button questions in rocket chat
-        if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT)){
+        if(lastQuestion.isBlocksQuestion() && (SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT) || SurveyHandlerService.messenger.equals(Messenger.RESTFUL))){
             if(message.length() == 2 && String.valueOf(message.charAt(1)).equals(".")){
                 // check if message asking for a number contains a "."
-                JSONParser p = new JSONParser();
                 try{
                     Integer.parseInt(message.substring(0,1));
                     // remove "."
