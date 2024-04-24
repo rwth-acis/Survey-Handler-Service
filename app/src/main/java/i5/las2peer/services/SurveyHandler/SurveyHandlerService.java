@@ -804,6 +804,7 @@ public class SurveyHandlerService extends RESTService {
 			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
 			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
 			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
+			System.out.println("using restful: " + SurveyHandlerService.messenger.equals(Messenger.RESTFUL));
 
 			// check if there is a followup survey, if not sid is ""
 			if(followUpSurvey.getSid().length() > 0){
@@ -894,9 +895,11 @@ public class SurveyHandlerService extends RESTService {
 			// telegram msg does not contain user email, so its null
 			token = bodyInput.getAsString("telegramToken");
 			messenger = Messenger.TELEGRAM;
+		}else if (bodyInput.getAsString("restful")== null){
+			messenger = Messenger.ROCKETCHAT;
 		}
 		else{
-			messenger = Messenger.ROCKETCHAT;
+			messenger = Messenger.RESTFUL;
 		}
 		return token;
 	}
