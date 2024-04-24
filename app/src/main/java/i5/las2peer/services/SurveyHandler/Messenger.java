@@ -5,7 +5,9 @@ package i5.las2peer.services.SurveyHandler;
 public enum Messenger {
     SLACK("Slack"),
     ROCKETCHAT("Rocket.Chat"),
-    TELEGRAM("Telegram");
+    TELEGRAM("Telegram"),
+
+    RESTFUL("Restful");
 
     private final String name;
 
