@@ -443,447 +443,40 @@ public class SurveyHandlerService extends RESTService {
 		return s == null || s.isBlank();
 	}
 
-	@POST
-	@Path("/takingSurvey")
-	@Consumes(MediaType.TEXT_PLAIN)
-	@Produces(MediaType.APPLICATION_JSON)
-	@ApiOperation(
-			value = "Return the next question of the survey.",
-			notes = "")
-	@ApiResponses(
-			value = {@ApiResponse(
-					code = HttpURLConnection.HTTP_OK,
-					message = "survey taking request handled")})
-	public Response takingSurvey(String input) {
-		System.out.println("url: " + url);
-		System.out.println("sbfmurl: " + sbfmURL);
-		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
-		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
-		System.out.println("log: " + Context.get());
-
-		JSONObject response = new JSONObject();
-		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
-
-		try{
-			LocalDate dateNow = LocalDate.now();
-			LocalTime timeNow = LocalTime.now();
-
-			JSONObject bodyInput = (JSONObject) p.parse(input);
-			System.out.println("received message: " + bodyInput);
-			String intent = bodyInput.getAsString("intent");
-			String channel = bodyInput.getAsString("channel");
-			String surveyID = bodyInput.getAsString("surveyID");
-			String[] surveyIDs = surveyID.split(",");
-			String beginningTextEN = "";
-			String beginningTextDE = "";
-			if(bodyInput.containsKey("beginningText")){
-				System.out.println("has beginningText");
-				beginningTextEN = bodyInput.getAsString("beginningText");
-				beginningTextDE = bodyInput.getAsString("beginningText");
-			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
-				beginningTextEN = bodyInput.getAsString("beginningTextEN");
-				beginningTextDE = bodyInput.getAsString("beginningTextDE");
-			}
-			String senderEmail = "";
-			boolean defualt = false;
-
-			String token = ""; // for rocket chat none in this service is needed, so length 0
-			token = selectMessenger(bodyInput, token);
-
-			if(bodyInput.containsKey("sbfmURL")){
-				sbfmURL = bodyInput.getAsString("sbfmURL");
-				System.out.println("\nsbfmurl_ " + sbfmURL);
-			}
-
-			if(bodyInput.containsKey("url")){
-				url = bodyInput.getAsString("url");
-				System.out.println("\nurl_ " + url);
-			}
-
-			System.out.println("messenger: " + messenger.toString());
-
-			String messageTs = bodyInput.getAsString("time");
-			boolean ls = bodyInput.containsKey("NameOfUser");
-
-			// This intent is needed to check if the message received was send by clicking on a button as an answer
-			String buttonIntent = bodyInput.getAsString("buttonIntent");
-			System.out.println("buttonIntent: " + buttonIntent);
-
-
-			try{
-				senderEmail = bodyInput.getAsString("email");
-				System.out.println("senderEMail: " + senderEmail);
-
-				// check if senderEmail is actual email or userid
-				if(!senderEmail.contains("@")){
-					System.out.println("sender email is user id");
-					senderEmail = getSlackEmailBySlackId(senderEmail, token);
-					System.out.println("senderEMail: " + senderEmail);
-				}
-			} catch(Exception e){
-				try{
-					for(String id : surveyIDs){
-						Survey s = getSurveyBySurveyID(id);
-
-						if(s.findParticipantByChannel(channel).getEmail() != null){
-							senderEmail = s.findParticipantByChannel(channel).getEmail();
-							break;
-						}
-					}
-				} catch (Exception ex){
-					// in case of telegram no email is passed on, so username is the 'email'
-					if(bodyInput.containsKey("user")){
-						senderEmail = bodyInput.getAsString("user");
-					}
-					else{
-						System.out.println("channel, email or user is not transmitted correctly");
-					}
-				}
-
-				System.out.println("senderEMail: " + senderEmail);
-			}
-
-			// find correct survey
-			String lastChosenSurveyID = null;
-			for(String id : surveyIDs){
-				Survey s = getSurveyBySurveyID(id);
-
-				// Check if survey is set up already
-				if (Objects.isNull(s)){
-					response.put("text", "Please wait for the survey to be initialized.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-
-				if(s.getParticipantByPID(senderEmail) != null){
-					// survey has participant, now check which survey is currently chosen
-					lastChosenSurveyID = s.getParticipantByPID(senderEmail).getLastChosenSurveyID();
-					System.out.println("lastchosenid: " + lastChosenSurveyID);
-					break;
-				}
-				else{
-					System.out.println("participant not found in survey");
-				}
-			}
-
-			if(empty(lastChosenSurveyID)){
-				// no survey chosen yet, use default
-				defualt = true;
-				lastChosenSurveyID = surveyIDs[0];
-			}
-
-			Survey currSurvey = getSurveyBySurveyID(lastChosenSurveyID);
-
-			String followupSurveyID;
-			Survey followUpSurvey = new Survey("");
-
-			if(bodyInput.containsKey("followupSurveyID")){
-				followupSurveyID = bodyInput.getAsString("followupSurveyID");
-				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
-			}
-
-
-			System.out.println("survey: " + currSurvey);
-			System.out.println("followup: " + followUpSurvey);
-
-
-			// Check if survey is set up already
-			if (Objects.isNull(currSurvey)){
-				response.put("text", "Please wait for the survey to be initialized.");
-				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-				return Response.ok().entity(response).build();
-			}
-
-			// Check if survey has expiration date and has not started yet
-			if(currSurvey.getStartDT() != null){
-				if(ls){
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String startDate = currSurvey.getStartDT().split("\\s")[0];
-					String startTime = currSurvey.getStartDT().split("\\s")[1];
-					System.out.println(startDate + " and starts at " + dateNow);
-					System.out.println(startTime + " and starts at " + timeNow);
-					if(dateNow.isBefore(LocalDate.parse(startDate))) {
-						if (timeNow.isBefore(LocalTime.parse(startTime))){
-							System.out.println("survey not yet active");
-							response.put("text", "The survey is not yet active.");
-							Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-							return Response.ok().entity(response).build();
-						}
-					}
-				} else{
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String startDate = currSurvey.getStartDT().split("T")[0];
-					String startTime = currSurvey.getStartDT().split("T")[1];
-					System.out.println(startDate + " and starts at " + dateNow);
-					System.out.println(startTime + " and starts at " + timeNow);
-					if(dateNow.isBefore(LocalDate.parse(startDate))){
-						if(timeNow.isBefore(LocalTime.parse(startTime))) {
-							System.out.println("survey not yet active");
-							response.put("text", "The survey is not yet active.");
-							Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-							return Response.ok().entity(response).build();
-						}
-					}
-				}
-
-			}
-
-			String messageId = bodyInput.getAsString("message_id");
-			System.out.println("ts: " + messageTs);
-			JSONObject currMessage = new JSONObject();
-			JSONObject prevMessage = new JSONObject();
-
-			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
-				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
-				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
-			}
-
-			// Check if message was sent by someone we only knew the channel of, but now also the email
-			if(Objects.nonNull(currSurvey.findParticipant(channel))){
-				// after setting the channel last time now we can set email, since the email gets send the second time a participants sents something
-				Participant tempP = currSurvey.findParticipant(channel);
-				tempP.setEmail(senderEmail);
-				tempP.setChannel(channel);
-				SurveyHandlerServiceQueries.updateParticipantInDB(tempP, database);
-				tempP.setPid(senderEmail);
-				SurveyHandlerServiceQueries.updateParticipantsPidInDB(tempP, database);
-			}
-
-			// Check if message was sent by someone known
-			boolean known = false;
-			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
-				// first check if participant exists for other survey
-				for(String id : surveyIDs){
-					Survey survey = getSurveyBySurveyID(id);
-					if(Objects.nonNull(survey.findParticipant(channel))){
-						currSurvey = survey;
-						known = true;
-					}
-				}
-				if(!known){
-					System.out.println("participant does not exist, create a new one");
-					// participant does not exist, create a new one
-					Participant newParticipant = new Participant(senderEmail);
-					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
-					newParticipant.setLastChosenSurveyID("");
-
-					currSurvey.addParticipant(newParticipant);
-					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
-
-					if(surveyIDs.length > 1){
-						System.out.println("more than one survey id and participant has not yet chosen");
-						// let participant choose which survey to take, since its first time messaging
-						HashMap<String, String> titles = new HashMap<>();
-						for(String id : surveyIDs){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						}
-
-						return newParticipant.chooseSurvey(titles);
-					}
-				}
-			}
-
-			// Get the existing participant
-			Participant currParticipant = currSurvey.findParticipant(senderEmail);
-			System.out.println(currParticipant.getChannel());
-			if(currParticipant.getChannel() == null){
-				currParticipant.setChannel(channel);
-				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
-			}
-			System.out.println(currParticipant.getChannel());
-			String message = bodyInput.getAsString("msg");
-
-			// check if survey has been chosen yet
-			if(surveyIDs.length > 1 && currParticipant.hasLastChosenSurveyID()){
-				if(currParticipant.getLastChosenSurveyID().length() < 1){
-					System.out.println("check if one can set survey");
-					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
-
-					if(!set){
-						// participant sent non existent title, ask again
-						HashMap<String, String> titles = new HashMap<>();
-						for(String id : surveyIDs){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						}
-
-						currParticipant.setLastChosenSurveyID("");
-
-						response.put("text", currParticipant.chooseSurvey(titles));
+	private static boolean isExpired(JSONObject response, LocalDate dateNow, LocalTime timeNow, boolean ls, Survey currSurvey) {
+		if(currSurvey.getStartDT() != null){
+			if(ls){
+				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+				String startDate = currSurvey.getStartDT().split("\\s")[0];
+				String startTime = currSurvey.getStartDT().split("\\s")[1];
+				System.out.println(startDate + " and starts at " + dateNow);
+				System.out.println(startTime + " and starts at " + timeNow);
+				if(dateNow.isBefore(LocalDate.parse(startDate))) {
+					if (timeNow.isBefore(LocalTime.parse(startTime))){
+						System.out.println("survey not yet active");
+						response.put("text", "The survey is not yet active.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
+						return true;
 					}
 				}
-
-
-				if(surveyChoosingEdited(currParticipant, messageTs, currMessage, prevMessage)){
-					// participant has chosen a survey but has now edited the choice
-					System.out.println("participant has chosen a survey but has now edited the choice");
-					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
-
-					if(!set){
-						// participant sent non existent title, ask to edit message again
-						HashMap<String, String> titles = new HashMap<>();
-						for(String id : surveyIDs){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						}
-
-						response.put("text", currParticipant.chooseSurvey(titles));
+			} else{
+				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+				String startDate = currSurvey.getStartDT().split("T")[0];
+				String startTime = currSurvey.getStartDT().split("T")[1];
+				System.out.println(startDate + " and starts at " + dateNow);
+				System.out.println(startTime + " and starts at " + timeNow);
+				if(dateNow.isBefore(LocalDate.parse(startDate))){
+					if(timeNow.isBefore(LocalTime.parse(startTime))) {
+						System.out.println("survey not yet active");
+						response.put("text", "The survey is not yet active.");
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-
-
-					if(currParticipant.getLastquestion() !=  null){
-						// send last asked question again
-						String questionText = currSurvey.getQuestionByQid(currParticipant.getLastquestion(), currParticipant.getLanguage()).encodeJsonBodyAsString(currParticipant);
-						response.put("text", questionText);
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-
-					}
-
-					// else procede with usual action
-
-				}
-			}
-
-			// check if participant is done with survey and can choose new one
-			if(surveyIDs.length > 1 && currParticipant.isCompletedsurvey()){
-				System.out.println("more than one survey id and participant finished survey");
-				// let participant choose which survey to take
-				HashMap<String, String> titles = new HashMap<>();
-				int count = 0;
-				String idOfSurvey = "";
-				for(String id : surveyIDs){
-					Survey survey = SurveyHandlerService.getSurveyBySurveyID(id);
-					if(survey.getParticipantByPID(senderEmail) == null){
-						titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						count++;
-						idOfSurvey = id;
-					}
-					else{
-						System.out.println("completed: " + id + " " + survey.getSid() + " " + survey.getParticipantByPID(senderEmail) + " " + survey.getParticipantByPID(senderEmail).getSid() + " " + survey.getParticipantByPID(senderEmail).isCompletedsurvey());
-						if(!survey.getParticipantByPID(senderEmail).isCompletedsurvey()){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-							count++;
-							idOfSurvey = id;
-						}
-					}
-				}
-				if(count < 1){
-					System.out.println("Participant has completed all surveys");
-					// no unfinished survey left
-					String changeAnswerExplanation = SurveyHandlerService.texts.get("changeAnswerExplanation");
-					String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
-					response.put("text", completedSurvey);
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-				else if(count < 2){
-					System.out.println("Participant has completed all but one survey");
-					// one survey left, participant has been notified that survey is done
-					currSurvey = getSurveyBySurveyID(idOfSurvey);
-					currParticipant.setLastChosenSurveyID(idOfSurvey);
-					SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
-
-					// add participant to chosen survey
-					Participant newParticipant = new Participant(senderEmail); //currParticipant;
-					currSurvey.addParticipant(newParticipant);
-					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
-					currParticipant = newParticipant;
-				}
-				else{
-					System.out.println("Participant has more than one open survey, is now asked which to do next");
-					return currParticipant.chooseSurvey(titles);
-				}
-			}
-
-			//
-			boolean secondSurvey = false;
-
-			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
-			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
-			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
-			System.out.println("using restful: " + SurveyHandlerService.messenger.equals(Messenger.RESTFUL));
-
-			// check if there is a followup survey, if not sid is ""
-			if(followUpSurvey.getSid().length() > 0){
-				// check if the participant is done with the first survey
-				if(currParticipant.isCompletedsurvey()){
-					currParticipant = followUpSurvey.findParticipant(senderEmail);
-					if(Objects.isNull(currParticipant)){
-						currParticipant = currSurvey.findParticipant(senderEmail);
-						if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
-							String changedAnswer = texts.get("changedAnswer");
-							if(currParticipant.languageIsGerman()){
-								changedAnswer = texts.get("changedAnswerDE");
-							}
-							String answerNotFittingQuestion = "";
-							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
-						}
-					}
-
-					// if the participant is done with first survey, check if already participant in second survey
-					currParticipant = followUpSurvey.findParticipant(senderEmail);
-					secondSurvey = true;
-					if(Objects.isNull(currParticipant)){
-						System.out.println("creating new participant for follow up");
-						// participant does not exist for new survey, create a new one
-						currParticipant = new Participant(senderEmail);
-						followUpSurvey.addParticipant(currParticipant);
-						SurveyHandlerServiceQueries.addParticipantToDB(currParticipant, database);
-					}
-					if(currParticipant.getChannel() == null){
-						currParticipant.setChannel(channel);
-						SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
-					}
-
-					boolean active = true;
-
-					// Check if survey has expiration date and if survey has expired
-					if(currSurvey.getExpires() != null){
-						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-						String expireDate = currSurvey.getExpires().split("\\s")[0];
-						String expireTime = currSurvey.getExpires().split("\\s")[1];
-						if(dateNow.isAfter(LocalDate.parse(expireDate))){
-							if(timeNow.isAfter(LocalTime.parse(expireTime)))
-								active = false;
-						}
-					}
-
-					// Check if survey has expiration date and if survey has expired
-					if(currSurvey.getStartDT() != null){
-						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-						String startDate = currSurvey.getStartDT().split("\\s")[0];
-						String startTime = currSurvey.getStartDT().split("\\s")[1];
-						if(dateNow.isBefore(LocalDate.parse(startDate))){
-							if(timeNow.isBefore(LocalTime.parse(startTime)))
-								active = false;
-						}
-					}
-
-					// check if survey is currently active
-					if(!active){
-						// survey is not active yet, so get participant infos from first survey again
-						currSurvey = getSurveyBySurveyID(surveyID);
-						currParticipant = currSurvey.findParticipant(senderEmail);
+						return true;
 					}
 				}
 			}
 
-
-			//Set the time the participant answered to check later if needed to be reminded to finish survey
-			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
-
-			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
-
-
-		} catch (ParseException e) {
-			e.printStackTrace();
 		}
-		response.put("text", "Something went wrong in takingSurvey try block.");
-		return Response.ok().entity(response).build();
+		return false;
 	}
 
 	private String selectMessenger(JSONObject bodyInput, String token) {
@@ -1287,6 +880,619 @@ public class SurveyHandlerService extends RESTService {
 		}
 
 		return false;
+	}
+
+	@POST
+	@Path("/takingSurvey")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "Return the next question of the survey.",
+			notes = "")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "survey taking request handled")})
+	public Response takingSurvey(String input) {
+		System.out.println("url: " + url);
+		System.out.println("sbfmurl: " + sbfmURL);
+		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+		System.out.println("log: " + Context.get());
+
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		try{
+			LocalDate dateNow = LocalDate.now();
+			LocalTime timeNow = LocalTime.now();
+
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+			String intent = bodyInput.getAsString("intent");
+			String channel = bodyInput.getAsString("channel");
+			String surveyID = bodyInput.getAsString("surveyID");
+			String[] surveyIDs = surveyID.split(",");
+			String beginningTextEN = "";
+			String beginningTextDE = "";
+			if(bodyInput.containsKey("beginningText")){
+				System.out.println("has beginningText");
+				beginningTextEN = bodyInput.getAsString("beginningText");
+				beginningTextDE = bodyInput.getAsString("beginningText");
+			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
+				beginningTextEN = bodyInput.getAsString("beginningTextEN");
+				beginningTextDE = bodyInput.getAsString("beginningTextDE");
+			}
+			String senderEmail = "";
+			boolean defualt = false;
+
+			String token = ""; // for rocket chat none in this service is needed, so length 0
+			token = selectMessenger(bodyInput, token);
+
+			if(bodyInput.containsKey("sbfmURL")){
+				sbfmURL = bodyInput.getAsString("sbfmURL");
+				System.out.println("\nsbfmurl_ " + sbfmURL);
+			}
+
+			if(bodyInput.containsKey("url")){
+				url = bodyInput.getAsString("url");
+				System.out.println("\nurl_ " + url);
+			}
+
+			System.out.println("messenger: " + messenger.toString());
+
+			String messageTs = bodyInput.getAsString("time");
+			boolean ls = bodyInput.containsKey("NameOfUser");
+
+			// This intent is needed to check if the message received was send by clicking on a button as an answer
+			String buttonIntent = bodyInput.getAsString("buttonIntent");
+			System.out.println("buttonIntent: " + buttonIntent);
+
+
+			try{
+				senderEmail = bodyInput.getAsString("email");
+				System.out.println("senderEMail: " + senderEmail);
+
+				// check if senderEmail is actual email or userid
+				if(!senderEmail.contains("@")){
+					System.out.println("sender email is user id");
+					senderEmail = getSlackEmailBySlackId(senderEmail, token);
+					System.out.println("senderEMail: " + senderEmail);
+				}
+			} catch(Exception e){
+				try{
+					for(String id : surveyIDs){
+						Survey s = getSurveyBySurveyID(id);
+
+						if(s.findParticipantByChannel(channel).getEmail() != null){
+							senderEmail = s.findParticipantByChannel(channel).getEmail();
+							break;
+						}
+					}
+				} catch (Exception ex){
+					// in case of telegram no email is passed on, so username is the 'email'
+					if(bodyInput.containsKey("user")){
+						senderEmail = bodyInput.getAsString("user");
+					}
+					else{
+						System.out.println("channel, email or user is not transmitted correctly");
+					}
+				}
+
+				System.out.println("senderEMail: " + senderEmail);
+			}
+
+			// find correct survey
+			String lastChosenSurveyID = null;
+			for(String id : surveyIDs){
+				Survey s = getSurveyBySurveyID(id);
+
+				// Check if survey is set up already
+				if (Objects.isNull(s)){
+					response.put("text", "Please wait for the survey to be initialized.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+
+				if(s.getParticipantByPID(senderEmail) != null){
+					// survey has participant, now check which survey is currently chosen
+					lastChosenSurveyID = s.getParticipantByPID(senderEmail).getLastChosenSurveyID();
+					System.out.println("lastchosenid: " + lastChosenSurveyID);
+					break;
+				}
+				else{
+					System.out.println("participant not found in survey");
+				}
+			}
+
+			if(empty(lastChosenSurveyID)){
+				// no survey chosen yet, use default
+				defualt = true;
+				lastChosenSurveyID = surveyIDs[0];
+			}
+
+			Survey currSurvey = getSurveyBySurveyID(lastChosenSurveyID);
+
+			String followupSurveyID;
+			Survey followUpSurvey = new Survey("");
+
+			if(bodyInput.containsKey("followupSurveyID")){
+				followupSurveyID = bodyInput.getAsString("followupSurveyID");
+				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
+			}
+
+
+			System.out.println("survey: " + currSurvey);
+			System.out.println("followup: " + followUpSurvey);
+
+
+			// Check if survey is set up already
+			if (Objects.isNull(currSurvey)){
+				response.put("text", "Please wait for the survey to be initialized.");
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
+			}
+
+			// Check if survey has expiration date and has not started yet
+			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) return Response.ok().entity(response).build();
+
+			String messageId = bodyInput.getAsString("message_id");
+			System.out.println("ts: " + messageTs);
+			JSONObject currMessage = new JSONObject();
+			JSONObject prevMessage = new JSONObject();
+
+			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
+				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
+				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
+			}
+
+			// Check if message was sent by someone we only knew the channel of, but now also the email
+			if(Objects.nonNull(currSurvey.findParticipant(channel))){
+				// after setting the channel last time now we can set email, since the email gets send the second time a participants sents something
+				Participant tempP = currSurvey.findParticipant(channel);
+				tempP.setEmail(senderEmail);
+				tempP.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(tempP, database);
+				tempP.setPid(senderEmail);
+				SurveyHandlerServiceQueries.updateParticipantsPidInDB(tempP, database);
+			}
+
+			// Check if message was sent by someone known
+			boolean known = false;
+			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
+				// first check if participant exists for other survey
+				for(String id : surveyIDs){
+					Survey survey = getSurveyBySurveyID(id);
+					if(Objects.nonNull(survey.findParticipant(channel))){
+						currSurvey = survey;
+						known = true;
+					}
+				}
+				if(!known){
+					System.out.println("participant does not exist, create a new one");
+					// participant does not exist, create a new one
+					Participant newParticipant = new Participant(senderEmail);
+					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
+					newParticipant.setLastChosenSurveyID("");
+
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+
+					if(surveyIDs.length > 1){
+						System.out.println("more than one survey id and participant has not yet chosen");
+						// let participant choose which survey to take, since its first time messaging
+						HashMap<String, String> titles = new HashMap<>();
+						for(String id : surveyIDs){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						}
+
+						return newParticipant.chooseSurvey(titles);
+					}
+				}
+			}
+
+			// Get the existing participant
+			Participant currParticipant = currSurvey.findParticipant(senderEmail);
+			System.out.println(currParticipant.getChannel());
+			if(currParticipant.getChannel() == null){
+				currParticipant.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+			}
+			System.out.println(currParticipant.getChannel());
+			String message = bodyInput.getAsString("msg");
+
+			// check if survey has been chosen yet
+			if(surveyIDs.length > 1 && currParticipant.hasLastChosenSurveyID()){
+				if(currParticipant.getLastChosenSurveyID().length() < 1){
+					System.out.println("check if one can set survey");
+					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
+
+					if(!set){
+						// participant sent non existent title, ask again
+						HashMap<String, String> titles = new HashMap<>();
+						for(String id : surveyIDs){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						}
+
+						currParticipant.setLastChosenSurveyID("");
+
+						response.put("text", currParticipant.chooseSurvey(titles));
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+				}
+
+
+				if(surveyChoosingEdited(currParticipant, messageTs, currMessage, prevMessage)){
+					// participant has chosen a survey but has now edited the choice
+					System.out.println("participant has chosen a survey but has now edited the choice");
+					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
+
+					if(!set){
+						// participant sent non existent title, ask to edit message again
+						HashMap<String, String> titles = new HashMap<>();
+						for(String id : surveyIDs){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						}
+
+						response.put("text", currParticipant.chooseSurvey(titles));
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+
+
+					if(currParticipant.getLastquestion() !=  null){
+						// send last asked question again
+						String questionText = currSurvey.getQuestionByQid(currParticipant.getLastquestion(), currParticipant.getLanguage()).encodeJsonBodyAsString(currParticipant);
+						response.put("text", questionText);
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+
+					}
+
+					// else procede with usual action
+
+				}
+			}
+
+			// check if participant is done with survey and can choose new one
+			if(surveyIDs.length > 1 && currParticipant.isCompletedsurvey()){
+				System.out.println("more than one survey id and participant finished survey");
+				// let participant choose which survey to take
+				HashMap<String, String> titles = new HashMap<>();
+				int count = 0;
+				String idOfSurvey = "";
+				for(String id : surveyIDs){
+					Survey survey = SurveyHandlerService.getSurveyBySurveyID(id);
+					if(survey.getParticipantByPID(senderEmail) == null){
+						titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						count++;
+						idOfSurvey = id;
+					}
+					else{
+						System.out.println("completed: " + id + " " + survey.getSid() + " " + survey.getParticipantByPID(senderEmail) + " " + survey.getParticipantByPID(senderEmail).getSid() + " " + survey.getParticipantByPID(senderEmail).isCompletedsurvey());
+						if(!survey.getParticipantByPID(senderEmail).isCompletedsurvey()){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+							count++;
+							idOfSurvey = id;
+						}
+					}
+				}
+				if(count < 1){
+					System.out.println("Participant has completed all surveys");
+					// no unfinished survey left
+					String changeAnswerExplanation = SurveyHandlerService.texts.get("changeAnswerExplanation");
+					String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
+					response.put("text", completedSurvey);
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+				else if(count < 2){
+					System.out.println("Participant has completed all but one survey");
+					// one survey left, participant has been notified that survey is done
+					currSurvey = getSurveyBySurveyID(idOfSurvey);
+					currParticipant.setLastChosenSurveyID(idOfSurvey);
+					SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+
+					// add participant to chosen survey
+					Participant newParticipant = new Participant(senderEmail); //currParticipant;
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+					currParticipant = newParticipant;
+				}
+				else{
+					System.out.println("Participant has more than one open survey, is now asked which to do next");
+					return currParticipant.chooseSurvey(titles);
+				}
+			}
+
+			//
+			boolean secondSurvey = false;
+
+			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
+			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
+			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
+			System.out.println("using restful: " + SurveyHandlerService.messenger.equals(Messenger.RESTFUL));
+
+			// check if there is a followup survey, if not sid is ""
+			if(followUpSurvey.getSid().length() > 0){
+				// check if the participant is done with the first survey
+				if(currParticipant.isCompletedsurvey()){
+					currParticipant = followUpSurvey.findParticipant(senderEmail);
+					if(Objects.isNull(currParticipant)){
+						currParticipant = currSurvey.findParticipant(senderEmail);
+						if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
+							String changedAnswer = texts.get("changedAnswer");
+							if(currParticipant.languageIsGerman()){
+								changedAnswer = texts.get("changedAnswerDE");
+							}
+							String answerNotFittingQuestion = "";
+							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
+						}
+					}
+
+					// if the participant is done with first survey, check if already participant in second survey
+					currParticipant = followUpSurvey.findParticipant(senderEmail);
+					secondSurvey = true;
+					if(Objects.isNull(currParticipant)){
+						System.out.println("creating new participant for follow up");
+						// participant does not exist for new survey, create a new one
+						currParticipant = new Participant(senderEmail);
+						followUpSurvey.addParticipant(currParticipant);
+						SurveyHandlerServiceQueries.addParticipantToDB(currParticipant, database);
+					}
+					if(currParticipant.getChannel() == null){
+						currParticipant.setChannel(channel);
+						SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+					}
+
+					boolean active = true;
+
+					// Check if survey has expiration date and if survey has expired
+					if(currSurvey.getExpires() != null){
+						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+						String expireDate = currSurvey.getExpires().split("\\s")[0];
+						String expireTime = currSurvey.getExpires().split("\\s")[1];
+						if(dateNow.isAfter(LocalDate.parse(expireDate))){
+							if(timeNow.isAfter(LocalTime.parse(expireTime)))
+								active = false;
+						}
+					}
+
+					// Check if survey has expiration date and if survey has expired
+					if(currSurvey.getStartDT() != null){
+						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+						String startDate = currSurvey.getStartDT().split("\\s")[0];
+						String startTime = currSurvey.getStartDT().split("\\s")[1];
+						if(dateNow.isBefore(LocalDate.parse(startDate))){
+							if(timeNow.isBefore(LocalTime.parse(startTime)))
+								active = false;
+						}
+					}
+
+					// check if survey is currently active
+					if(!active){
+						// survey is not active yet, so get participant infos from first survey again
+						currSurvey = getSurveyBySurveyID(surveyID);
+						currParticipant = currSurvey.findParticipant(senderEmail);
+					}
+				}
+			}
+
+
+			//Set the time the participant answered to check later if needed to be reminded to finish survey
+			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
+
+			// Get the next action
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
+
+
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+		response.put("text", "Something went wrong in takingSurvey try block.");
+		return Response.ok().entity(response).build();
+	}
+
+	@POST
+	@Path("/questions")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "Return the next question of the survey.",
+			notes = "")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "survey question request handled")})
+	public Response nextQuestion(String input) {
+		System.out.println("url: " + url);
+		System.out.println("sbfmurl: " + sbfmURL);
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+		System.out.println("log: " + Context.get());
+
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		try{
+			LocalDate dateNow = LocalDate.now();
+			LocalTime timeNow = LocalTime.now();
+
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+			String intent = bodyInput.getAsString("intent");
+			String channel = bodyInput.getAsString("channel");
+			String surveyID = bodyInput.getAsString("surveyID");
+			String beginningTextEN = "";
+			String beginningTextDE = "";
+			if(bodyInput.containsKey("beginningText")){
+				System.out.println("has beginningText");
+				beginningTextEN = bodyInput.getAsString("beginningText");
+				beginningTextDE = bodyInput.getAsString("beginningText");
+			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
+				beginningTextEN = bodyInput.getAsString("beginningTextEN");
+				beginningTextDE = bodyInput.getAsString("beginningTextDE");
+			}
+			String senderEmail = "";
+
+			String token = ""; // for rocket chat none in this service is needed, so length 0
+			token = selectMessenger(bodyInput, token);
+
+			if(bodyInput.containsKey("sbfmURL")){
+				sbfmURL = bodyInput.getAsString("sbfmURL");
+				System.out.println("\nsbfmurl_ " + sbfmURL);
+			}
+
+			if(bodyInput.containsKey("url")){
+				url = bodyInput.getAsString("url");
+				System.out.println("\nurl_ " + url);
+			}
+
+			System.out.println("messenger: " + messenger.toString());
+
+			String messageTs = bodyInput.getAsString("time");
+			boolean ls = bodyInput.containsKey("NameOfUser");
+
+			// This intent is needed to check if the message received was send by clicking on a button as an answer
+			String buttonIntent = bodyInput.getAsString("buttonIntent");
+			System.out.println("buttonIntent: " + buttonIntent);
+
+
+			try{
+				senderEmail = bodyInput.getAsString("email");
+				System.out.println("senderEMail: " + senderEmail);
+
+				// check if senderEmail is actual email or userid
+				if(!senderEmail.contains("@")){
+					System.out.println("sender email is user id");
+					senderEmail = getSlackEmailBySlackId(senderEmail, token);
+					System.out.println("senderEMail: " + senderEmail);
+				}
+			} catch(Exception e){
+				try{
+					Survey s = getSurveyBySurveyID(surveyID);
+
+					if(s.findParticipantByChannel(channel).getEmail() != null){
+						senderEmail = s.findParticipantByChannel(channel).getEmail();
+					}
+				} catch (Exception ex){
+					// in case of telegram no email is passed on, so username is the 'email'
+					if(bodyInput.containsKey("user")){
+						senderEmail = bodyInput.getAsString("user");
+					}
+					else{
+						System.out.println("channel, email or user is not transmitted correctly");
+					}
+				}
+
+				System.out.println("senderEMail: " + senderEmail);
+			}
+
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
+
+			if (Objects.isNull(currSurvey)){
+				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+				boolean setUp = setUpSurvey(input);
+				// See if survey is set up now
+				currSurvey = getSurveyBySurveyID(surveyID);
+				if (Objects.isNull(currSurvey) || !setUp){
+					deleteSurvey(surveyID);
+					System.out.println("ERROR: Could not set up survey, still null.");
+					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+				System.out.println("Survey is set-up.");
+			}
+
+			System.out.println("survey: " + currSurvey);
+
+			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) {
+				return Response.ok().entity(response).build();
+			}
+
+			String messageId = bodyInput.getAsString("message_id");
+			System.out.println("ts: " + messageTs);
+			JSONObject currMessage = new JSONObject();
+			JSONObject prevMessage = new JSONObject();
+
+			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
+				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
+				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
+			}
+
+			// Check if message was sent by someone we only knew the channel of, but now also the email
+			if(Objects.nonNull(currSurvey.findParticipant(channel))){
+				// after setting the channel last time now we can set email, since the email gets send the second time a participants sents something
+				Participant tempP = currSurvey.findParticipant(channel);
+				tempP.setEmail(senderEmail);
+				tempP.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(tempP, database);
+				tempP.setPid(senderEmail);
+				SurveyHandlerServiceQueries.updateParticipantsPidInDB(tempP, database);
+			}
+
+			// Check if message was sent by someone known
+			boolean known = false;
+			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
+				if(Objects.nonNull(currSurvey.findParticipant(channel))){
+					known = true;
+				}
+
+				if(!known){
+					System.out.println("participant does not exist, create a new one");
+					// participant does not exist, create a new one
+					Participant newParticipant = new Participant(senderEmail);
+					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
+					newParticipant.setLastChosenSurveyID("");
+
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+				}
+			}
+
+			// Get the existing participant
+			Participant currParticipant = currSurvey.findParticipant(senderEmail);
+			System.out.println(currParticipant.getChannel());
+			if(currParticipant.getChannel() == null){
+				currParticipant.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+			}
+			System.out.println(currParticipant.getChannel());
+			String message = bodyInput.getAsString("msg");
+
+			// check if participant is done with survey and can choose new one
+			if(currParticipant.isCompletedsurvey()){
+
+				System.out.println("Participant has completed survey");
+				// no unfinished survey left
+				String changeAnswerExplanation = SurveyHandlerService.texts.get("changeAnswerExplanation");
+				String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
+				response.put("text", completedSurvey);
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
+
+			}
+
+			//
+			boolean secondSurvey = false;
+
+			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
+			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
+			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
+			System.out.println("using restful: " + SurveyHandlerService.messenger.equals(Messenger.RESTFUL));
+
+			//Set the time the participant answered to check later if needed to be reminded to finish survey
+			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
+
+			// Get the next action
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
+
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+		response.put("text", "Something went wrong in takingSurvey try block.");
+		return Response.ok().entity(response).build();
 	}
 
 
