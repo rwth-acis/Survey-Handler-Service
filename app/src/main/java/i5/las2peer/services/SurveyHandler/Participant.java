@@ -62,7 +62,6 @@ public class Participant {
 
         String beginningText = "";
         JSONObject response = new JSONObject();
-        Participant currParticipant = this;
 
         String languages = "";
         for(String s : this.currentSurvey.getLanguages()){

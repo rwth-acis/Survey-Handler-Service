@@ -1335,8 +1335,7 @@ public class SurveyHandlerService extends RESTService {
 			}
 			String senderEmail = "";
 
-			String token = ""; // for rocket chat none in this service is needed, so length 0
-			token = selectMessenger(bodyInput, token);
+			messenger = Messenger.RESTFUL;
 
 			if(bodyInput.containsKey("sbfmURL")){
 				sbfmURL = bodyInput.getAsString("sbfmURL");
@@ -1362,12 +1361,6 @@ public class SurveyHandlerService extends RESTService {
 				senderEmail = bodyInput.getAsString("email");
 				System.out.println("senderEMail: " + senderEmail);
 
-				// check if senderEmail is actual email or userid
-				if(!senderEmail.contains("@")){
-					System.out.println("sender email is user id");
-					senderEmail = getSlackEmailBySlackId(senderEmail, token);
-					System.out.println("senderEMail: " + senderEmail);
-				}
 			} catch(Exception e){
 				try{
 					Survey s = getSurveyBySurveyID(surveyID);
@@ -1474,9 +1467,6 @@ public class SurveyHandlerService extends RESTService {
 
 			}
 
-			//
-			boolean secondSurvey = false;
-
 			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
 			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
 			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
@@ -1484,9 +1474,10 @@ public class SurveyHandlerService extends RESTService {
 
 			//Set the time the participant answered to check later if needed to be reminded to finish survey
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
+			String token = "";
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, false, beginningTextEN, beginningTextDE);
 
 		} catch (ParseException e) {
 			e.printStackTrace();
