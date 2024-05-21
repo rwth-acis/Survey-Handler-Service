@@ -22,19 +22,14 @@ sourceSets {
 repositories {
     // Use MavenCentral for resolving dependencies.
     mavenCentral()
-
-    // DBIS Archiva
-    maven {
-        url "https://archiva.dbis.rwth-aachen.de:9911/repository/internal/"
-    }
 }
 
 dependencies {
+    // las2peer bundle dependency
+    implementation "io.github.rwth-acis.org.las2peer:las2peer-bundle:${project.property('core.version')}"
     // Use JUnit test framework.
     testImplementation "junit:junit:4.13.2"
-    // las2peer bundle which is not necessary in the runtime path
     // compileOnly will be moved into the lib dir afterwards
-    implementation "i5:las2peer-bundle:${project.property('core.version')}"
 
     // Add service dependencies here
     // example:
