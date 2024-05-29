@@ -8,6 +8,7 @@ import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
+import org.jetbrains.annotations.NotNull;
 
 import javax.ws.rs.core.Response;
 import java.time.LocalDateTime;
@@ -47,10 +48,6 @@ public class Participant {
     private HashMap<String, String> answers = new HashMap<>();
 
     private Survey currentSurvey = null;
-
-
-    public String test = "";
-    String propertiesName = "i5.las2peer.services.SurveyHandler.Participant";
 
     public Participant(String email){
         this.addEmail(email);
@@ -119,7 +116,7 @@ public class Participant {
             }
         }
 
-        String title = "";
+        String title;
         String welcomeText = "";
         if(this.currentSurvey.getLanguages().get(0).equals(this.language)){
             title = currentSurvey.getTitle();
@@ -205,8 +202,6 @@ public class Participant {
                 }
             }
         }
-        //System.out.println("we: " + welcomeString);
-        //System.out.println("beginningT length: " + beginningText.length());
         if(beginningTextEN.length() < 1 && beginningTextDE.length() < 1){
             // if no text is set in frontend, use predefined text
             beginningText = welcomeString + skipExplanation + first + changeAnswerExplanation + resultsGetSaved;
@@ -1869,7 +1864,7 @@ public class Participant {
         } else if(lastQuestion.getType().equals(Question.qType.MULTIPLECHOICENOCOMMENT.toString()) ||
                 lastQuestion.getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString())) {
             // lastquestion is MC, handle accordingly
-            JSONParser p = new JSONParser();
+            JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
             JSONArray selectedOptionsJson;
             boolean submitButtonPressed = message.equals(submitButton);
             System.out.println("submitButtonPressed is " + submitButtonPressed + " and message is: " + message);
@@ -1893,20 +1888,8 @@ public class Participant {
                             }
                         }
                         if(!chosen){
-                            Answer currAnswer = new Answer();
-                            // Subquestions also have the same group id as the main question
-                            currAnswer.setGid(q.getGid());
-                            currAnswer.setPid(this.pid);
-                            currAnswer.setSid(q.getSid());
-                            currAnswer.setMessageId(messageId);
-                            currAnswer.setMessageTs(messageTs);
-                            currAnswer.setSkipped(false);
-                            currAnswer.setDtanswered(LocalDateTime.now().toString());
-                            currAnswer.setQid(q.getQid());
-                            currAnswer.setText("N");
-                            currAnswer.setFinalized(true);
-
-                            this.givenAnswersAl.add(currAnswer);
+                            Answer currAnswer = setCurrentAnswer(q.getGid(), this.pid, q.getSid(), messageId, messageTs,
+                                    false, q.getQid(), "N", true);
                             SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
                         }
                     }
@@ -1925,20 +1908,8 @@ public class Participant {
                             }
                         }
                         if(!chosen){
-                            Answer currAnswer = new Answer();
-                            // Subquestions also have the same group id as the main question
-                            currAnswer.setGid(q.getGid());
-                            currAnswer.setPid(this.pid);
-                            currAnswer.setSid(q.getSid());
-                            currAnswer.setMessageId(messageId);
-                            currAnswer.setMessageTs(messageTs);
-                            currAnswer.setSkipped(false);
-                            currAnswer.setDtanswered(LocalDateTime.now().toString());
-                            currAnswer.setQid(q.getQid());
-                            currAnswer.setText("N");
-                            currAnswer.setFinalized(true);
-
-                            this.givenAnswersAl.add(currAnswer);
+                            Answer currAnswer = setCurrentAnswer(q.getGid(), this.pid, q.getSid(), messageId, messageTs,
+                                    false, q.getQid(), "N", true);
                             SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
                         }
                     }
@@ -2012,18 +1983,10 @@ public class Participant {
                         }
 
                         System.out.println("parsing mesage got text: " + text);
-                        Answer currAnswer = new Answer();
-                        // Subquestions also have the same group id as the main question
-                        currAnswer.setGid(lastQuestion.getGid());
-                        currAnswer.setPid(this.pid);
-                        currAnswer.setSid(this.sid);
-                        currAnswer.setSkipped(false);
-                        currAnswer.setDtanswered(LocalDateTime.now().toString());
-                        currAnswer.setQid(value);
-                        currAnswer.setText("Y");
-                        currAnswer.setFinalized(false);
+                        Answer currAnswer = setCurrentAnswer(lastQuestion.getGid(), this.pid, this.sid, null,
+                                null, false, value, "Y", false );
+
                         this.currentSubquestionAnswers.add(currAnswer);
-                        this.givenAnswersAl.add(currAnswer);
                         SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
                         System.out.println("curr subquestion answers: " +this.currentSubquestionAnswers + "size: " + this.currentSubquestionAnswers.size());
                     }
@@ -2096,6 +2059,26 @@ public class Participant {
 
     }
 
+    @NotNull
+    private Answer setCurrentAnswer(String gId, String pId, String sId, String messageId, String messageTs, Boolean skipped,
+                                    String qId, String text, boolean finalized) {
+        Answer currAnswer = new Answer();
+        // Subquestions also have the same group id as the main question
+        currAnswer.setGid(gId);
+        currAnswer.setPid(pId);
+        currAnswer.setSid(sId);
+        currAnswer.setMessageId(messageId);
+        currAnswer.setMessageTs(messageTs);
+        currAnswer.setSkipped(skipped);
+        currAnswer.setDtanswered(LocalDateTime.now().toString());
+        currAnswer.setQid(qId);
+        currAnswer.setText(text);
+        currAnswer.setFinalized(finalized);
+
+        this.givenAnswersAl.add(currAnswer);
+        return currAnswer;
+    }
+
     public Response newTextAnswer(Answer newAnswer, Question lastQuestion, String message, String surveyDoneString, String submitButton){
         JSONObject response = new JSONObject();
         String check = SurveyHandlerService.telegramButtonCheck;
@@ -2120,14 +2103,6 @@ public class Participant {
             // only one answer option more chosen so return
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().build();
-            /*
-            String option = answerOptionForComment();
-            qidFromEditedMCC = "";
-            if(option != null){
-                response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
-                return Response.ok().entity(response).build();
-            }
-             */
         }
 
         // Check if it is a text answer for button questions in rocket chat
@@ -2180,7 +2155,6 @@ public class Participant {
 
 
                     String aQid = this.getGivenAnswersAl().get(this.getGivenAnswersAl().size() - 1).getQid();
-                    //System.out.println("aqid: " + aQid);
 
                     int i = 1;
                     for(Question q : lastQuestion.getSubquestionAl()){
@@ -2190,8 +2164,6 @@ public class Participant {
                         i++;
                     }
                 }
-                //System.out.println("index: " + index);
-
 
                 // answer is in valid form, so save to db
                 for(AnswerOption ao : lastQuestion.getAnswerOptions()){
@@ -2346,20 +2318,9 @@ public class Participant {
                 System.out.println("all non chosen: " + nonchosen.toString());
                 for(String qs : nonchosen){
                     Question q = this.currentSurvey.getQuestionByQid(qs, this.language);
-                    Answer currAnswer = new Answer();
-                    // Subquestions also have the same group id as the main question
-                    currAnswer.setGid(q.getGid());
-                    currAnswer.setPid(this.pid);
-                    currAnswer.setSid(q.getSid());
-                    currAnswer.setSkipped(false);
-                    currAnswer.setDtanswered(LocalDateTime.now().toString());
-                    currAnswer.setQid(q.getQid());
-                    currAnswer.setMessageTs(messageTs);
-                    currAnswer.setMessageId(messageId);
-                    currAnswer.setText("N");
-                    currAnswer.setFinalized(true);
+                    Answer currAnswer = setCurrentAnswer(q.getGid(), this.pid, q.getSid(), messageId, messageTs,
+                            false, q.getQid(), "N", true);
 
-                    this.givenAnswersAl.add(currAnswer);
                     SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
                 }
 
@@ -2419,22 +2380,9 @@ public class Participant {
                 System.out.println("all nonchosen: " + nonchosen);
                 for(String qs : nonchosen){
                     Question q = this.currentSurvey.getQuestionByQid(qs, this.language);
-                    Answer currAnswer = new Answer();
-                    // Subquestions also have the same group id as the main question
-                    currAnswer.setGid(q.getGid());
-                    currAnswer.setPid(this.pid);
-                    currAnswer.setSid(q.getSid());
-                    currAnswer.setSkipped(false);
-                    currAnswer.setDtanswered(LocalDateTime.now().toString());
-                    currAnswer.setQid(q.getQid());
-                    currAnswer.setMessageTs(messageTs);
-                    currAnswer.setMessageId(messageId);
-                    currAnswer.setText("N");
-                    currAnswer.setCommentTs(messageTs);
-                    currAnswer.setComment("");
-                    currAnswer.setFinalized(true);
+                    Answer currAnswer = setCurrentAnswer(q.getGid(), this.pid, q.getSid(), messageId, messageTs,
+                            false, q.getQid(), "N", true);
 
-                    this.givenAnswersAl.add(currAnswer);
                     SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
                 }
 
@@ -2497,20 +2445,8 @@ public class Participant {
                             chosen = true;
                         }
                         if(!chosen){
-                            Answer currAnswer = new Answer();
-                            // Subquestions also have the same group id as the main question
-                            currAnswer.setGid(q.getGid());
-                            currAnswer.setPid(this.pid);
-                            currAnswer.setSid(q.getSid());
-                            currAnswer.setSkipped(false);
-                            currAnswer.setDtanswered(LocalDateTime.now().toString());
-                            currAnswer.setQid(q.getQid());
-                            currAnswer.setMessageTs(messageTs);
-                            currAnswer.setMessageId(messageId);
-                            currAnswer.setText("N");
-                            currAnswer.setFinalized(true);
-
-                            this.givenAnswersAl.add(currAnswer);
+                            Answer currAnswer = setCurrentAnswer(q.getGid(), this.pid, q.getSid(), messageId, messageTs,
+                                    false, q.getQid(), "N", true);
                             SurveyHandlerServiceQueries.addAnswerToDB(currAnswer, currentSurvey.database);
                         }
                     }
