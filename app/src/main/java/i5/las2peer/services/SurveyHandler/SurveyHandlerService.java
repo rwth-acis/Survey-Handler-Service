@@ -894,12 +894,7 @@ public class SurveyHandlerService extends RESTService {
 					code = HttpURLConnection.HTTP_OK,
 					message = "survey taking request handled")})
 	public Response takingSurvey(String input) {
-		System.out.println("url: " + url);
-		System.out.println("sbfmurl: " + sbfmURL);
-		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
 		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
-		System.out.println("log: " + Context.get());
-
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
@@ -931,33 +926,24 @@ public class SurveyHandlerService extends RESTService {
 
 			if(bodyInput.containsKey("sbfmURL")){
 				sbfmURL = bodyInput.getAsString("sbfmURL");
-				System.out.println("\nsbfmurl_ " + sbfmURL);
 			}
 
 			if(bodyInput.containsKey("url")){
 				url = bodyInput.getAsString("url");
-				System.out.println("\nurl_ " + url);
 			}
-
-			System.out.println("messenger: " + messenger.toString());
 
 			String messageTs = bodyInput.getAsString("time");
 			boolean ls = bodyInput.containsKey("NameOfUser");
 
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
 			String buttonIntent = bodyInput.getAsString("buttonIntent");
-			System.out.println("buttonIntent: " + buttonIntent);
 
 
 			try{
 				senderEmail = bodyInput.getAsString("email");
-				System.out.println("senderEMail: " + senderEmail);
-
 				// check if senderEmail is actual email or userid
 				if(!senderEmail.contains("@")){
-					System.out.println("sender email is user id");
 					senderEmail = getSlackEmailBySlackId(senderEmail, token);
-					System.out.println("senderEMail: " + senderEmail);
 				}
 			} catch(Exception e){
 				try{
@@ -978,8 +964,6 @@ public class SurveyHandlerService extends RESTService {
 						System.out.println("channel, email or user is not transmitted correctly");
 					}
 				}
-
-				System.out.println("senderEMail: " + senderEmail);
 			}
 
 			// find correct survey
@@ -1226,8 +1210,7 @@ public class SurveyHandlerService extends RESTService {
 							if(currParticipant.languageIsGerman()){
 								changedAnswer = texts.get("changedAnswerDE");
 							}
-							String answerNotFittingQuestion = "";
-							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
+							return currParticipant.updateAnswer(message, messageTs, currMessage, prevMessage, changedAnswer, token);
 						}
 					}
 
@@ -1306,10 +1289,7 @@ public class SurveyHandlerService extends RESTService {
 					code = HttpURLConnection.HTTP_OK,
 					message = "survey question request handled")})
 	public Response nextQuestion(String input) {
-		System.out.println("url: " + url);
-		System.out.println("sbfmurl: " + sbfmURL);
 		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
-		System.out.println("log: " + Context.get());
 
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
@@ -1339,27 +1319,20 @@ public class SurveyHandlerService extends RESTService {
 
 			if(bodyInput.containsKey("sbfmURL")){
 				sbfmURL = bodyInput.getAsString("sbfmURL");
-				System.out.println("\nsbfmurl_ " + sbfmURL);
 			}
 
 			if(bodyInput.containsKey("url")){
 				url = bodyInput.getAsString("url");
-				System.out.println("\nurl_ " + url);
 			}
-
-			System.out.println("messenger: " + messenger.toString());
 
 			String messageTs = bodyInput.getAsString("time");
 			boolean ls = bodyInput.containsKey("NameOfUser");
 
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
 			String buttonIntent = bodyInput.getAsString("buttonIntent");
-			System.out.println("buttonIntent: " + buttonIntent);
-
 
 			try{
 				senderEmail = bodyInput.getAsString("email");
-				System.out.println("senderEMail: " + senderEmail);
 
 			} catch(Exception e){
 				try{
@@ -1377,14 +1350,12 @@ public class SurveyHandlerService extends RESTService {
 						System.out.println("channel, email or user is not transmitted correctly");
 					}
 				}
-
-				System.out.println("senderEMail: " + senderEmail);
 			}
 
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			if (Objects.isNull(currSurvey)){
-				System.out.println("No survey exists for id "+ surveyID + ". Creating...");
+				System.out.println("No survey exists. Creating...");
 				boolean setUp = setUpSurvey(input);
 				// See if survey is set up now
 				currSurvey = getSurveyBySurveyID(surveyID);
@@ -1398,14 +1369,11 @@ public class SurveyHandlerService extends RESTService {
 				System.out.println("Survey is set-up.");
 			}
 
-			System.out.println("survey: " + currSurvey);
-
 			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) {
 				return Response.ok().entity(response).build();
 			}
 
 			String messageId = bodyInput.getAsString("message_id");
-			System.out.println("ts: " + messageTs);
 			JSONObject currMessage = new JSONObject();
 			JSONObject prevMessage = new JSONObject();
 
@@ -1446,12 +1414,10 @@ public class SurveyHandlerService extends RESTService {
 
 			// Get the existing participant
 			Participant currParticipant = currSurvey.findParticipant(senderEmail);
-			System.out.println(currParticipant.getChannel());
 			if(currParticipant.getChannel() == null){
 				currParticipant.setChannel(channel);
 				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
 			}
-			System.out.println(currParticipant.getChannel());
 			String message = bodyInput.getAsString("msg");
 
 			// check if participant is done with survey and can choose new one
@@ -1466,11 +1432,6 @@ public class SurveyHandlerService extends RESTService {
 				return Response.ok().entity(response).build();
 
 			}
-
-			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
-			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
-			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
-			System.out.println("using restful: " + SurveyHandlerService.messenger.equals(Messenger.RESTFUL));
 
 			//Set the time the participant answered to check later if needed to be reminded to finish survey
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
@@ -2019,7 +1980,7 @@ public class SurveyHandlerService extends RESTService {
 					// dont send inbetween, since there is no possibility to update response
 					String surveyResponseID;
 
-					String content = pa.getMSAnswersString();
+					String content = pa.getAnswersString(false);
 					System.out.println(content);
 
 					String contentFilled = "{" + content + "}";
@@ -2126,7 +2087,7 @@ public class SurveyHandlerService extends RESTService {
 			for(Participant pa : currSurvey.getParticipants()) {
 				String surveyResponseID;
 
-				String content = pa.getLSAnswersString();
+				String content = pa.getAnswersString(true);
 				System.out.println(content);
 
 				if(pa.getSurveyResponseID() != null){
@@ -2217,7 +2178,7 @@ public class SurveyHandlerService extends RESTService {
 				for(Participant pa : currSurvey.getParticipants()) {
 					String surveyResponseID;
 
-					String content = pa.getLSAnswersString();
+					String content = pa.getAnswersString(true);
 					System.out.println(content);
 
 					if(pa.getSurveyResponseID() != null){
