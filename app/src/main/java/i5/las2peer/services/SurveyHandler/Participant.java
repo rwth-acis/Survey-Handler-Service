@@ -620,6 +620,9 @@ public class Participant {
     }
 
     public Answer getAnswerByTS(String messageTs){
+        if (messageTs == null){
+            return null;
+        }
         return this.givenAnswersAl.stream()
             .filter(a -> messageTs.equals(a.getMessageTs()) || messageTs.equals(a.getCommentTs()))
             .findFirst()
