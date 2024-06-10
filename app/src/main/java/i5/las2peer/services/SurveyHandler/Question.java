@@ -1,5 +1,6 @@
 package i5.las2peer.services.SurveyHandler;
 
+import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import org.jetbrains.annotations.NotNull;
 
@@ -24,52 +25,18 @@ public class Question{
     private boolean mandatory;
     // end Database model identifier
 
-    public static enum qType{
-        ARRAY("F"),
-        SINGLECHOICECOMMENT("O"),
-        MULTIPLECHOICENOCOMMENT("M"),
-        MULTIPLECHOICEWITHCOMMENT("P"),
-        LISTDROPDOWN("!"),
-        LISTRADIO("L"),
-        GENDER("G"),
-        YESNO("Y"),
-        DATETIME("D"),
-        TEXTDISPLAY("X"),
-        NUMERICALINPUT("N"),
-        FILEUPLOAD("|"),
-        FIVESCALE("5"),
-        LONGFREETEXT("T"),
-        SHORTFREETEXT("S"),
-        HUGEFREETEXT("U"),
-        DICHOTOMOUS("DI"),
-        SCALE("SC");
-
-        private final String name;
-        private final int maxLength;
-        private qType(String name){
-            this.name= name;
-            // TODO find correct values
-            if(this.name.equals("T")){
-                this.maxLength = 1200;
-            }
-            else if(this.name.equals("U")){
-                this.maxLength = 1200;
-            }
-            else if(this.name.equals("S")){
-                this.maxLength = 600;
-            }
-            else{
-                this.maxLength = 1200;
-            }
+    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
+        System.out.println("inside encodejsonbodyasstring. slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
+        System.out.println("inside encodejsonbodyasstring. telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
+        System.out.println("inside encodejsonbodyasstring. rest: " + SurveyHandlerService.messenger.equals(Messenger.RESTFUL));
+        if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
+            return parseQuestionForSlack(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
         }
-
-        public int getMaxLength(){
-            return this.maxLength;
+        else if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
+            return parseQuestionForTelegram(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
         }
-
-        @Override
-        public String toString(){
-            return this.name;
+        else{
+            return parseQuestionAsText(newQuestionGroup, participant, arrayNumber);
         }
     }
 
@@ -353,18 +320,8 @@ public class Question{
         return encodeJsonBodyAsString(newQuestionGroup, edit, buttonToColor, participant, null);
     }
 
-    public String encodeJsonBodyAsString(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
-        System.out.println("inside encodejsonbodyasstring. slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
-        System.out.println("inside encodejsonbodyasstring. telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
-        if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
-            return parseQuestionForSlack(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
-        }
-        else if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
-            return parseQuestionForTelegram(newQuestionGroup, edit, buttonToColor, participant, arrayNumber);
-        }
-        else{
-            return parseQuestionAsText(newQuestionGroup, participant, arrayNumber);
-        }
+    public JSONArray getAnswerOptionsForRest(){
+        return AnswerOptionHelper.buildAnswerOption(this.type, this.answerOptions);
     }
 
     public String parseQuestionForTelegram(boolean newQuestionGroup, boolean edit, String buttonToColor, Participant participant, Integer arrayNumber){
@@ -964,6 +921,7 @@ public class Question{
     }
 
     public String parseQuestionAsText(boolean newQuestionGroup, Participant participant, Integer arrayNumber){
+        boolean restful = SurveyHandlerService.messenger.equals(Messenger.RESTFUL);
         String resString = "";
         String subString = "";
         int index = 1;
@@ -1013,19 +971,20 @@ public class Question{
                 index++;
             }
 
-        } else if(this.subquestionAl.size() > 0 && !this.answerOptions.isEmpty() && this.type.equals(qType.ARRAY.toString())){
+        } else if(this.subquestionAl.size() > 0 && !this.answerOptions.isEmpty() && this.type.equals(qType.ARRAY.toString()) && !restful){
             resString = handleTextArrayType(participant, arrayNumber, resString, exp);
         }
 
 
         switch(this.type){
             case "D":
-                resString += " Please enter a date in the format dd.mm.jjjj.";
+                resString += " Bitte gib ein Datum im Format tt.mm.jjjj an.";
                 break;
             case "|":
-                resString += " Please send a file.";
+                resString += " Bitte sende eine Datei.";
                 break;
             case "G":
+                if (!restful){
                 if(languageIsGerman()){
                     resString += exp;
                     resString += " 1. Weiblich ";
@@ -1041,14 +1000,15 @@ public class Question{
                     if(!isMandatory()){
                         resString += " 3. No Answer ";
                     }
-                }
+                }}
                 break;
             case "N":
-                resString += " Please respond with a number.";
+                resString += " Bitte antworte mit einer Zahl.";
                 break;
             case "X":
                 break;
             case "Y":
+                if (!restful){
                 if(languageIsGerman()){
                     resString += exp;
                     resString += " 1. Ja ";
@@ -1064,18 +1024,20 @@ public class Question{
                     if(!isMandatory()){
                         resString += " 3. No Answer ";
                     }
-                }
+                }}
                 break;
             case "5":
-                System.out.println("5 point choice");
-                resString += " Please only answer with a number between 1 and 5.";
+                if(!restful) {
+                    System.out.println("5 point choice");
+                    resString += " Please only answer with a number between 1 and 5.";
+                }
                 break;
 
         }
-        if((!(this.answerOptions.isEmpty()) && this.type.equals(qType.DICHOTOMOUS.toString())) ||
+        if(!restful &&( !(this.answerOptions.isEmpty()) && this.type.equals(qType.DICHOTOMOUS.toString())) ||
                 (!(this.answerOptions.isEmpty()) && this.type.equals(qType.SCALE.toString())) ||
                 (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTRADIO.toString())) ||
-                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTDROPDOWN.toString()))) {
+                (!(this.answerOptions.isEmpty()) && this.type.equals(qType.LISTDROPDOWN.toString()))){
 
             resString += exp;
             for(int i = 1; i < answerOptions.size() + 1; i++){
@@ -1094,6 +1056,67 @@ public class Question{
             }
         }
         return resString;
+    }
+
+    public static enum qType{
+        ARRAY("F"),
+        SINGLECHOICECOMMENT("O"),
+        MULTIPLECHOICENOCOMMENT("M"),
+        MULTIPLECHOICEWITHCOMMENT("P"),
+        LISTDROPDOWN("!"),
+        LISTRADIO("L"),
+        GENDER("G"),
+        YESNO("Y"),
+        DATETIME("D"),
+        TEXTDISPLAY("X"),
+        NUMERICALINPUT("N"),
+        FILEUPLOAD("|"),
+        FIVESCALE("5"),
+        LONGFREETEXT("T"),
+        SHORTFREETEXT("S"),
+        HUGEFREETEXT("U"),
+        DICHOTOMOUS("DI"),
+        SCALE("SC");
+
+        private final String name;
+        private final int maxLength;
+        private qType(String name){
+            this.name= name;
+            // TODO find correct values
+            if(this.name.equals("T")){
+                this.maxLength = 1200;
+            }
+            else if(this.name.equals("U")){
+                this.maxLength = 1200;
+            }
+            else if(this.name.equals("S")){
+                this.maxLength = 600;
+            }
+            else{
+                this.maxLength = 1200;
+            }
+        }
+
+        public static qType fromName(String name) {
+            for (qType type : qType.values()) {
+                if (type.getName().equals(name)) {
+                    return type;
+                }
+            }
+            throw new IllegalArgumentException("No enum constant found for the provided name.");
+        }
+
+        public String getName() {
+            return this.name;
+        }
+        public int getMaxLength(){
+            return this.maxLength;
+        }
+
+        @Override
+        public String toString(){
+            return this.name;
+        }
     }
 
     @NotNull

@@ -17,6 +17,7 @@ import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
@@ -1418,7 +1419,13 @@ public class SurveyHandlerService extends RESTService {
 				currParticipant.setChannel(channel);
 				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
 			}
-			String message = bodyInput.getAsString("msg");
+
+			String message;
+			if (StringUtils.isBlank(bodyInput.getAsString("msg"))) {
+				message = intent.substring(intent.length() - 1);
+			} else {
+				message = bodyInput.getAsString("msg");
+			}
 
 			// check if participant is done with survey and can choose new one
 			if(currParticipant.isCompletedsurvey()){
@@ -1429,8 +1436,8 @@ public class SurveyHandlerService extends RESTService {
 				String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
 				response.put("text", completedSurvey);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				//TODO: Proper response?
 				return Response.ok().entity(response).build();
-
 			}
 
 			//Set the time the participant answered to check later if needed to be reminded to finish survey
@@ -1443,7 +1450,7 @@ public class SurveyHandlerService extends RESTService {
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
-		response.put("text", "Something went wrong in takingSurvey try block.");
+		response.put("text", "Something went wrong in Next Question try block.");
 		return Response.ok().entity(response).build();
 	}
 

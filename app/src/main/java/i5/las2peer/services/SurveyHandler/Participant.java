@@ -370,7 +370,13 @@ public class Participant {
                 response.put("blocks", messageText);
             } // If it is a normal text message
             else{
-                response.put("text", messageText);
+                if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
+                    JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
+                    response.put("text", messageText);
+                    response.put("interactiveElements", answerOptions);
+                } else {
+                    response.put("text", messageText);
+                }
             }
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
@@ -395,12 +401,22 @@ public class Participant {
                 if(isSlackOrTelegram()){
                     response.put("text", skipText);
                     response.put("blocks", messageText);
-                }else{
+                } else if (SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
+                    JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
+                    response.put("text", messageText);
+                    response.put("interactiveElements", answerOptions);
+                } else{
                     response.put("text", skipText + messageText);
                 }
 
             } else{
-                response.put("text", skipText + messageText);
+                if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
+                    JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
+                    response.put("text", messageText);
+                    response.put("interactiveElements", answerOptions);
+                } else {
+                    response.put("text", skipText + messageText);
+                }
             }
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
