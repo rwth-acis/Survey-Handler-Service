@@ -372,7 +372,7 @@ public class Participant {
             else{
                 if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
                     JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
-                    response.put("text", messageText);
+                    response.put("message", messageText);
                     response.put("interactiveElements", answerOptions);
                 } else {
                     response.put("text", messageText);
@@ -403,7 +403,7 @@ public class Participant {
                     response.put("blocks", messageText);
                 } else if (SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
                     JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
-                    response.put("text", messageText);
+                    response.put("message", messageText);
                     response.put("interactiveElements", answerOptions);
                 } else{
                     response.put("text", skipText + messageText);
@@ -412,7 +412,7 @@ public class Participant {
             } else{
                 if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
                     JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
-                    response.put("text", messageText);
+                    response.put("message", messageText);
                     response.put("interactiveElements", answerOptions);
                 } else {
                     response.put("text", skipText + messageText);
