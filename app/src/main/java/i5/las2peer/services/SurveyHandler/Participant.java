@@ -664,7 +664,8 @@ public class Participant {
         // Participant has not started the survey yet
         this.participantcontacted = true;
         SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-        response.put("text", beginningText);
+        //todo: change beginning Text
+        response.put("message", beginningText);
         Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
         return Response.ok().entity(response).build();
     }
@@ -672,7 +673,7 @@ public class Participant {
     public Response chooseLanguage(String languageChoosing){
         JSONObject response = new JSONObject();
         // Participant has not started the survey yet
-        response.put("text", languageChoosing);
+        response.put("message", languageChoosing);
         Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
         return Response.ok().entity(response).build();
     }
@@ -1857,7 +1858,7 @@ public class Participant {
             }
         }
         if(!lastQuestion.answerIsPlausible(message, check)){
-            response.put("text", lastQuestion.reasonAnswerNotPlausible());
+            response.put("message", lastQuestion.reasonAnswerNotPlausible());
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }
@@ -2126,7 +2127,7 @@ public class Participant {
             // No questions remaining, survey done.
             this.completedsurvey = true;
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-            response.put("text", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
+            response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }

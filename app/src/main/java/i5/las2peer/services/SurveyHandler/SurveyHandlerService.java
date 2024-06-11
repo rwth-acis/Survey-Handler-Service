@@ -1432,11 +1432,9 @@ public class SurveyHandlerService extends RESTService {
 
 				System.out.println("Participant has completed survey");
 				// no unfinished survey left
-				String changeAnswerExplanation = SurveyHandlerService.texts.get("changeAnswerExplanation");
-				String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
-				response.put("text", completedSurvey);
+				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
+				response.put("message", completedSurvey);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-				//TODO: Proper response?
 				return Response.ok().entity(response).build();
 			}
 
