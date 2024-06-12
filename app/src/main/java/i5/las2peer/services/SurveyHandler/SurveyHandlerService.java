@@ -1,16 +1,28 @@
 package i5.las2peer.services.SurveyHandler;
 
+import i5.las2peer.api.Context;
 import i5.las2peer.api.ManualDeployment;
 import i5.las2peer.api.ServiceException;
 import i5.las2peer.api.logging.MonitoringEvent;
-import i5.las2peer.logging.L2pLogger;
-import i5.las2peer.restMapper.RESTService;
+import i5.las2peer.api.security.UserAgent;
 import i5.las2peer.connectors.webConnector.client.ClientResponse;
 import i5.las2peer.connectors.webConnector.client.MiniClient;
-import i5.las2peer.services.SurveyHandler.Participant;
+import i5.las2peer.restMapper.RESTService;
+import i5.las2peer.restMapper.annotations.ServicePath;
+import i5.las2peer.services.SurveyHandler.database.SQLDatabase;
+import i5.las2peer.services.SurveyHandler.database.SQLDatabaseType;
+import i5.las2peer.services.SurveyHandler.database.SurveyHandlerServiceQueries;
+import io.swagger.annotations.*;
+import net.minidev.json.JSONArray;
+import net.minidev.json.JSONObject;
+import net.minidev.json.parser.JSONParser;
+import net.minidev.json.parser.ParseException;
+import org.apache.commons.lang3.StringUtils;
 
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.io.*;
-import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -21,53 +33,14 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-
-import net.minidev.json.JSONObject;
-import net.minidev.json.JSONArray;
-import net.minidev.json.parser.JSONParser;
-import net.minidev.json.parser.ParseException;
-
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.Consumes;
-
-import i5.las2peer.api.Context;
-import i5.las2peer.api.security.UserAgent;
-import i5.las2peer.restMapper.annotations.ServicePath;
-
-import i5.las2peer.services.SurveyHandler.database.*;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
-import io.swagger.annotations.Contact;
-import io.swagger.annotations.Info;
-import io.swagger.annotations.License;
-import io.swagger.annotations.SwaggerDefinition;
-import org.apache.commons.io.IOUtils;
-import org.glassfish.jersey.server.JSONP;
-import org.junit.Assert;
-
-import java.util.Properties;
 import java.util.logging.Level;
 
-import java.util.concurrent.locks.ReentrantLock;
 /**
  * SurveyHandlerService
  *
  * A service to conduct surveys with a chatbot created with the SBF.
  *
  */
-
-
-
-
-
 @Api
 @SwaggerDefinition(
 		info = @Info(
@@ -89,44 +62,18 @@ public class SurveyHandlerService extends RESTService {
 
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
 	private static ArrayList<Admin> allAdmins = new ArrayList<>();
-	private static boolean firstStartUp = true;
-	private String databaseUser = "root";
-	private String databasePassword = "root";
-	private String databaseName = "shs";
-	private String databaseHost = "127.0.0.1";
-	private String url = "";
-	private int databaseTypeInt = 1;
-	private int databasePort = 3306;
-	public static messenger messenger;
-	public String sbfmURL = "";
-	// symbol to check telegram buttons
-	public static String check = ":check: ";
-
+	private String databaseUser;
+	private String databasePassword;
+	private String databaseName;
+	private String databaseHost;
+	private String url;
+	private int databaseTypeInt;
+	private int databasePort;
+	public static Messenger messenger;
+	public String sbfmURL;
+	public static String telegramButtonCheck = ":check: ";
 	// contains all texts displayed during the survey when talking as the bot
 	public static HashMap<String, String> texts = new HashMap<>();
-
-	public static enum messenger{
-		SLACK("Slack"),
-		ROCKETCHAT("Rocket.Chat"),
-		TELEGRAM("Telegram");
-
-		private final String name;
-		private messenger(String name){
-			this.name= name;
-		}
-
-		@Override
-		public String toString(){
-			return this.name;
-		}
-	}
-	// for logging
-	private Context l2pcontext = null;
-	public void setL2pcontext(Context l2pcontext) {
-		this.l2pcontext = l2pcontext;
-	}
-
-
 	private static SQLDatabase database; // The database instance to write to.
 
 	// Look through global survey list for surveyID, which is unique for each survey
@@ -139,31 +86,13 @@ public class SurveyHandlerService extends RESTService {
 		return null;
 	}
 
-	public static Admin getAdminByAdminID(String adminID){
+	public Admin getAdminByAdminID(String adminID){
 		for(Admin a : allAdmins){
 			if(a.getAid().equals(adminID)){
 				return a;
 			}
 		}
 		return null;
-	}
-
-	public static String setAdminlanguage(String surveyID, String language){
-		for (Survey s : allSurveys){
-			if (s.getSid().equals(surveyID)){
-				// all surveys with same id have the same admin, so same adminlanguage
-				s.setAdminLanguage(language);
-			}
-		}
-		return null;
-	}
-
-	public static HashMap<String, String> getTexts() {
-		return texts;
-	}
-
-	public static void setTexts(HashMap<String, String> texts) {
-		SurveyHandlerService.texts = texts;
 	}
 
 	public static void deleteSurvey(String surveyID){
@@ -173,10 +102,6 @@ public class SurveyHandlerService extends RESTService {
 			}
 		}
 		allSurveys.remove(getSurveyBySurveyID(surveyID));
-	}
-
-	public static ArrayList<Survey> getAllSurveys(){
-		return allSurveys;
 	}
 
 	@Override
@@ -192,7 +117,6 @@ public class SurveyHandlerService extends RESTService {
 
 			database = new SQLDatabase(databaseType, databaseUser, databasePassword, databaseName,
 					databaseHost, databasePort);
-
 			// Test database connection
 			try {
 				Connection con = database.getDataSource().getConnection();
@@ -200,48 +124,48 @@ public class SurveyHandlerService extends RESTService {
 			} catch (SQLException e) {
 				System.out.println("Failed to Connect: " + e.getMessage());
 			}
-
-			// TODO better handling, if tables are missing.
-			// Check if required table exists in our database
-			for (String tableName : SurveyHandlerServiceQueries.requiredTables){
-				if(!SurveyHandlerServiceQueries.tablesExist(tableName, database)){
-					System.out.println("Table " + tableName + " not found. Creating table...");
-					// Create table
-					boolean created = SurveyHandlerServiceQueries.createTable(tableName, database);
-					System.out.println("Created table had result: " + created);
-				}else{
-					System.out.println("Table " + tableName + " found.");
-				}
+			for (String tableName : SurveyHandlerServiceQueries.requiredTables) {
+				ensureTableExists(tableName, database);
 			}
-
 			// Load internal data structures with values from database
 			ArrayList<Survey> allSurveysFromDB = SurveyHandlerServiceQueries.getSurveysFromDB(database);
 			// init admins
-			ArrayList<Admin> allAdmins = SurveyHandlerServiceQueries.getAdminsFromDB(database);
+			allAdmins = SurveyHandlerServiceQueries.getAdminsFromDB(database);
 			for (Survey sur : allSurveysFromDB){
-				sur.setDatabase(database);
-				// init questions
-				ArrayList<Question> allQForSurvey = SurveyHandlerServiceQueries.getSurveyQuestionsFromDB(sur.getSid(), database);
-				//System.out.println(allQForSurvey);
-				sur.initQuestionsFromDB(allQForSurvey);
-				// init participants
-				ArrayList<Participant> allPForSurvey = SurveyHandlerServiceQueries.getSurveyParticipantsFromDB(sur.getSid(), database);
-				sur.initParticipantsFromDB(allPForSurvey);
-				// init answers for every participant
-				for (Participant tempP : sur.getParticipants()){
-					ArrayList<Answer> allAforP = SurveyHandlerServiceQueries.getAnswersForParticipantFromDB(sur.getSid(), tempP.getPid(), database);
-					System.out.println(allAforP);
-					sur.initAnswersForParticipantFromDB(tempP, allAforP);
-
-				}
-				// add new survey to global list
-				allSurveys.add(sur);
+				initSurvey(sur);
 			}
 		} catch (Exception e){
 			e.printStackTrace();
-			return;
 		}
 
+	}
+
+	private static void initSurvey(Survey sur) {
+		sur.setDatabase(database);
+		// init questions
+		ArrayList<Question> allQForSurvey = SurveyHandlerServiceQueries.getSurveyQuestionsFromDB(sur.getSid(), database);
+		//System.out.println(allQForSurvey);
+		sur.initQuestionsFromDB(allQForSurvey);
+		// init participants
+		ArrayList<Participant> allPForSurvey = SurveyHandlerServiceQueries.getSurveyParticipantsFromDB(sur.getSid(), database);
+		sur.initParticipantsFromDB(allPForSurvey);
+		// init answers for every participant
+		for (Participant tempP : sur.getParticipants()){
+			ArrayList<Answer> allAforP = SurveyHandlerServiceQueries.getAnswersForParticipantFromDB(sur.getSid(), tempP.getPid(), database);
+			sur.initAnswersForParticipantFromDB(tempP, allAforP);
+		}
+		// add new survey to global list
+		allSurveys.add(sur);
+	}
+
+	private void ensureTableExists(String tableName, SQLDatabase database) {
+		if (!SurveyHandlerServiceQueries.tablesExist(tableName, database)) {
+			System.out.println("Table " + tableName + " not found. Creating table...");
+			boolean created = SurveyHandlerServiceQueries.createTable(tableName, database);
+			System.out.println("Created table had result: " + created);
+		} else {
+			System.out.println("Table " + tableName + " found.");
+		}
 	}
 
 	public SurveyHandlerService(){
@@ -254,16 +178,16 @@ public class SurveyHandlerService extends RESTService {
 	@Path("/get")
 	@Produces(MediaType.TEXT_PLAIN)
 	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "REPLACE THIS WITH YOUR NOTES TO THE FUNCTION")
+	  value = "Get User Login Name",
+	  notes = "This function returns the login name of the current user.")
 	@ApiResponses(
-			value = {@ApiResponse(
-					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
+	  value = {@ApiResponse(
+		code = HttpURLConnection.HTTP_OK,
+		message = "User login name retrieved successfully")})
 	public Response getTemplate() {
 		UserAgent userAgent = (UserAgent) Context.getCurrent().getMainAgent();
-		String name = userAgent.getLoginName();
-		return Response.ok().entity(name).build();
+	 	String name = userAgent.getLoginName();
+	 	return Response.ok().entity(name).build();
 	}
 
 	@POST
@@ -271,59 +195,56 @@ public class SurveyHandlerService extends RESTService {
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(value = "Returns a list of surveys that are available for the specified credentials", notes = "url, loginName, loginPassword need to be provided")
 	@ApiResponses(value = {
-			@ApiResponse(code = HttpURLConnection.HTTP_OK, message = "REPLACE THIS WITH YOUR OK MESSAGE") })
+	  @ApiResponse(code = HttpURLConnection.HTTP_OK, message = "Surveys sent successfully") })
 	public Response getSurveys(String input) {
-		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+	  try {
+		JSONObject bodyInput = parseJson(input);
+		String url = bodyInput.getAsString("url");
+		String loginName = bodyInput.getAsString("loginName");
+		String loginPassword = bodyInput.getAsString("loginPassword");
 
-		JSONObject response = new JSONObject();
-		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+		String sessionKeyString = getSessionKey(url, loginName, loginPassword);
+		JSONObject res = listSurveys(url, sessionKeyString);
 
-		JSONArray completeReturnJSON = new JSONArray();
+		return Response.ok().entity(res.toJSONString()).build();
+	  } catch (Exception e) {
+		return Response.status(500).entity(e.getMessage()).build();
+	  }
+	}
 
-		try {
-			JSONObject bodyInput = (JSONObject) p.parse(input);
-			System.out.println("received message: " + bodyInput);
+	private JSONObject parseJson(String input) throws ParseException {
+	  JSONParser parser = new JSONParser(JSONParser.MODE_PERMISSIVE);
+	  return (JSONObject) parser.parse(input);
+	}
 
-			String url = bodyInput.getAsString("url");
-			String loginName = bodyInput.getAsString("loginName");
-			String loginPassword = bodyInput.getAsString("loginPassword");
+	private String getSessionKey(String url, String loginName, String loginPassword) throws Exception {
+	  MiniClient mini = new MiniClient();
+	  mini.setConnectorEndpoint(url);
+	  HashMap<String, String> head = new HashMap<String, String>();
 
-			MiniClient mini = new MiniClient();
-			mini.setConnectorEndpoint(url);
-			HashMap<String, String> head = new HashMap<String, String>();
+	  ClientResponse miniClientResponse = mini.sendRequest("POST", url,
+		("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
+		  + "\"], \"id\": 1}"),
+		MediaType.APPLICATION_JSON, "", head);
 
-			try {
-				ClientResponse miniClientResponse = mini.sendRequest("POST", url,
-						("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
-								+ "\"], \"id\": 1}"),
-						MediaType.APPLICATION_JSON, "", head);
-				if (miniClientResponse == null || miniClientResponse.getHttpCode() != 200) {
-					System.out.println("Error: " + miniClientResponse.getHttpCode());
-					return Response.status(400).entity("Could not retrieve session key. Credentials might not be valid")
-							.build();
-				}
-				JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
-				String sessionKeyString = miniresJSON.getAsString("result");
+	  if (miniClientResponse == null || miniClientResponse.getHttpCode() != 200) {
+		throw new Exception("Could not retrieve session key. Credentials might not be valid");
+	  }
 
-				ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
-						("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"),
-						MediaType.APPLICATION_JSON, "", head);
-				JSONObject res = (JSONObject) p.parse(clientResponseQuestionInfo.getResponse());
-				response.put("text", completeReturnJSON);
-				return Response.ok().entity(res.toJSONString()).build();
+	  JSONObject miniresJSON = (JSONObject) parseJson(miniClientResponse.getResponse());
+	  return miniresJSON.getAsString("result");
+	}
 
-				// return Response.ok().entity(response).build();
-			} catch (Exception e) {
-				e.printStackTrace();
-				return Response.status(400).entity(e.getMessage()).build();
-			}
+	private JSONObject listSurveys(String url, String sessionKeyString) throws Exception {
+	  MiniClient mini = new MiniClient();
+	  mini.setConnectorEndpoint(url);
+	  HashMap<String, String> head = new HashMap<String, String>();
 
-		} catch (Exception e) {
-			e.printStackTrace();
-			return Response.status(500).entity(e.getMessage()).build();
-		}
+	  ClientResponse clientResponseQuestionInfo = mini.sendRequest("POST", url,
+		("{\"method\": \"list_surveys\", \"params\": [ \"" + sessionKeyString + "\"], \"id\": 1}"),
+		MediaType.APPLICATION_JSON, "", head);
 
-
+	  return (JSONObject) parseJson(clientResponseQuestionInfo.getResponse());
 	}
 
 	@POST
@@ -354,12 +275,8 @@ public class SurveyHandlerService extends RESTService {
 			mini.setConnectorEndpoint(url);
 			HashMap<String, String> head = new HashMap<String, String>();
 
-			ClientResponse miniClientResponse = mini.sendRequest("POST", url,
-					("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword
-							+ "\"], \"id\": 1}"),
-					MediaType.APPLICATION_JSON, "", head);
-			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
-			String sessionKeyString = miniresJSON.getAsString("result");
+			String sessionKeyString = getSessionKey(url, loginName, loginPassword);
+
 			params.add(0, sessionKeyString); // add session key to params
 
 			JSONObject request = new JSONObject();
@@ -383,22 +300,6 @@ public class SurveyHandlerService extends RESTService {
 	}
 
 	@POST
-	@Path("/post/{input}")
-	@Produces(MediaType.TEXT_PLAIN)
-	@ApiResponses(
-			value = {@ApiResponse(
-					code = HttpURLConnection.HTTP_OK,
-					message = "REPLACE THIS WITH YOUR OK MESSAGE")})
-	@ApiOperation(
-			value = "REPLACE THIS WITH AN APPROPRIATE FUNCTION NAME",
-			notes = "Example method that returns a phrase containing the received input.")
-	public Response postTemplate(@PathParam("input") String myInput) {
-		String returnString = "";
-		returnString += "Input " + myInput;
-		return Response.ok().entity(returnString).build();
-	}
-
-	@POST
 	@Path("/responses")
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
@@ -409,7 +310,6 @@ public class SurveyHandlerService extends RESTService {
 					code = HttpURLConnection.HTTP_OK,
 					message = "")})
 	public Response limesurveyConnector(String input) {
-		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
 		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
 		System.out.println("log: " + Context.get());
 
@@ -437,10 +337,7 @@ public class SurveyHandlerService extends RESTService {
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(url);
 			HashMap<String, String> head = new HashMap<String, String>();
-
-			ClientResponse miniClientResponse = mini.sendRequest("POST", url, ("{\"method\": \"get_session_key\", \"params\": [ \"" + loginName + "\", \"" + loginPassword + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-			JSONObject miniresJSON = (JSONObject) p.parse(miniClientResponse.getResponse());
-			String sessionKeyString = miniresJSON.getAsString("result");
+			String sessionKeyString = getSessionKey(url, loginName, loginPassword);
 
 			// now get question information, to add to response json object
 			ClientResponse clientResponseQuestionInfo = mini
@@ -472,73 +369,7 @@ public class SurveyHandlerService extends RESTService {
 			JSONArray decodedStringJSON = (JSONArray) p.parse(decodedStringResponses);
 
 			// go through all questions
-			for(Object keys : questionListJSON){
-				JSONObject key = (JSONObject) keys;
-
-				// only add to responses if not subquestion
-				if(!key.getAsString("parent_qid").equals("0")){
-					continue;
-				}
-
-				// will contain information for one question
-				JSONObject ret = new JSONObject();
-
-				ret.put("question",key.getAsString("question"));
-				ret.put("title",key.getAsString("title"));
-				ret.put("type",key.getAsString("type"));
-
-				JSONArray responses = new JSONArray();
-
-				// answeroptions given
-				ArrayList<String> answeroptions = new ArrayList<>();
-
-				// go through all responses and add answer for this question
-				for(Object resIds : decodedStringJSON){
-					JSONObject resKey = (JSONObject) resIds;
-					Set<String> keySet = resKey.keySet();
-
-					// iterate through all answers
-					for(String s : keySet){
-						String answer = "";
-						try{
-							String currRes = resKey.getAsString(s);
-							JSONObject currResJSON = (JSONObject) p.parse(currRes);
-							answer = currResJSON.getAsString(key.getAsString("title"));
-						} catch (Exception e){
-							//
-							answer = resKey.getAsString(key.getAsString("title"));
-						}
-
-
-						// remove null answers, so parsing works
-						if(answer == null){
-							answer = "";
-						}
-
-						responses.add(answer);
-
-						if(!answeroptions.contains(answer)){
-							answeroptions.add(answer);
-						}
-					}
-
-				}
-
-				// now count occurences of each answer
-				JSONObject occurences = new JSONObject();
-
-				for(String option : answeroptions){
-					int occ = Collections.frequency(responses, option);
-					occurences.put(option, occ);
-				}
-
-				ret.put("responses", occurences);
-
-				completeReturnJSON.add(ret);
-
-			}
-
-
+			completeReturnJSON = iterateQuestions(p, completeReturnJSON, questionListJSON, decodedStringJSON);
 		} catch (Exception e){
 			e.printStackTrace();
 		}
@@ -548,511 +379,123 @@ public class SurveyHandlerService extends RESTService {
 		return Response.ok().entity(response).build();
 	}
 
+	private static JSONArray iterateQuestions(JSONParser p, JSONArray completeReturnJSON, JSONArray questionListJSON, JSONArray decodedStringJSON) {
+		for(Object keys : questionListJSON){
+			JSONObject key = (JSONObject) keys;
 
-	@POST
-	@Path("/takingSurvey")
-	@Consumes(MediaType.TEXT_PLAIN)
-	@Produces(MediaType.APPLICATION_JSON)
-	@ApiOperation(
-			value = "Return the next question of the survey.",
-			notes = "")
-	@ApiResponses(
-			value = {@ApiResponse(
-					code = HttpURLConnection.HTTP_OK,
-					message = "survey taking request handled")})
-	public Response takingSurvey(String input) {
-		System.out.println("url: " + url);
-		System.out.println("sbfmurl: " + sbfmURL);
-		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
-		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
-		System.out.println("log: " + Context.get());
-
-		JSONObject response = new JSONObject();
-		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
-
-		try{
-			LocalDate dateNow = LocalDate.now();
-			LocalTime timeNow = LocalTime.now();
-
-			JSONObject bodyInput = (JSONObject) p.parse(input);
-			System.out.println("received message: " + bodyInput);
-			String intent = bodyInput.getAsString("intent");
-			String channel = bodyInput.getAsString("channel");
-			String surveyID = bodyInput.getAsString("surveyID");
-			String[] surveyIDs = surveyID.split(",");
-			String beginningTextEN = "";
-			String beginningTextDE = "";
-			if(bodyInput.containsKey("beginningText")){
-				System.out.println("has beginningText");
-				beginningTextEN = bodyInput.getAsString("beginningText");
-				beginningTextDE = bodyInput.getAsString("beginningText");
-			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
-				beginningTextEN = bodyInput.getAsString("beginningTextEN");
-				beginningTextDE = bodyInput.getAsString("beginningTextDE");
-			}
-			String senderEmail = "";
-			boolean defualt = false;
-
-			String token = ""; // for rocket chat none in this service is needed, so length 0
-			if(bodyInput.containsKey("slackToken")){
-				token = bodyInput.getAsString("slackToken");
-				messenger = SurveyHandlerService.messenger.SLACK;
-			}
-			else if(bodyInput.getAsString("email") == null){
-				// telegram msg does not contain user email, so its null
-				token = bodyInput.getAsString("telegramToken");
-				messenger = SurveyHandlerService.messenger.TELEGRAM;
-			}
-			else{
-				messenger = SurveyHandlerService.messenger.ROCKETCHAT;
+			// only add to responses if not subquestion
+			if(!key.getAsString("parent_qid").equals("0")){
+				continue;
 			}
 
-			if(bodyInput.containsKey("sbfmURL")){
-				sbfmURL = bodyInput.getAsString("sbfmURL");
-				System.out.println("\nsbfmurl_ " + sbfmURL);
-			}
+			// will contain information for one question
+			JSONObject ret = new JSONObject();
 
-			if(bodyInput.containsKey("url")){
-				url = bodyInput.getAsString("url");
-				System.out.println("\nurl_ " + url);
-			}
+			ret.put("question",key.getAsString("question"));
+			ret.put("title",key.getAsString("title"));
+			ret.put("type",key.getAsString("type"));
 
-			System.out.println("messenger: " + messenger.toString());
+			JSONArray responses = new JSONArray();
 
-			String messageTs = bodyInput.getAsString("time");
-			boolean ls = bodyInput.containsKey("NameOfUser");
+			// answeroptions given
+			ArrayList<String> answeroptions = new ArrayList<>();
 
-			// This intent is needed to check if the message received was send by clicking on a button as an answer
-			String buttonIntent = bodyInput.getAsString("buttonIntent");
-			System.out.println("buttonIntent: " + buttonIntent);
+			// go through all responses and add answer for this question
+			for(Object resIds : decodedStringJSON){
+				JSONObject resKey = (JSONObject) resIds;
+				Set<String> keySet = resKey.keySet();
 
-
-			try{
-				senderEmail = bodyInput.getAsString("email");
-				System.out.println("senderEMail: " + senderEmail);
-
-				// check if senderEmail is actual email or userid
-				if(!senderEmail.contains("@")){
-					System.out.println("sender email is user id");
-					senderEmail = getSlackEmailBySlackId(senderEmail, token);
-					System.out.println("senderEMail: " + senderEmail);
-				}
-			} catch(Exception e){
-				try{
-					for(String id : surveyIDs){
-						Survey s = getSurveyBySurveyID(id);
-
-						if(s.findParticipantByChannel(channel).getEmail() != null){
-							senderEmail = s.findParticipantByChannel(channel).getEmail();
-							break;
-						}
+				// iterate through all answers
+				for(String s : keySet){
+					String answer = "";
+					try{
+						String currRes = resKey.getAsString(s);
+						JSONObject currResJSON = (JSONObject) p.parse(currRes);
+						answer = currResJSON.getAsString(key.getAsString("title"));
+					} catch (Exception e){
+						//
+						answer = resKey.getAsString(key.getAsString("title"));
 					}
-				} catch (Exception ex){
-					// in case of telegram no email is passed on, so username is the 'email'
-					if(bodyInput.containsKey("user")){
-						senderEmail = bodyInput.getAsString("user");
+					// remove null answers, so parsing works
+					if(answer == null){
+						answer = "";
 					}
-					else{
-						System.out.println("channel, email or user is not transmitted correctly");
-					}
-				}
-
-				System.out.println("senderEMail: " + senderEmail);
-			}
-
-			// find correct survey
-			String lastChosenSurveyID = null;
-			for(String id : surveyIDs){
-				Survey s = getSurveyBySurveyID(id);
-
-				// Check if survey is set up already
-				if (Objects.isNull(s)){
-					response.put("text", "Please wait for the survey to be initialized.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-
-				if(s.getParticipantByPID(senderEmail) != null){
-					// survey has participant, now check which survey is currently chosen
-					lastChosenSurveyID = s.getParticipantByPID(senderEmail).getLastChosenSurveyID();
-					System.out.println("lastchosenid: " + lastChosenSurveyID);
-					break;
-				}
-				/*
-				else if(s.getParticipantByPID(channel) != null){
-					System.out.println("s.getParticipantByPID(channel): " + s.getParticipantByPID(channel) + s.getParticipantByPID(channel).getPid() + s.getParticipantByPID(channel).getSid());
-					lastChosenSurveyID = s.getParticipantByPID(channel).getLastChosenSurveyID();
-					System.out.println("lastchosenid: " + lastChosenSurveyID);
-					break;
-				}
-				 */
-				else{
-					System.out.println("participant not found in survey");
-				}
-			}
-
-			if(Objects.isNull(lastChosenSurveyID)){
-				// no survey chosen yet, use default
-				defualt = true;
-				lastChosenSurveyID = surveyIDs[0];
-			}
-
-			Survey currSurvey = getSurveyBySurveyID(lastChosenSurveyID);
-
-			String followupSurveyID;
-			Survey followUpSurvey = new Survey("");
-
-			if(bodyInput.containsKey("followupSurveyID")){
-				followupSurveyID = bodyInput.getAsString("followupSurveyID");
-				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
-			}
-
-
-			System.out.println("survey: " + currSurvey);
-			System.out.println("followup: " + followUpSurvey);
-
-
-			// Check if survey is set up already
-			if (Objects.isNull(currSurvey)){
-				response.put("text", "Please wait for the survey to be initialized.");
-				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-				return Response.ok().entity(response).build();
-			}
-
-			// Check if survey has expiration date and if survey has expired
-			/*
-			if(currSurvey.getExpires() != null){
-				if(ls){
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String expireDate = currSurvey.getExpires().split("\\s")[0];
-					String expireTime = currSurvey.getExpires().split("\\s")[1];
-					System.out.println(expireDate + " and expires at " + dateNow);
-					System.out.println(expireTime + " and expires at " + timeNow);
-					if(dateNow.isAfter(LocalDate.parse(expireDate))){
-						if(timeNow.isAfter(LocalTime.parse(expireTime)))
-							System.out.println("survey not active anymore");
-							response.put("text", "The survey is no longer active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-				} else{
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String expireDate = currSurvey.getExpires().split("T")[0];
-					String expireTime = currSurvey.getExpires().split("T")[1];
-					System.out.println(expireDate + " and expires at " + dateNow);
-					System.out.println(expireTime + " and expires at " + timeNow);
-					if(dateNow.isAfter(LocalDate.parse(expireDate))){
-						if(timeNow.isAfter(LocalTime.parse(expireTime)))
-							System.out.println("survey not active anymore");
-							response.put("text", "The survey is no longer active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-				}
-
-
-			}
-
-			 */
-
-			// Check if survey has expiration date and if survey has expired
-			if(currSurvey.getStartDT() != null){
-				if(ls){
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String startDate = currSurvey.getStartDT().split("\\s")[0];
-					String startTime = currSurvey.getStartDT().split("\\s")[1];
-					System.out.println(startDate + " and starts at " + dateNow);
-					System.out.println(startTime + " and starts at " + timeNow);
-					if(dateNow.isBefore(LocalDate.parse(startDate))){
-						if(timeNow.isBefore(LocalTime.parse(startTime)))
-							System.out.println("survey not yet active");
-							response.put("text", "The survey is not yet active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-				} else{
-					// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-					String startDate = currSurvey.getStartDT().split("T")[0];
-					String startTime = currSurvey.getStartDT().split("T")[1];
-					System.out.println(startDate + " and starts at " + dateNow);
-					System.out.println(startTime + " and starts at " + timeNow);
-					if(dateNow.isBefore(LocalDate.parse(startDate))){
-						if(timeNow.isBefore(LocalTime.parse(startTime)))
-							System.out.println("survey not yet active");
-							response.put("text", "The survey is not yet active.");
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-				}
-
-			}
-
-			String messageId = bodyInput.getAsString("message_id");
-			System.out.println("ts: " + messageTs);
-			JSONObject currMessage = new JSONObject();
-			JSONObject prevMessage = new JSONObject();
-
-			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
-				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
-				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
-			}
-
-			// Check if message was sent by someone we only knew the channel of, but now also the email
-			if(Objects.nonNull(currSurvey.findParticipant(channel))){
-				// after setting the channel last time now we can set email, since the email gets send the second time a participants sents something
-				Participant tempP = currSurvey.findParticipant(channel);
-				tempP.setEmail(senderEmail);
-				tempP.setChannel(channel);
-				SurveyHandlerServiceQueries.updateParticipantInDB(tempP, database);
-				tempP.setPid(senderEmail);
-				SurveyHandlerServiceQueries.updateParticipantsPidInDB(tempP, database);
-			}
-
-			// Check if message was sent by someone known
-			boolean known = false;
-			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
-				// first check if participant exists for other survey
-				for(String id : surveyIDs){
-					Survey survey = getSurveyBySurveyID(id);
-					if(Objects.nonNull(survey.findParticipant(channel))){
-						currSurvey = survey;
-						known = true;
-					}
-				}
-				if(!known){
-					System.out.println("participant does not exist, create a new one");
-					// participant does not exist, create a new one
-					Participant newParticipant = new Participant(senderEmail);
-					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
-					newParticipant.setLastChosenSurveyID("");
-
-					currSurvey.addParticipant(newParticipant);
-					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
-
-					if(surveyIDs.length > 1){
-						System.out.println("more than one survey id and participant has not yet chosen");
-						// let participant choose which survey to take, since its first time messaging
-						HashMap<String, String> titles = new HashMap<>();
-						for(String id : surveyIDs){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						}
-
-						return newParticipant.chooseSurvey(titles);
+					responses.add(answer);
+					if(!answeroptions.contains(answer)){
+						answeroptions.add(answer);
 					}
 				}
 			}
 
-			// Get the existing participant
-			Participant currParticipant = currSurvey.findParticipant(senderEmail);
-			System.out.println(currParticipant.getChannel());
-			if(currParticipant.getChannel() == null){
-				currParticipant.setChannel(channel);
-				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+			// now count occurences of each answer
+			JSONObject occurences = new JSONObject();
+
+			for(String option : answeroptions){
+				int occ = Collections.frequency(responses, option);
+				occurences.put(option, occ);
 			}
-			System.out.println(currParticipant.getChannel());
-			String message = bodyInput.getAsString("msg");
-
-			// check if survey has been chosen yet
-			if(surveyIDs.length > 1 && currParticipant.hasLastChosenSurveyID()){
-				if(currParticipant.getLastChosenSurveyID().length() < 1){
-					System.out.println("check if one can set survey");
-					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
-
-					if(!set){
-						// participant sent non existent title, ask again
-						HashMap<String, String> titles = new HashMap<>();
-						for(String id : surveyIDs){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						}
-
-						currParticipant.setLastChosenSurveyID("");
-
-						response.put("text", currParticipant.chooseSurvey(titles));
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-				}
-				else{
-					/*
-					System.out.println("here it should not be neccessary to switch, since correct survey is checked at beginning...");
-					// get participant of last chosen survey
-					System.out.println("setting correct survey and then find correct participant for that survey");
-
-					currSurvey = SurveyHandlerService.getSurveyBySurveyID(currParticipant.getLastChosenSurveyID());
-					String email = currParticipant.getEmail();
-					currParticipant = currSurvey.findParticipant(email);
-					 */
-				}
-
-
-				if(surveyChoosingEdited(currParticipant, messageTs, currMessage, prevMessage)){
-					// participant has chosen a survey but has now edited the choice
-					System.out.println("participant has chosen a survey but has now edited the choice");
-					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
-
-					if(!set){
-						// participant sent non existent title, ask to edit message again
-						HashMap<String, String> titles = new HashMap<>();
-						for(String id : surveyIDs){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						}
-
-						response.put("text", currParticipant.chooseSurvey(titles));
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-					}
-
-
-					if(currParticipant.getLastquestion() !=  null){
-						// send last asked question again
-						String questionText = currSurvey.getQuestionByQid(currParticipant.getLastquestion(), currParticipant.getLanguage()).encodeJsonBodyAsString(currParticipant);
-						response.put("text", questionText);
-						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-						return Response.ok().entity(response).build();
-
-					}
-
-					// else procede with usual action
-
-				}
-			}
-
-			// check if participant is done with survey and can choose new one
-			if(surveyIDs.length > 1 && currParticipant.isCompletedsurvey()){
-				System.out.println("more than one survey id and participant finished survey");
-				// let participant choose which survey to take
-				HashMap<String, String> titles = new HashMap<>();
-				int count = 0;
-				String idOfSurvey = "";
-				for(String id : surveyIDs){
-					Survey survey = SurveyHandlerService.getSurveyBySurveyID(id);
-					if(survey.getParticipantByPID(senderEmail) == null){
-						titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-						count++;
-						idOfSurvey = id;
-					}
-					else{
-						System.out.println("completed: " + id + " " + survey.getSid() + " " + survey.getParticipantByPID(senderEmail) + " " + survey.getParticipantByPID(senderEmail).getSid() + " " + survey.getParticipantByPID(senderEmail).isCompletedsurvey());
-						if(!survey.getParticipantByPID(senderEmail).isCompletedsurvey()){
-							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
-							count++;
-							idOfSurvey = id;
-						}
-					}
-				}
-				if(count < 1){
-					System.out.println("Participant has completed all surveys");
-					// no unfinished survey left
-					String changeAnswerExplanation = SurveyHandlerService.texts.get("changeAnswerExplanation");
-					String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
-					response.put("text", completedSurvey);
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-				else if(count < 2){
-					System.out.println("Participant has completed all but one survey");
-					// one survey left, participant has been notified that survey is done
-					currSurvey = getSurveyBySurveyID(idOfSurvey);
-					currParticipant.setLastChosenSurveyID(idOfSurvey);
-					SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
-
-					// add participant to chosen survey
-					Participant newParticipant = new Participant(senderEmail); //currParticipant;
-					currSurvey.addParticipant(newParticipant);
-					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
-					currParticipant = newParticipant;
-				}
-				else{
-					System.out.println("Participant has more than one open survey, is now asked which to do next");
-					return currParticipant.chooseSurvey(titles);
-				}
-			}
-
-			//
-			boolean secondSurvey = false;
-
-			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK));
-			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM));
-			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.ROCKETCHAT));
-
-			// check if there is a followup survey, if not sid is ""
-			if(followUpSurvey.getSid().length() > 0){
-				// check if the participant is done with the first survey
-				if(currParticipant.isCompletedsurvey()){
-					currParticipant = followUpSurvey.findParticipant(senderEmail);
-					if(Objects.isNull(currParticipant)){
-						currParticipant = currSurvey.findParticipant(senderEmail);
-						if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
-							String changedAnswer = texts.get("changedAnswer");
-							if(currParticipant.languageIsGerman()){
-								changedAnswer = texts.get("changedAnswerDE");
-							}
-							String answerNotFittingQuestion = "";
-							return currParticipant.updateAnswer(intent, message, messageTs, currMessage, prevMessage, changedAnswer, token);
-						}
-					}
-
-					// if the participant is done with first survey, check if already participant in second survey
-					currParticipant = followUpSurvey.findParticipant(senderEmail);
-					secondSurvey = true;
-					if(Objects.isNull(currParticipant)){
-						System.out.println("creating new participant for follow up");
-						// participant does not exist for new survey, create a new one
-						currParticipant = new Participant(senderEmail);
-						followUpSurvey.addParticipant(currParticipant);
-						SurveyHandlerServiceQueries.addParticipantToDB(currParticipant, database);
-					}
-					if(currParticipant.getChannel() == null){
-						currParticipant.setChannel(channel);
-						SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
-					}
-
-					boolean active = true;
-
-					// Check if survey has expiration date and if survey has expired
-					if(currSurvey.getExpires() != null){
-						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-						String expireDate = currSurvey.getExpires().split("\\s")[0];
-						String expireTime = currSurvey.getExpires().split("\\s")[1];
-						if(dateNow.isAfter(LocalDate.parse(expireDate))){
-							if(timeNow.isAfter(LocalTime.parse(expireTime)))
-								active = false;
-						}
-					}
-
-					// Check if survey has expiration date and if survey has expired
-					if(currSurvey.getStartDT() != null){
-						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
-						String startDate = currSurvey.getStartDT().split("\\s")[0];
-						String startTime = currSurvey.getStartDT().split("\\s")[1];
-						if(dateNow.isBefore(LocalDate.parse(startDate))){
-							if(timeNow.isBefore(LocalTime.parse(startTime)))
-								active = false;
-						}
-					}
-
-					// check if survey is currently active
-					if(!active){
-						// survey is not active yet, so get participant infos from first survey again
-						currSurvey = getSurveyBySurveyID(surveyID);
-						currParticipant = currSurvey.findParticipant(senderEmail);
-					}
-				}
-			}
-
-
-			//Set the time the participant answered to check later if needed to be reminded to finish survey
-			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
-
-			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
-
-
-		} catch (ParseException e) {
-			e.printStackTrace();
+			ret.put("responses", occurences);
+			completeReturnJSON.add(ret);
 		}
-		response.put("text", "Something went wrong in takingSurvey try block.");
-		return Response.ok().entity(response).build();
+		return completeReturnJSON;
+	}
+
+	private boolean empty ( String s ) {
+		return s == null || s.isBlank();
+	}
+
+	private static boolean isExpired(JSONObject response, LocalDate dateNow, LocalTime timeNow, boolean ls, Survey currSurvey) {
+		if(currSurvey.getStartDT() != null){
+			if(ls){
+				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+				String startDate = currSurvey.getStartDT().split("\\s")[0];
+				String startTime = currSurvey.getStartDT().split("\\s")[1];
+				System.out.println(startDate + " and starts at " + dateNow);
+				System.out.println(startTime + " and starts at " + timeNow);
+				if(dateNow.isBefore(LocalDate.parse(startDate))) {
+					if (timeNow.isBefore(LocalTime.parse(startTime))){
+						System.out.println("survey not yet active");
+						response.put("text", "The survey is not yet active.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return true;
+					}
+				}
+			} else{
+				// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+				String startDate = currSurvey.getStartDT().split("T")[0];
+				String startTime = currSurvey.getStartDT().split("T")[1];
+				System.out.println(startDate + " and starts at " + dateNow);
+				System.out.println(startTime + " and starts at " + timeNow);
+				if(dateNow.isBefore(LocalDate.parse(startDate))){
+					if(timeNow.isBefore(LocalTime.parse(startTime))) {
+						System.out.println("survey not yet active");
+						response.put("text", "The survey is not yet active.");
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return true;
+					}
+				}
+			}
+
+		}
+		return false;
+	}
+
+	private String selectMessenger(JSONObject bodyInput, String token) {
+		if(bodyInput.containsKey("slackToken")){
+			token = bodyInput.getAsString("slackToken");
+			messenger = Messenger.SLACK;
+		}
+		else if(bodyInput.getAsString("email") == null){
+			// telegram msg does not contain user email, so its null
+			token = bodyInput.getAsString("telegramToken");
+			messenger = Messenger.TELEGRAM;
+		}else if (bodyInput.getAsString("restful")== null){
+			messenger = Messenger.ROCKETCHAT;
+		}
+		else{
+			messenger = Messenger.RESTFUL;
+		}
+		return token;
 	}
 
 	private boolean setSurvey(String[] surveyIDs, String message, Participant currParticipant, String messageTs, Survey currSurvey, String senderEmail, boolean first){
@@ -1154,7 +597,7 @@ public class SurveyHandlerService extends RESTService {
 			Survey newSurvey = new Survey(surveyID);
 			allSurveys.add(newSurvey);
 
-			JSONParser p = new JSONParser();
+			JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
 			HashMap<String, String> head = new HashMap<String, String>();
@@ -1303,7 +746,7 @@ public class SurveyHandlerService extends RESTService {
 
 	private boolean setUpMobsosSurvey(String surveyID, String uri, String adminmail){
 		try{
-			JSONParser p = new JSONParser();
+			JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
 			HashMap<String, String> head = new HashMap<String, String>();
@@ -1440,6 +883,576 @@ public class SurveyHandlerService extends RESTService {
 		return false;
 	}
 
+	@POST
+	@Path("/takingSurvey")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "Return the next question of the survey.",
+			notes = "")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "survey taking request handled")})
+	public Response takingSurvey(String input) {
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		try{
+			LocalDate dateNow = LocalDate.now();
+			LocalTime timeNow = LocalTime.now();
+
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+			String intent = bodyInput.getAsString("intent");
+			String channel = bodyInput.getAsString("channel");
+			String surveyID = bodyInput.getAsString("surveyID");
+			String[] surveyIDs = surveyID.split(",");
+			String beginningTextEN = "";
+			String beginningTextDE = "";
+			if(bodyInput.containsKey("beginningText")){
+				System.out.println("has beginningText");
+				beginningTextEN = bodyInput.getAsString("beginningText");
+				beginningTextDE = bodyInput.getAsString("beginningText");
+			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
+				beginningTextEN = bodyInput.getAsString("beginningTextEN");
+				beginningTextDE = bodyInput.getAsString("beginningTextDE");
+			}
+			String senderEmail = "";
+			boolean defualt = false;
+
+			String token = ""; // for rocket chat none in this service is needed, so length 0
+			token = selectMessenger(bodyInput, token);
+
+			if(bodyInput.containsKey("sbfmURL")){
+				sbfmURL = bodyInput.getAsString("sbfmURL");
+			}
+
+			if(bodyInput.containsKey("url")){
+				url = bodyInput.getAsString("url");
+			}
+
+			String messageTs = bodyInput.getAsString("time");
+			boolean ls = bodyInput.containsKey("NameOfUser");
+
+			// This intent is needed to check if the message received was send by clicking on a button as an answer
+			String buttonIntent = bodyInput.getAsString("buttonIntent");
+
+
+			try{
+				senderEmail = bodyInput.getAsString("email");
+				// check if senderEmail is actual email or userid
+				if(!senderEmail.contains("@")){
+					senderEmail = getSlackEmailBySlackId(senderEmail, token);
+				}
+			} catch(Exception e){
+				try{
+					for(String id : surveyIDs){
+						Survey s = getSurveyBySurveyID(id);
+
+						if(s.findParticipantByChannel(channel).getEmail() != null){
+							senderEmail = s.findParticipantByChannel(channel).getEmail();
+							break;
+						}
+					}
+				} catch (Exception ex){
+					// in case of telegram no email is passed on, so username is the 'email'
+					if(bodyInput.containsKey("user")){
+						senderEmail = bodyInput.getAsString("user");
+					}
+					else{
+						System.out.println("channel, email or user is not transmitted correctly");
+					}
+				}
+			}
+
+			// find correct survey
+			String lastChosenSurveyID = null;
+			for(String id : surveyIDs){
+				Survey s = getSurveyBySurveyID(id);
+
+				// Check if survey is set up already
+				if (Objects.isNull(s)){
+					response.put("text", "Please wait for the survey to be initialized.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+
+				if(s.getParticipantByPID(senderEmail) != null){
+					// survey has participant, now check which survey is currently chosen
+					lastChosenSurveyID = s.getParticipantByPID(senderEmail).getLastChosenSurveyID();
+					System.out.println("lastchosenid: " + lastChosenSurveyID);
+					break;
+				}
+				else{
+					System.out.println("participant not found in survey");
+				}
+			}
+
+			if(empty(lastChosenSurveyID)){
+				// no survey chosen yet, use default
+				defualt = true;
+				lastChosenSurveyID = surveyIDs[0];
+			}
+
+			Survey currSurvey = getSurveyBySurveyID(lastChosenSurveyID);
+
+			String followupSurveyID;
+			Survey followUpSurvey = new Survey("");
+
+			if(bodyInput.containsKey("followupSurveyID")){
+				followupSurveyID = bodyInput.getAsString("followupSurveyID");
+				followUpSurvey = getSurveyBySurveyID(followupSurveyID);
+			}
+
+
+			System.out.println("survey: " + currSurvey);
+			System.out.println("followup: " + followUpSurvey);
+
+
+			// Check if survey is set up already
+			if (Objects.isNull(currSurvey)){
+				response.put("text", "Please wait for the survey to be initialized.");
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
+			}
+
+			// Check if survey has expiration date and has not started yet
+			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) return Response.ok().entity(response).build();
+
+			String messageId = bodyInput.getAsString("message_id");
+			System.out.println("ts: " + messageTs);
+			JSONObject currMessage = new JSONObject();
+			JSONObject prevMessage = new JSONObject();
+
+			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
+				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
+				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
+			}
+
+			// Check if message was sent by someone we only knew the channel of, but now also the email
+			if(Objects.nonNull(currSurvey.findParticipant(channel))){
+				// after setting the channel last time now we can set email, since the email gets send the second time a participants sents something
+				Participant tempP = currSurvey.findParticipant(channel);
+				tempP.setEmail(senderEmail);
+				tempP.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(tempP, database);
+				tempP.setPid(senderEmail);
+				SurveyHandlerServiceQueries.updateParticipantsPidInDB(tempP, database);
+			}
+
+			// Check if message was sent by someone known
+			boolean known = false;
+			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
+				// first check if participant exists for other survey
+				for(String id : surveyIDs){
+					Survey survey = getSurveyBySurveyID(id);
+					if(Objects.nonNull(survey.findParticipant(channel))){
+						currSurvey = survey;
+						known = true;
+					}
+				}
+				if(!known){
+					System.out.println("participant does not exist, create a new one");
+					// participant does not exist, create a new one
+					Participant newParticipant = new Participant(senderEmail);
+					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
+					newParticipant.setLastChosenSurveyID("");
+
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+
+					if(surveyIDs.length > 1){
+						System.out.println("more than one survey id and participant has not yet chosen");
+						// let participant choose which survey to take, since its first time messaging
+						HashMap<String, String> titles = new HashMap<>();
+						for(String id : surveyIDs){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						}
+
+						return newParticipant.chooseSurvey(titles);
+					}
+				}
+			}
+
+			// Get the existing participant
+			Participant currParticipant = currSurvey.findParticipant(senderEmail);
+			System.out.println(currParticipant.getChannel());
+			if(currParticipant.getChannel() == null){
+				currParticipant.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+			}
+			System.out.println(currParticipant.getChannel());
+			String message = bodyInput.getAsString("msg");
+
+			// check if survey has been chosen yet
+			if(surveyIDs.length > 1 && currParticipant.hasLastChosenSurveyID()){
+				if(currParticipant.getLastChosenSurveyID().length() < 1){
+					System.out.println("check if one can set survey");
+					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
+
+					if(!set){
+						// participant sent non existent title, ask again
+						HashMap<String, String> titles = new HashMap<>();
+						for(String id : surveyIDs){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						}
+
+						currParticipant.setLastChosenSurveyID("");
+
+						response.put("text", currParticipant.chooseSurvey(titles));
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+				}
+
+
+				if(surveyChoosingEdited(currParticipant, messageTs, currMessage, prevMessage)){
+					// participant has chosen a survey but has now edited the choice
+					System.out.println("participant has chosen a survey but has now edited the choice");
+					boolean set = setSurvey(surveyIDs, message, currParticipant, messageTs, currSurvey, senderEmail, defualt);
+
+					if(!set){
+						// participant sent non existent title, ask to edit message again
+						HashMap<String, String> titles = new HashMap<>();
+						for(String id : surveyIDs){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						}
+
+						response.put("text", currParticipant.chooseSurvey(titles));
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+					}
+
+
+					if(currParticipant.getLastquestion() !=  null){
+						// send last asked question again
+						String questionText = currSurvey.getQuestionByQid(currParticipant.getLastquestion(), currParticipant.getLanguage()).encodeJsonBodyAsString(currParticipant);
+						response.put("text", questionText);
+						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+						return Response.ok().entity(response).build();
+
+					}
+
+					// else procede with usual action
+
+				}
+			}
+
+			// check if participant is done with survey and can choose new one
+			if(surveyIDs.length > 1 && currParticipant.isCompletedsurvey()){
+				System.out.println("more than one survey id and participant finished survey");
+				// let participant choose which survey to take
+				HashMap<String, String> titles = new HashMap<>();
+				int count = 0;
+				String idOfSurvey = "";
+				for(String id : surveyIDs){
+					Survey survey = SurveyHandlerService.getSurveyBySurveyID(id);
+					if(survey.getParticipantByPID(senderEmail) == null){
+						titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+						count++;
+						idOfSurvey = id;
+					}
+					else{
+						System.out.println("completed: " + id + " " + survey.getSid() + " " + survey.getParticipantByPID(senderEmail) + " " + survey.getParticipantByPID(senderEmail).getSid() + " " + survey.getParticipantByPID(senderEmail).isCompletedsurvey());
+						if(!survey.getParticipantByPID(senderEmail).isCompletedsurvey()){
+							titles.put(id, SurveyHandlerService.getSurveyBySurveyID(id).getTitle());
+							count++;
+							idOfSurvey = id;
+						}
+					}
+				}
+				if(count < 1){
+					System.out.println("Participant has completed all surveys");
+					// no unfinished survey left
+					String changeAnswerExplanation = SurveyHandlerService.texts.get("changeAnswerExplanation");
+					String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
+					response.put("text", completedSurvey);
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+				else if(count < 2){
+					System.out.println("Participant has completed all but one survey");
+					// one survey left, participant has been notified that survey is done
+					currSurvey = getSurveyBySurveyID(idOfSurvey);
+					currParticipant.setLastChosenSurveyID(idOfSurvey);
+					SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+
+					// add participant to chosen survey
+					Participant newParticipant = new Participant(senderEmail); //currParticipant;
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+					currParticipant = newParticipant;
+				}
+				else{
+					System.out.println("Participant has more than one open survey, is now asked which to do next");
+					return currParticipant.chooseSurvey(titles);
+				}
+			}
+
+			//
+			boolean secondSurvey = false;
+
+			System.out.println("using slack: " + SurveyHandlerService.messenger.equals(Messenger.SLACK));
+			System.out.println("using telegram: " + SurveyHandlerService.messenger.equals(Messenger.TELEGRAM));
+			System.out.println("using rocket.chat: " + SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT));
+			System.out.println("using restful: " + SurveyHandlerService.messenger.equals(Messenger.RESTFUL));
+
+			// check if there is a followup survey, if not sid is ""
+			if(followUpSurvey.getSid().length() > 0){
+				// check if the participant is done with the first survey
+				if(currParticipant.isCompletedsurvey()){
+					currParticipant = followUpSurvey.findParticipant(senderEmail);
+					if(Objects.isNull(currParticipant)){
+						currParticipant = currSurvey.findParticipant(senderEmail);
+						if(currParticipant.participantChangedAnswer(messageTs, currMessage, prevMessage)){
+							String changedAnswer = texts.get("changedAnswer");
+							if(currParticipant.languageIsGerman()){
+								changedAnswer = texts.get("changedAnswerDE");
+							}
+							return currParticipant.updateAnswer(message, messageTs, currMessage, prevMessage, changedAnswer, token);
+						}
+					}
+
+					// if the participant is done with first survey, check if already participant in second survey
+					currParticipant = followUpSurvey.findParticipant(senderEmail);
+					secondSurvey = true;
+					if(Objects.isNull(currParticipant)){
+						System.out.println("creating new participant for follow up");
+						// participant does not exist for new survey, create a new one
+						currParticipant = new Participant(senderEmail);
+						followUpSurvey.addParticipant(currParticipant);
+						SurveyHandlerServiceQueries.addParticipantToDB(currParticipant, database);
+					}
+					if(currParticipant.getChannel() == null){
+						currParticipant.setChannel(channel);
+						SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+					}
+
+					boolean active = true;
+
+					// Check if survey has expiration date and if survey has expired
+					if(currSurvey.getExpires() != null){
+						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+						String expireDate = currSurvey.getExpires().split("\\s")[0];
+						String expireTime = currSurvey.getExpires().split("\\s")[1];
+						if(dateNow.isAfter(LocalDate.parse(expireDate))){
+							if(timeNow.isAfter(LocalTime.parse(expireTime)))
+								active = false;
+						}
+					}
+
+					// Check if survey has expiration date and if survey has expired
+					if(currSurvey.getStartDT() != null){
+						// getting the date in format yyyy-mm-dd and time in format hh:mm:ss
+						String startDate = currSurvey.getStartDT().split("\\s")[0];
+						String startTime = currSurvey.getStartDT().split("\\s")[1];
+						if(dateNow.isBefore(LocalDate.parse(startDate))){
+							if(timeNow.isBefore(LocalTime.parse(startTime)))
+								active = false;
+						}
+					}
+
+					// check if survey is currently active
+					if(!active){
+						// survey is not active yet, so get participant infos from first survey again
+						currSurvey = getSurveyBySurveyID(surveyID);
+						currParticipant = currSurvey.findParticipant(senderEmail);
+					}
+				}
+			}
+
+
+			//Set the time the participant answered to check later if needed to be reminded to finish survey
+			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
+
+			// Get the next action
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
+
+
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+		response.put("text", "Something went wrong in takingSurvey try block.");
+		return Response.ok().entity(response).build();
+	}
+
+	@POST
+	@Path("/questions")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(
+			value = "Return the next question of the survey.",
+			notes = "")
+	@ApiResponses(
+			value = {@ApiResponse(
+					code = HttpURLConnection.HTTP_OK,
+					message = "survey question request handled")})
+	public Response nextQuestion(String input) {
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+
+		JSONObject response = new JSONObject();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
+
+		try{
+			LocalDate dateNow = LocalDate.now();
+			LocalTime timeNow = LocalTime.now();
+
+			JSONObject bodyInput = (JSONObject) p.parse(input);
+			System.out.println("received message: " + bodyInput);
+			String intent = bodyInput.getAsString("intent");
+			String channel = bodyInput.getAsString("channel");
+			String surveyID = bodyInput.getAsString("surveyID");
+			String beginningTextEN = "";
+			String beginningTextDE = "";
+			if(bodyInput.containsKey("beginningText")){
+				System.out.println("has beginningText");
+				beginningTextEN = bodyInput.getAsString("beginningText");
+				beginningTextDE = bodyInput.getAsString("beginningText");
+			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
+				beginningTextEN = bodyInput.getAsString("beginningTextEN");
+				beginningTextDE = bodyInput.getAsString("beginningTextDE");
+			}
+			String senderEmail = "";
+
+			messenger = Messenger.RESTFUL;
+
+			if(bodyInput.containsKey("sbfmURL")){
+				sbfmURL = bodyInput.getAsString("sbfmURL");
+			}
+
+			if(bodyInput.containsKey("url")){
+				url = bodyInput.getAsString("url");
+			}
+
+			String messageTs = bodyInput.getAsString("time");
+			boolean ls = bodyInput.containsKey("NameOfUser");
+
+			// This intent is needed to check if the message received was send by clicking on a button as an answer
+			String buttonIntent = bodyInput.getAsString("buttonIntent");
+
+			try{
+				senderEmail = bodyInput.getAsString("email");
+
+			} catch(Exception e){
+				try{
+					Survey s = getSurveyBySurveyID(surveyID);
+
+					if(s.findParticipantByChannel(channel).getEmail() != null){
+						senderEmail = s.findParticipantByChannel(channel).getEmail();
+					}
+				} catch (Exception ex){
+					// in case of telegram no email is passed on, so username is the 'email'
+					if(bodyInput.containsKey("user")){
+						senderEmail = bodyInput.getAsString("user");
+					}
+					else{
+						System.out.println("channel, email or user is not transmitted correctly");
+					}
+				}
+			}
+
+			Survey currSurvey = getSurveyBySurveyID(surveyID);
+
+			if (Objects.isNull(currSurvey)){
+				System.out.println("No survey exists. Creating...");
+				boolean setUp = setUpSurvey(input);
+				// See if survey is set up now
+				currSurvey = getSurveyBySurveyID(surveyID);
+				if (Objects.isNull(currSurvey) || !setUp){
+					deleteSurvey(surveyID);
+					System.out.println("ERROR: Could not set up survey, still null.");
+					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+					return Response.ok().entity(response).build();
+				}
+				System.out.println("Survey is set-up.");
+			}
+
+			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) {
+				return Response.ok().entity(response).build();
+			}
+
+			String messageId = bodyInput.getAsString("message_id");
+			JSONObject currMessage = new JSONObject();
+			JSONObject prevMessage = new JSONObject();
+
+			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
+				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
+				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
+			}
+
+			// Check if message was sent by someone we only knew the channel of, but now also the email
+			if(Objects.nonNull(currSurvey.findParticipant(channel))){
+				// after setting the channel last time now we can set email, since the email gets send the second time a participants sents something
+				Participant tempP = currSurvey.findParticipant(channel);
+				tempP.setEmail(senderEmail);
+				tempP.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(tempP, database);
+				tempP.setPid(senderEmail);
+				SurveyHandlerServiceQueries.updateParticipantsPidInDB(tempP, database);
+			}
+
+			// Check if message was sent by someone known
+			boolean known = false;
+			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
+				if(Objects.nonNull(currSurvey.findParticipant(channel))){
+					known = true;
+				}
+
+				if(!known){
+					System.out.println("participant does not exist, create a new one");
+					// participant does not exist, create a new one
+					Participant newParticipant = new Participant(senderEmail);
+					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
+					newParticipant.setLastChosenSurveyID("");
+
+					currSurvey.addParticipant(newParticipant);
+					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+				}
+			}
+
+			// Get the existing participant
+			Participant currParticipant = currSurvey.findParticipant(senderEmail);
+			if(currParticipant.getChannel() == null){
+				currParticipant.setChannel(channel);
+				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+			}
+
+			String message;
+			if (StringUtils.isBlank(bodyInput.getAsString("msg"))) {
+				message = intent.substring(intent.length() - 1);
+			} else {
+				message = bodyInput.getAsString("msg");
+			}
+
+			// check if participant is done with survey and can choose new one
+			if(currParticipant.isCompletedsurvey()){
+
+				System.out.println("Participant has completed survey");
+				// no unfinished survey left
+				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
+				response.put("message", completedSurvey);
+				response.put("intent", "Ende");
+				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
+				return Response.ok().entity(response).build();
+			}
+
+			//Set the time the participant answered to check later if needed to be reminded to finish survey
+			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
+			String token = "";
+
+			// Get the next action
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, false, beginningTextEN, beginningTextDE);
+
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+		response.put("text", "Something went wrong in Next Question try block.");
+		return Response.ok().entity(response).build();
+	}
+
 
 	@POST
 	@Path("/adminSurvey")
@@ -1507,23 +1520,13 @@ public class SurveyHandlerService extends RESTService {
 			Admin admin = getAdminByAdminID(adminmail);
 
 			// TODO better handling for multiple admins
-			//ArrayList<Admin> admins = new ArrayList<>();
 
 			if(admin == null){
 				System.out.println("first time admin has sent message, so init");
 				// first time, create admin for surveys
 				admin = new Admin(adminmail);
 				SurveyHandlerServiceQueries.addAdminToDB(admin, database);
-				//admins.add(admin);
 				allAdmins.add(admin);
-				/*
-				for(String id : surveyIDs){
-					Survey survey = SurveyHandlerService.getSurveyBySurveyID(id);
-					admin.getSurveys().add(survey);
-					allAdmins.add(admin);
-					survey.initAdminsFromDB(admins);
-				}
-				 */
 			}
 
 			System.out.println("curr active admin: " + admin.getAid());
@@ -1812,7 +1815,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.numberOfQuestions();
 					String hello = SurveyHandlerService.texts.get("helloDefaultDE");
-					if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+					if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
 						hello = SurveyHandlerService.texts.get("helloTelegramDE");
 					}
 					String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
@@ -1872,7 +1875,7 @@ public class SurveyHandlerService extends RESTService {
 					System.out.println(emails);
 					int questionsInSurvey = currSurvey.numberOfQuestions();
 					String hello = SurveyHandlerService.texts.get("helloDefaultDE");
-					if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+					if(SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
 						hello = SurveyHandlerService.texts.get("helloTelegramDE");
 					}
 					String welcomeString = SurveyHandlerService.texts.get("welcomeString").replaceAll("\\{hello\\}", hello);
@@ -1983,7 +1986,7 @@ public class SurveyHandlerService extends RESTService {
 					// dont send inbetween, since there is no possibility to update response
 					String surveyResponseID;
 
-					String content = pa.getMSAnswersString();
+					String content = pa.getAnswersString(false);
 					System.out.println(content);
 
 					String contentFilled = "{" + content + "}";
@@ -2087,17 +2090,10 @@ public class SurveyHandlerService extends RESTService {
 			JSONObject minire = (JSONObject) p.parse(minires.getResponse());
 			String sessionKeyString = minire.getAsString("result");
 
-			/*
-			// Export the responses
-			ClientResponse minires3 = mini.sendRequest("POST", uri, ("{\"method\": \"export_responses\", \"params\": [ \"" + sessionKeyString + "\", \"" + surveyID + "\", \"" + "pdf" + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-			JSONObject minire3 = (JSONObject) p.parse(minires3.getResponse());
-			String response3 = minire3.getAsString("result");
-			 */
-
 			for(Participant pa : currSurvey.getParticipants()) {
 				String surveyResponseID;
 
-				String content = pa.getLSAnswersString();
+				String content = pa.getAnswersString(true);
 				System.out.println(content);
 
 				if(pa.getSurveyResponseID() != null){
@@ -2188,7 +2184,7 @@ public class SurveyHandlerService extends RESTService {
 				for(Participant pa : currSurvey.getParticipants()) {
 					String surveyResponseID;
 
-					String content = pa.getLSAnswersString();
+					String content = pa.getAnswersString(true);
 					System.out.println(content);
 
 					if(pa.getSurveyResponseID() != null){
@@ -2273,17 +2269,7 @@ public class SurveyHandlerService extends RESTService {
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			// set messenger
-			if(bodyInput.containsKey("slackToken")){
-				token = bodyInput.getAsString("slackToken");
-				messenger = SurveyHandlerService.messenger.SLACK;
-			}
-			else if(bodyInput.getAsString("email") == null){
-				token = bodyInput.getAsString("telegramToken");
-				messenger = SurveyHandlerService.messenger.TELEGRAM;
-			}
-			else{
-				messenger = SurveyHandlerService.messenger.ROCKETCHAT;
-			}
+			token = selectMessenger(bodyInput, token);
 
 			String adminmail = bodyInput.getAsString("adminmail");
 
@@ -2360,7 +2346,7 @@ public class SurveyHandlerService extends RESTService {
 								msg = reminderComposing(pa, unansweredQuestions, true);
 							}
 
-							if(SurveyHandlerService.messenger.equals(SurveyHandlerService.messenger.SLACK)){
+							if(SurveyHandlerService.messenger.equals(Messenger.SLACK)){
 								// post request to sbfmanager to send slack message
 								String SBFManagerURL = "SBFManager";
 								String uri = SBFManagerURL + "/sendMessageToSlack/" + token + "/" + mail;
@@ -2392,7 +2378,7 @@ public class SurveyHandlerService extends RESTService {
 				}
 			}
 
-			System.out.println(response.toString());
+			System.out.println(response);
 
 		} catch(Exception e){
 			e.printStackTrace();
@@ -2499,7 +2485,7 @@ public class SurveyHandlerService extends RESTService {
 
 	private String getSlackEmailBySlackId(String userId, String token){
 		System.out.println("inside getSlackEMailbyuserid...");
-		JSONParser p = new JSONParser();
+		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 		System.out.println(userId);
 		//remove <@ and > at the beginning and end
 		if(userId.contains("<")){
@@ -2530,17 +2516,6 @@ public class SurveyHandlerService extends RESTService {
 			String result = reader.readLine();
 			System.out.println(result);
 
-			/*
-			MiniClient mini = new MiniClient();
-			mini.setConnectorEndpoint("https://slack.com/api/users.info");
-			HashMap<String, String> head = new HashMap<String, String>();
-
-			ClientResponse minires = mini.sendRequest("POST", "https://slack.com/api/users.info", "{\"token\":" + token + ", \"user\":" + userId + "}", MediaType.APPLICATION_FORM_URLENCODED, "", head);
-			System.out.println("minires: " + minires.getResponse());
-			String cResult = java.net.URLDecoder.decode(minires.getResponse(), StandardCharsets.UTF_8.name());
-			System.out.println(cResult);
-			 */
-
 			// getting email from json
 			JSONObject resultJ = (JSONObject) p.parse(result);
 			String userS = resultJ.getAsString("user");
@@ -2559,58 +2534,10 @@ public class SurveyHandlerService extends RESTService {
 
 	}
 
-	/*
-	private String getRocketChatEmailByUsername(String user, String token){
-		System.out.println("inside getSlackEMailbyuserid...");
-		JSONParser p = new JSONParser();
-		System.out.println(user);
-		//remove <@ and > at the beginning and end
-		if(user.contains("@")){
-			user = user.substring(1, user.length());
-		}
-
-		try{
-			// slack api call to get email for user id
-			String urlParameters = "token=" + token + "&user=" + user;
-			byte[] postData = urlParameters.getBytes( StandardCharsets.UTF_8 );
-			int postDataLength = postData.length;
-			String request = "https://chat.tech4comp.dbis.rwth-aachen.de";
-			MiniClient mini = new MiniClient();
-			mini.setConnectorEndpoint("");
-			HashMap<String, String> head = new HashMap<String, String>();
-
-			ClientResponse minires = mini.sendRequest("POST", request + "/api/v1/users.info", "{\"X-Auth-Token\":" + token + ", \"X-User_Id\":" + user + "}", MediaType.APPLICATION_FORM_URLENCODED, "", head);
-			System.out.println("minires: " + minires.getResponse());
-			String cResult = java.net.URLDecoder.decode(minires.getResponse(), StandardCharsets.UTF_8.name());
-			System.out.println(cResult);
-			//System.out.println(result);
-
-
-			// getting email from json
-			JSONObject resultJ = (JSONObject) p.parse(cResult);
-			String userS = resultJ.getAsString("user");
-			JSONObject userJson = (JSONObject) p.parse(userS);
-			String profileS = userJson.getAsString("profile");
-			JSONObject profileJson = (JSONObject) p.parse(profileS);
-			String email = profileJson.getAsString("email");
-			System.out.println("email: " + email);
-
-			return email;
-
-		} catch(Exception e){
-			e.printStackTrace();
-			return "";
-		}
-
-	}
-
-	 */
-
-
 	private String reminderComposing(Participant pa, Integer unansweredQuestions, boolean started){
-		String msg = "";
+		String msg;
 		if(started){
-			if(messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+			if(messenger.equals(Messenger.TELEGRAM)){
 				if(pa.languageIsGerman()){
 					msg = SurveyHandlerService.texts.get("reminderContinueTelegramDE").replaceAll("\\{unansweredQuestions\\}", String.valueOf(unansweredQuestions));
 				}
@@ -2629,7 +2556,7 @@ public class SurveyHandlerService extends RESTService {
 			return msg;
 		}
 		else{
-			if(messenger.equals(SurveyHandlerService.messenger.TELEGRAM)){
+			if(messenger.equals(Messenger.TELEGRAM)){
 				if(pa.languageIsGerman()){
 					msg = texts.get("reminderStartTelegramDE");
 				}
@@ -2664,35 +2591,38 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			// ensure all relevant properties are set
-			if(!properties.containsKey("helloDefault") || !properties.containsKey("helloDefaultAgain") || !properties.containsKey("helloTelegramAgain")
-					|| !properties.containsKey("reminderStartDefault") || !properties.containsKey("reminderStartTelegram") || !properties.containsKey("reminderContinueDefault")
-					|| !properties.containsKey("reminderContinueTelegram") || !properties.containsKey("languageChoosing") || !properties.containsKey("skipExplanation")
-					|| !properties.containsKey("changeAnswerExplanation") || !properties.containsKey("changeAnswerExplanationButton") || !properties.containsKey("first")
-					|| !properties.containsKey("completedSurvey") || !properties.containsKey("submitButton") || !properties.containsKey("firstEdit")
-					|| !properties.containsKey("welcomeString") || !properties.containsKey("languageChangedEN") || !properties.containsKey("changed")
-					|| !properties.containsKey("reasonButton") || !properties.containsKey("reasonCheckboxesComment") || !properties.containsKey("changedAnswer")
-					|| !properties.containsKey("helloTelegram") || !properties.containsKey("resultsGetSaved") || !properties.containsKey("surveyDoneString")
-					|| !properties.containsKey("skipText") || !properties.containsKey("languageNotChangedEN") || !properties.containsKey("reasonButtonDefault")
-					|| !properties.containsKey("reasonListCommentDefault") || !properties.containsKey("reasonCheckboxesNoCommentDefault") || !properties.containsKey("reasonCheckboxesCommentDefault")
-					|| !properties.containsKey("reasonText") || !properties.containsKey("reasonDate") || !properties.containsKey("reasonFiveScale")
-					|| !properties.containsKey("reasonNumber")){
-				System.out.println("a text value is missing in the texts.properties file");
-				throw new IllegalStateException("Missing properties value in english part of texts.properties");
-			}
+			List<String> keys = Arrays.asList("helloDefault", "helloDefaultAgain", "helloTelegramAgain", "reminderStartDefault",
+											  "reminderStartTelegram", "reminderContinueDefault", "reminderContinueTelegram",
+											  "languageChoosing", "skipExplanation", "changeAnswerExplanation",
+											  "changeAnswerExplanationButton", "first", "completedSurvey", "submitButton",
+											  "firstEdit", "welcomeString", "languageChangedEN", "changed", "reasonButton",
+											  "reasonCheckboxesComment", "changedAnswer", "helloTelegram", "resultsGetSaved",
+											  "surveyDoneString", "skipText", "languageNotChangedEN", "reasonButtonDefault",
+											  "reasonListCommentDefault", "reasonCheckboxesNoCommentDefault",
+											  "reasonCheckboxesCommentDefault", "reasonText", "reasonDate", "reasonFiveScale",
+											  "reasonNumber");
 
-			if(!properties.containsKey("helloDefaultDE") || !properties.containsKey("helloTelegramDE") || !properties.containsKey("helloDefaultAgainDE")
-					|| !properties.containsKey("helloTelegramAgainDE") || !properties.containsKey("reminderStartDefaultDE") || !properties.containsKey("reminderStartTelegramDE")
-					|| !properties.containsKey("reminderContinueDefaultDE") || !properties.containsKey("reminderContinueTelegramDE") || !properties.containsKey("skipExplanationDE")
-					|| !properties.containsKey("changeAnswerExplanationDE") || !properties.containsKey("changeAnswerExplanationButtonDE") || !properties.containsKey("firstDE")
-					|| !properties.containsKey("resultsGetSavedDE") || !properties.containsKey("completedSurveyDE") || !properties.containsKey("changedAnswerDE")
-					|| !properties.containsKey("surveyDoneStringDE") || !properties.containsKey("firstEditDE") || !properties.containsKey("welcomeStringDE")
-					|| !properties.containsKey("skipTextDE") || !properties.containsKey("languageNotChangedDE") || !properties.containsKey("languageChangedDE")
-					|| !properties.containsKey("changedDE") || !properties.containsKey("reasonButtonDE") || !properties.containsKey("reasonCheckboxesCommentDE")
-					|| !properties.containsKey("reasonButtonDefaultDE") || !properties.containsKey("reasonListCommentDefaultDE") || !properties.containsKey("reasonCheckboxesNoCommentDefaultDE")
-					|| !properties.containsKey("reasonCheckboxesCommentDefaultDE") || !properties.containsKey("reasonTextDE") || !properties.containsKey("reasonDateDE")
-					|| !properties.containsKey("reasonFiveScaleDE") || !properties.containsKey("reasonNumberDE")){
-				System.out.println("a german text value is missing in the texts.properties file");
-				throw new IllegalStateException("Missing properties value in german part of texts.properties");
+			for (String key : keys) {
+				if (!properties.containsKey(key)) {
+					System.out.println("a text value is missing in the texts.properties file");
+					throw new IllegalStateException("Missing properties value in english part of texts.properties");
+				}
+			}
+			List<String> germanKeys = Arrays.asList("helloDefaultDE", "helloTelegramDE", "helloDefaultAgainDE", "helloTelegramAgainDE",
+											  "reminderStartDefaultDE", "reminderStartTelegramDE", "reminderContinueDefaultDE",
+											  "reminderContinueTelegramDE", "skipExplanationDE", "changeAnswerExplanationDE",
+											  "changeAnswerExplanationButtonDE", "firstDE", "resultsGetSavedDE", "completedSurveyDE",
+											  "changedAnswerDE", "surveyDoneStringDE", "firstEditDE", "welcomeStringDE", "skipTextDE",
+											  "languageNotChangedDE", "languageChangedDE", "changedDE", "reasonButtonDE",
+											  "reasonCheckboxesCommentDE", "reasonButtonDefaultDE", "reasonListCommentDefaultDE",
+											  "reasonCheckboxesNoCommentDefaultDE", "reasonCheckboxesCommentDefaultDE", "reasonTextDE",
+											  "reasonDateDE", "reasonFiveScaleDE", "reasonNumberDE");
+
+			for (String key : germanKeys) {
+				if (!properties.containsKey(key)) {
+					System.out.println("a german text value is missing in the texts.properties file");
+					throw new IllegalStateException("Missing properties value in german part of texts.properties");
+				}
 			}
 		}
 		catch (Exception ex){
