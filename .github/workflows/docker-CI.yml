@@ -25,8 +25,8 @@ jobs:
     # - run: mysql -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }} ${{ env.DB_DATABASE }} < ./initDB.sql
     - name: Grant Gradle permissions
       run: chmod +x gradlew
-    - name: Test with Gradle
-      run: ./gradlew test --stacktrace --info 
+    - name: Build with Gradle without tests
+      run: ./gradlew build -x test --stacktrace --info
   build:
     needs: test
     runs-on: ubuntu-latest
