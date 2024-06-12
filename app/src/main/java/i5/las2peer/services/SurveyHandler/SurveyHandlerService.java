@@ -1434,6 +1434,7 @@ public class SurveyHandlerService extends RESTService {
 				// no unfinished survey left
 				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
 				response.put("message", completedSurvey);
+				response.put("intent", "Ende");
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
 			}

@@ -192,12 +192,8 @@ public class Participant {
             changeAnswerExplanation = changeAnswerExplanation.substring(0, changeAnswerExplanation.length() - 1);
             changeAnswerExplanation += SurveyHandlerService.texts.get("changeAnswerExplanationButton");
         }
-        String completedSurvey = SurveyHandlerService.texts.get("completedSurvey") + changeAnswerExplanation;
-        String firstEdit = "";
-        if(!secondSurvey){
-            firstEdit = SurveyHandlerService.texts.get("firstEdit");
-        }
-        String surveyDoneString = SurveyHandlerService.texts.get("surveyDoneString") + firstEdit;
+        String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
+        String surveyDoneString = SurveyHandlerService.texts.get("surveyDoneStringDE");
         String changedAnswer = SurveyHandlerService.texts.get("changedAnswer");
         String submitButton = SurveyHandlerService.texts.get("submitButton");
         String resultsGetSaved = SurveyHandlerService.texts.get("resultsGetSaved");
@@ -235,12 +231,8 @@ public class Participant {
                         changeAnswerExplanation += SurveyHandlerService.texts.get("changeAnswerExplanationButtonDE");
                     }
                     resultsGetSaved = SurveyHandlerService.texts.get("resultsGetSavedDE");
-                    completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE") + changeAnswerExplanation;
-                    firstEdit = "";
-                    if(!secondSurvey){
-                        firstEdit = SurveyHandlerService.texts.get("firstEditDE");
-                    }
-                    surveyDoneString = SurveyHandlerService.texts.get("surveyDoneStringDE") + firstEdit;
+                    completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
+                    surveyDoneString = SurveyHandlerService.texts.get("surveyDoneStringDE");
                     changedAnswer = SurveyHandlerService.texts.get("changedAnswerDE");
                     submitButton = SurveyHandlerService.texts.get("submitButton");
                 }
@@ -259,10 +251,18 @@ public class Participant {
 
         // check if it is the first contacting
         boolean participantContacted = this.participantcontacted;
+        boolean firstMessage = false;
 
         if (!participantContacted){
             System.out.println("newly contacted...");
-            return participantNewlyContacted(beginningText);
+            if(!SurveyHandlerService.messenger.equals(Messenger.RESTFUL)){
+                return participantNewlyContacted(beginningText);
+            } else {
+                // Participant has not started the survey yet
+                firstMessage = true;
+                this.participantcontacted = true;
+                SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
+            }
         }
 
         // check if participant changed language
@@ -290,17 +290,18 @@ public class Participant {
         boolean participantDone = this.completedsurvey;
         if (participantDone){
             System.out.println("participant done");
-            response.put("text", completedSurvey);
+            response.put("message", completedSurvey);
+            response.put("intent", "Ende");
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }
 
-        return calcNextResponse(intent, message, buttonIntent, messageTs, messageId, surveyDoneString, submitButton, token);
+        return calcNextResponse(intent, message, buttonIntent, messageTs, messageId, surveyDoneString, submitButton, token, firstMessage);
 
 
     }
 
-    private Response AskNextQuestion(String surveyDoneString){
+    private Response AskNextQuestion(String surveyDoneString, boolean firstMessage){
         // clear the answers for previous question
         this.currentSubquestionAnswers.clear();
         for(Answer a : this.givenAnswersAl){
@@ -371,8 +372,12 @@ public class Participant {
             } // If it is a normal text message
             else{
                 if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
+                    String msg = messageText;
+                    if(firstMessage){
+                        msg = "Super, danke für das Teilnehmen an der Umfrage! Hier kommt deine erste Frage:\n" + messageText;
+                    }
                     JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
-                    response.put("message", messageText);
+                    response.put("message", msg);
                     response.put("interactiveElements", answerOptions);
                 } else {
                     response.put("text", messageText);
@@ -401,22 +406,10 @@ public class Participant {
                 if(isSlackOrTelegram()){
                     response.put("text", skipText);
                     response.put("blocks", messageText);
-                } else if (SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
-                    JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
-                    response.put("message", messageText);
-                    response.put("interactiveElements", answerOptions);
-                } else{
-                    response.put("text", skipText + messageText);
-                }
+                } else handleRestful(firstMessage, response, nextId, messageText, skipText);
 
             } else{
-                if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
-                    JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
-                    response.put("message", messageText);
-                    response.put("interactiveElements", answerOptions);
-                } else {
-                    response.put("text", skipText + messageText);
-                }
+                handleRestful(firstMessage, response, nextId, messageText, skipText);
             }
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
@@ -425,6 +418,20 @@ public class Participant {
         response.put("text", "Something went wrong on bot-side :(");
         Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
         return Response.ok().entity(response).build();
+    }
+
+    private void handleRestful(boolean firstMessage, JSONObject response, String nextId, String messageText, String skipText) {
+        if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
+            String msg = messageText;
+            if(firstMessage){
+                msg = "Super, danke für das Teilnehmen an der Umfrage! Hier kommt deine erste Frage:\n" + messageText;
+            }
+            JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
+            response.put("message", msg);
+            response.put("interactiveElements", answerOptions);
+        } else {
+            response.put("text", skipText + messageText);
+        }
     }
 
     private boolean isMoreThanOneAnswerMissing(String nextId) {
@@ -1274,7 +1281,7 @@ public class Participant {
         }
     }
 
-    public Response calcNextResponse(String intent, String message, String buttonIntent, String messageTs, String messageId, String surveyDoneString, String submitButton, String token){
+    public Response calcNextResponse(String intent, String message, String buttonIntent, String messageTs, String messageId, String surveyDoneString, String submitButton, String token, boolean firstMessage){
         JSONObject response = new JSONObject();
         Response res = null;
 
@@ -1395,7 +1402,7 @@ public class Participant {
             return res;
         }
         // Check what questions are left
-        return this.AskNextQuestion(surveyDoneString);
+        return this.AskNextQuestion(surveyDoneString, firstMessage);
     }
 
     public Response newButtonAnswer(Answer newAnswer, Question lastQuestion, String token, String message, String surveyDoneString, String submitButton){
@@ -2127,6 +2134,7 @@ public class Participant {
             // No questions remaining, survey done.
             this.completedsurvey = true;
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
+            response.put("intent", "Ende");
             response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
