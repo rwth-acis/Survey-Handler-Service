@@ -289,6 +289,12 @@ public class Participant {
         // check if participant has completed the survey
         boolean participantDone = this.completedsurvey;
         if (participantDone){
+            JSONObject button = new JSONObject();
+            button.put("intent", "Ende");
+            button.put("label", "Ende");
+            button.put("description", "Ende");
+            button.put("isFile", false);
+            response.put("interactiveElements", new JSONArray().add(button));
             System.out.println("participant done");
             response.put("message", completedSurvey);
             response.put("contextOn", false);

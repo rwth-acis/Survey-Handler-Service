@@ -1432,9 +1432,15 @@ public class SurveyHandlerService extends RESTService {
 
 				System.out.println("Participant has completed survey");
 				// no unfinished survey left
+				JSONObject button = new JSONObject();
+				button.put("intent", "Ende");
+				button.put("label", "Ende");
+				button.put("description", "Ende");
+				button.put("isFile", false);
 				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
 				response.put("message", completedSurvey);
 				response.put("contextOn", false);
+				response.put("interactiveElements", new JSONArray().add(button));
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
 			}
