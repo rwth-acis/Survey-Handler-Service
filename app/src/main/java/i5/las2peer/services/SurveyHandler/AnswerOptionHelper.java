@@ -21,15 +21,15 @@ public class AnswerOptionHelper {
                 interactiveElements = buildGender();
                 break;
             case YESNO:
-                interactiveElements.add(buildButton("Survey Answer Option 1", "Ja"));
-                interactiveElements.add(buildButton("Survey Answer Option 2", "Nein"));
+                interactiveElements.add(buildButton("SurveyAnswer 1", "Ja"));
+                interactiveElements.add(buildButton("SurveyAnswer 2", "Nein"));
                 break;
             case FIVESCALE:
-                interactiveElements.add(buildButton("Survey Answer Option 1", "1"));
-                interactiveElements.add(buildButton("Survey Answer Option 2", "2"));
-                interactiveElements.add(buildButton("Survey Answer Option 3", "3"));
-                interactiveElements.add(buildButton("Survey Answer Option 4", "4"));
-                interactiveElements.add(buildButton("Survey Answer Option 5", "5"));
+                interactiveElements.add(buildButton("SurveyAnswer 1", "1"));
+                interactiveElements.add(buildButton("SurveyAnswer 2", "2"));
+                interactiveElements.add(buildButton("SurveyAnswer 3", "3"));
+                interactiveElements.add(buildButton("SurveyAnswer 4", "4"));
+                interactiveElements.add(buildButton("SurveyAnswer 5", "5"));
                 break;
         }
         return interactiveElements;
@@ -37,16 +37,16 @@ public class AnswerOptionHelper {
 
     private static JSONArray buildGender() {
         JSONArray array = new JSONArray();
-        array.add(buildButton("Survey Answer Option 1", "Weiblich"));
-        array.add(buildButton("Survey Answer Option 2", "Maennlich"));
-        array.add(buildButton("Survey Answer Option 3", "Keine Angabe"));
+        array.add(buildButton("SurveyAnswer 1", "Weiblich"));
+        array.add(buildButton("SurveyAnswer 2", "Maennlich"));
+        array.add(buildButton("SurveyAnswer 3", "Keine Angabe"));
         return array;
     }
 
     private static JSONArray buildMC(ArrayList<AnswerOption> options){
         JSONArray array = new JSONArray();
         for(int i = 1; i < options.size() + 1; i++){
-            array.add(buildButton("Survey Answer Option " + i, getAnswerOptionByIndex(i, options).getText()));
+            array.add(buildButton("SurveyAnswer " + i, getAnswerOptionByIndex(i, options).getText()));
         }
         return array;
     }
