@@ -1341,7 +1341,7 @@ public class SurveyHandlerService extends RESTService {
 			String buttonIntent = "";
 
 			try{
-				senderEmail = bodyInput.getAsString("email");
+				senderEmail = bodyInput.getAsString("channel");
 
 			} catch(Exception e){
 				try{
@@ -1441,15 +1441,17 @@ public class SurveyHandlerService extends RESTService {
 
 				System.out.println("Participant has completed survey");
 				// no unfinished survey left
+				JSONArray interactiveElements = new JSONArray();
 				JSONObject button = new JSONObject();
 				button.put("intent", "SurveyFertig");
 				button.put("label", "Ende");
 				button.put("description", "Ende");
 				button.put("isFile", false);
+				interactiveElements.add(button);
 				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
 				response.put("message", completedSurvey);
 				response.put("contextOn", false);
-				response.put("interactiveElements", new JSONArray().add(button));
+				response.put("interactiveElements", interactiveElements);
 				response.put("channel", channel);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();

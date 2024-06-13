@@ -290,12 +290,14 @@ public class Participant {
         // check if participant has completed the survey
         boolean participantDone = this.completedsurvey;
         if (participantDone){
+            JSONArray interactiveElements = new JSONArray();
             JSONObject button = new JSONObject();
             button.put("intent", "SurveyFertig");
             button.put("label", "Ende");
             button.put("description", "Ende");
             button.put("isFile", false);
-            response.put("interactiveElements", new JSONArray().add(button));
+            interactiveElements.add(button);
+            response.put("interactiveElements", interactiveElements);
             System.out.println("participant done");
             response.put("message", completedSurvey);
             response.put("contextOn", false);
@@ -386,7 +388,8 @@ public class Participant {
                     }
                     JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
                     response.put("message", msg);
-                    response.put("interactiveElements", answerOptions);
+                    if(!answerOptions.isEmpty())
+                        response.put("interactiveElements", answerOptions);
                     response.put("contextOn", true);
                     response.put("channel", channel);
                 } else {
@@ -438,7 +441,8 @@ public class Participant {
             }
             JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
             response.put("message", msg);
-            response.put("interactiveElements", answerOptions);
+            if(!answerOptions.isEmpty())
+                response.put("interactiveElements", answerOptions);
             response.put("contextOn", true);
             response.put("channel", channel);
         } else {
@@ -2146,6 +2150,14 @@ public class Participant {
             // No questions remaining, survey done.
             this.completedsurvey = true;
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
+            JSONArray interactiveElements = new JSONArray();
+            JSONObject button = new JSONObject();
+            button.put("intent", "SurveyFertig");
+            button.put("label", "Ende");
+            button.put("description", "Ende");
+            button.put("isFile", false);
+            interactiveElements.add(button);
+            response.put("interactiveElements", interactiveElements);
             response.put("contextOn", false);
             response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
