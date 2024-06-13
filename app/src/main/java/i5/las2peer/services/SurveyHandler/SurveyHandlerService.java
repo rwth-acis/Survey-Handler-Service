@@ -1277,7 +1277,7 @@ public class SurveyHandlerService extends RESTService {
 		return Response.ok().entity(response).build();
 	}
 	@POST
-	@Path("/questions")
+	@Path("/nextQuestion")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
