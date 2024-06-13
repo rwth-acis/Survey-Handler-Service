@@ -1289,7 +1289,7 @@ public class SurveyHandlerService extends RESTService {
 					message = "survey question request handled")})
 	public Response nextQuestion(@FormDataParam("msg") String msg, @FormDataParam("channel") String channel, @FormDataParam("sbfmUrl") @DefaultValue("default") String sbfmUrl,
 								 @FormDataParam("intent") String intent, @FormDataParam("surveyID") String surveyID, @FormDataParam("Password") String password,
-								 @FormDataParam("NameOfUser") String nameOfUser, @FormDataParam("email") String email, @FormDataParam("adminmail") String adminmail){
+								 @FormDataParam("NameOfUser") String nameOfUser, @FormDataParam("adminmail") String adminmail){
 		//Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
 
 		JSONObject response = new JSONObject();
@@ -1301,7 +1301,6 @@ public class SurveyHandlerService extends RESTService {
 		bodyInput.put("surveyID", surveyID);
 		bodyInput.put("Password", password);
 		bodyInput.put("NameOfUser", nameOfUser);
-		bodyInput.put("email", email);
 		bodyInput.put("adminmail", adminmail);
 
 		String input = bodyInput.toString();
@@ -1353,8 +1352,8 @@ public class SurveyHandlerService extends RESTService {
 					}
 				} catch (Exception ex){
 					// in case of telegram no email is passed on, so username is the 'email'
-					if(bodyInput.containsKey("user")){
-						senderEmail = bodyInput.getAsString("user");
+					if(bodyInput.containsKey("channel")){
+						senderEmail = bodyInput.getAsString("channel");
 					}
 					else{
 						System.out.println("channel, email or user is not transmitted correctly");
