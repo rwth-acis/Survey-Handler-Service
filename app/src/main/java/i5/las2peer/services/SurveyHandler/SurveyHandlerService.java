@@ -17,7 +17,6 @@ import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
-import org.apache.commons.lang3.StringUtils;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 
 import javax.ws.rs.*;
@@ -1432,7 +1431,7 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			String message;
-			if (StringUtils.isBlank(bodyInput.getAsString("msg"))) {
+			if (bodyInput.getAsString("msg").substring(0).equals("!")) {
 				message = intent.substring(intent.length() - 1);
 			} else {
 				message = bodyInput.getAsString("msg");
@@ -1452,7 +1451,6 @@ public class SurveyHandlerService extends RESTService {
 				interactiveElements.add(button);
 				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
 				response.put("message", completedSurvey);
-				response.put("contextOn", false);
 				response.put("interactiveElements", interactiveElements);
 				response.put("channel", channel);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());

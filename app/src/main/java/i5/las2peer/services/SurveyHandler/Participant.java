@@ -300,7 +300,6 @@ public class Participant {
             response.put("interactiveElements", interactiveElements);
             System.out.println("participant done");
             response.put("message", completedSurvey);
-            response.put("contextOn", false);
             response.put("channel", channel);
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
@@ -390,7 +389,6 @@ public class Participant {
                     response.put("message", msg);
                     if(!answerOptions.isEmpty())
                         response.put("interactiveElements", answerOptions);
-                    response.put("contextOn", true);
                     response.put("channel", channel);
                 } else {
                     response.put("text", messageText);
@@ -443,7 +441,6 @@ public class Participant {
             response.put("message", msg);
             if(!answerOptions.isEmpty())
                 response.put("interactiveElements", answerOptions);
-            response.put("contextOn", true);
             response.put("channel", channel);
         } else {
             response.put("text", skipText + messageText);
@@ -2158,7 +2155,6 @@ public class Participant {
             button.put("isFile", false);
             interactiveElements.add(button);
             response.put("interactiveElements", interactiveElements);
-            response.put("contextOn", false);
             response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
