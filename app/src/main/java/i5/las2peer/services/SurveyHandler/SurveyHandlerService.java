@@ -18,6 +18,7 @@ import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
 import org.apache.commons.lang3.StringUtils;
+import org.glassfish.jersey.media.multipart.FormDataParam;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
@@ -830,12 +831,12 @@ public class SurveyHandlerService extends RESTService {
 		return false;
 	}
 
-	private boolean setUpSurvey(JSONObject input){
+	private boolean setUpSurvey(String input){
 		boolean successful = true;
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 		try {
-			JSONObject bodyInput = input;
+			JSONObject bodyInput = (JSONObject) p.parse(input);
 
 			String username = "";
 			String password = "";
@@ -1278,7 +1279,6 @@ public class SurveyHandlerService extends RESTService {
 	}
 	@POST
 	@Path("/nextQuestion")
-	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
 			value = "Return the next question of the survey.",
@@ -1287,21 +1287,32 @@ public class SurveyHandlerService extends RESTService {
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
 					message = "survey question request handled")})
-	public Response nextQuestion(JSONObject input) {
-		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input.toString());
+	public Response nextQuestion(@FormDataParam("msg") String msg, @FormDataParam("channel") String channel, @FormDataParam("sbfmUrl") @DefaultValue("default") String sbfmUrl,
+								 @FormDataParam("intent") String intent, @FormDataParam("surveyID") String surveyID, @FormDataParam("Password") String password,
+								 @FormDataParam("NameOfUser") String nameOfUser, @FormDataParam("email") String email, @FormDataParam("adminmail") String adminmail){
+		//Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
 
 		JSONObject response = new JSONObject();
+		JSONObject bodyInput = new JSONObject();
+		bodyInput.put("msg", msg);
+		bodyInput.put("channel", channel);
+		bodyInput.put("sbfmUrl", sbfmUrl);
+		bodyInput.put("intent", intent);
+		bodyInput.put("surveyID", surveyID);
+		bodyInput.put("Password", password);
+		bodyInput.put("NameOfUser", nameOfUser);
+		bodyInput.put("email", email);
+		bodyInput.put("adminmail", adminmail);
+
+		String input = bodyInput.toString();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
 		try{
 			LocalDate dateNow = LocalDate.now();
 			LocalTime timeNow = LocalTime.now();
 
-			JSONObject bodyInput = input;
 			System.out.println("received message: " + bodyInput);
-			String intent = bodyInput.getAsString("intent");
-			String channel = bodyInput.getAsString("channel");
-			String surveyID = bodyInput.getAsString("surveyID");
+
 			String beginningTextEN = "";
 			String beginningTextDE = "";
 			if(bodyInput.containsKey("beginningText")){
@@ -1633,8 +1644,7 @@ public class SurveyHandlerService extends RESTService {
 				if(Objects.isNull(currSurvey)){
 					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
 					String adjInput = input.replaceAll(surveyID, admin.getCurrAdministrating());
-					//todo: adjust for json input of setupsurvey
-					boolean setUp = true;
+					boolean setUp = setUpSurvey(adjInput);
 					// See if survey is set up now
 					currSurvey = getSurveyBySurveyID(admin.getCurrAdministrating());
 					if (Objects.isNull(currSurvey) || !setUp){
@@ -1665,8 +1675,7 @@ public class SurveyHandlerService extends RESTService {
 				//set up survey
 				if(Objects.isNull(currSurvey)){
 					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-					//todo: adjust for json input of setupsurvey
-					boolean setUp = true;
+					boolean setUp = setUpSurvey(input);
 					// See if survey is set up now
 					currSurvey = getSurveyBySurveyID(surveyID);
 					if (Objects.isNull(currSurvey)|| !setUp){
