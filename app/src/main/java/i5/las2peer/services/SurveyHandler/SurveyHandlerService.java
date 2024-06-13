@@ -85,12 +85,7 @@ public class SurveyHandlerService extends RESTService {
 		return null;
 	}
 
-	@Override
-	protected void initResources() {
-		getResourceConfig().register(this);
-	}
-
-	public Admin getAdminByAdminID(String adminID){
+	private Admin getAdminByAdminID(String adminID){
 		for(Admin a : allAdmins){
 			if(a.getAid().equals(adminID)){
 				return a;
