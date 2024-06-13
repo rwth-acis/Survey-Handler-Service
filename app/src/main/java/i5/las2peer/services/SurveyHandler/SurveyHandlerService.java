@@ -1430,11 +1430,9 @@ public class SurveyHandlerService extends RESTService {
 				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
 			}
 
-			String message;
+			String message = bodyInput.getAsString("msg");
 			if (bodyInput.getAsString("msg").startsWith("!SurveyAnswer")) {
-				message = intent.substring(intent.length() - 1);
-			} else {
-				message = bodyInput.getAsString("msg");
+				message = message.substring(message.length() - 1);
 			}
 
 			// check if participant is done with survey and can choose new one
