@@ -830,12 +830,12 @@ public class SurveyHandlerService extends RESTService {
 		return false;
 	}
 
-	private boolean setUpSurvey(String input){
+	private boolean setUpSurvey(JSONObject input){
 		boolean successful = true;
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
 		try {
-			JSONObject bodyInput = (JSONObject) p.parse(input);
+			JSONObject bodyInput = input;
 
 			String username = "";
 			String password = "";
@@ -1278,7 +1278,7 @@ public class SurveyHandlerService extends RESTService {
 	}
 	@POST
 	@Path("/nextQuestion")
-	@Consumes(MediaType.TEXT_PLAIN)
+	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
 			value = "Return the next question of the survey.",
@@ -1287,8 +1287,8 @@ public class SurveyHandlerService extends RESTService {
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
 					message = "survey question request handled")})
-	public Response nextQuestion(String input) {
-		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+	public Response nextQuestion(JSONObject input) {
+		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input.toString());
 
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
@@ -1297,7 +1297,7 @@ public class SurveyHandlerService extends RESTService {
 			LocalDate dateNow = LocalDate.now();
 			LocalTime timeNow = LocalTime.now();
 
-			JSONObject bodyInput = (JSONObject) p.parse(input);
+			JSONObject bodyInput = input;
 			System.out.println("received message: " + bodyInput);
 			String intent = bodyInput.getAsString("intent");
 			String channel = bodyInput.getAsString("channel");
@@ -1633,7 +1633,8 @@ public class SurveyHandlerService extends RESTService {
 				if(Objects.isNull(currSurvey)){
 					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
 					String adjInput = input.replaceAll(surveyID, admin.getCurrAdministrating());
-					boolean setUp = setUpSurvey(adjInput);
+					//todo: adjust for json input of setupsurvey
+					boolean setUp = true;
 					// See if survey is set up now
 					currSurvey = getSurveyBySurveyID(admin.getCurrAdministrating());
 					if (Objects.isNull(currSurvey) || !setUp){
@@ -1664,7 +1665,8 @@ public class SurveyHandlerService extends RESTService {
 				//set up survey
 				if(Objects.isNull(currSurvey)){
 					System.out.println("No survey exists for id "+ surveyID + ". Creating...");
-					boolean setUp = setUpSurvey(input);
+					//todo: adjust for json input of setupsurvey
+					boolean setUp = true;
 					// See if survey is set up now
 					currSurvey = getSurveyBySurveyID(surveyID);
 					if (Objects.isNull(currSurvey)|| !setUp){
