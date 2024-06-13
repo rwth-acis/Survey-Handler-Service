@@ -1431,7 +1431,7 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			String message;
-			if (bodyInput.getAsString("msg").substring(0).equals("!")) {
+			if (bodyInput.getAsString("msg").startsWith("!SurveyAnswer")) {
 				message = intent.substring(intent.length() - 1);
 			} else {
 				message = bodyInput.getAsString("msg");
