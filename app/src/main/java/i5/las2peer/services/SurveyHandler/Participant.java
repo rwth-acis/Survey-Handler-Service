@@ -290,7 +290,7 @@ public class Participant {
         boolean participantDone = this.completedsurvey;
         if (participantDone){
             JSONObject button = new JSONObject();
-            button.put("intent", "Ende");
+            button.put("intent", "SurveyFertig");
             button.put("label", "Ende");
             button.put("description", "Ende");
             button.put("isFile", false);

@@ -57,7 +57,6 @@ import java.util.logging.Level;
 						url = "")))
 @ServicePath("/SurveyHandler")
 @ManualDeployment
-
 public class SurveyHandlerService extends RESTService {
 
 	private static ArrayList<Survey> allSurveys = new ArrayList<>();
@@ -84,6 +83,11 @@ public class SurveyHandlerService extends RESTService {
 			}
 		}
 		return null;
+	}
+
+	@Override
+	protected void initResources() {
+		getResourceConfig().register(this);
 	}
 
 	public Admin getAdminByAdminID(String adminID){
@@ -1330,7 +1334,7 @@ public class SurveyHandlerService extends RESTService {
 			boolean ls = bodyInput.containsKey("NameOfUser");
 
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
-			String buttonIntent = bodyInput.getAsString("buttonIntent");
+			String buttonIntent = "";
 
 			try{
 				senderEmail = bodyInput.getAsString("email");
@@ -1433,7 +1437,7 @@ public class SurveyHandlerService extends RESTService {
 				System.out.println("Participant has completed survey");
 				// no unfinished survey left
 				JSONObject button = new JSONObject();
-				button.put("intent", "Ende");
+				button.put("intent", "SurveyFertig");
 				button.put("label", "Ende");
 				button.put("description", "Ende");
 				button.put("isFile", false);
