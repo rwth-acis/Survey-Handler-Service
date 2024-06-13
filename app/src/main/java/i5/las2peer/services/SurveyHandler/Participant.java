@@ -100,10 +100,11 @@ public class Participant {
     // Based on the intent, decide what is sent back to the participant
     public Response calculateNextAction(String intent, String message, String messageId, String buttonIntent,
                                         String messageTs, JSONObject currMessage, JSONObject prevMessage,
-                                        String token, boolean secondSurvey, String beginningTextEN, String beginningTextDE){
+                                        String token, boolean secondSurvey, String beginningTextEN, String beginningTextDE, String channel){
 
         String beginningText = "";
         JSONObject response = new JSONObject();
+        this.channel = channel;
 
         String languages = "";
         for(String s : this.currentSurvey.getLanguages()){
@@ -298,6 +299,7 @@ public class Participant {
             System.out.println("participant done");
             response.put("message", completedSurvey);
             response.put("contextOn", false);
+            response.put("channel", channel);
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }
@@ -386,6 +388,7 @@ public class Participant {
                     response.put("message", msg);
                     response.put("interactiveElements", answerOptions);
                     response.put("contextOn", true);
+                    response.put("channel", channel);
                 } else {
                     response.put("text", messageText);
                 }
@@ -431,12 +434,13 @@ public class Participant {
         if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
             String msg = messageText;
             if(firstMessage){
-                msg = "Super, danke für das Teilnehmen an der Umfrage! Hier kommt deine erste Frage:\n" + messageText;
+                msg = messageText;
             }
             JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
             response.put("message", msg);
             response.put("interactiveElements", answerOptions);
             response.put("contextOn", true);
+            response.put("channel", channel);
         } else {
             response.put("text", skipText + messageText);
         }

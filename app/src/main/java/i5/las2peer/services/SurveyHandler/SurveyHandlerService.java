@@ -1267,7 +1267,7 @@ public class SurveyHandlerService extends RESTService {
 			currParticipant.setLasttimeactive(LocalDateTime.now().toString());
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE);
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, secondSurvey, beginningTextEN, beginningTextDE, channel);
 
 
 		} catch (ParseException e) {
@@ -1276,7 +1276,6 @@ public class SurveyHandlerService extends RESTService {
 		response.put("text", "Something went wrong in takingSurvey try block.");
 		return Response.ok().entity(response).build();
 	}
-
 	@POST
 	@Path("/questions")
 	@Consumes(MediaType.TEXT_PLAIN)
@@ -1363,6 +1362,7 @@ public class SurveyHandlerService extends RESTService {
 					deleteSurvey(surveyID);
 					System.out.println("ERROR: Could not set up survey, still null.");
 					response.put("message", "ERROR: Could not set up survey. Reason unknown.");
+					response.put("channel", channel);
 					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 					return Response.ok().entity(response).build();
 				}
@@ -1440,6 +1440,7 @@ public class SurveyHandlerService extends RESTService {
 				response.put("message", completedSurvey);
 				response.put("contextOn", false);
 				response.put("interactiveElements", new JSONArray().add(button));
+				response.put("channel", channel);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
 			}
@@ -1449,7 +1450,7 @@ public class SurveyHandlerService extends RESTService {
 			String token = "";
 
 			// Get the next action
-			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, false, beginningTextEN, beginningTextDE);
+			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, false, beginningTextEN, beginningTextDE, channel);
 
 		} catch (ParseException e) {
 			e.printStackTrace();
