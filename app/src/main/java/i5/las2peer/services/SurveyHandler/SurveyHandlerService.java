@@ -1412,8 +1412,8 @@ public class SurveyHandlerService extends RESTService {
 
 				if(!known){
 					System.out.println("participant does not exist, create a new one");
-					// participant does not exist, create a new one
-					Participant newParticipant = new Participant(senderEmail);
+					// participant does not exist, create a new one, channel is email
+					Participant newParticipant = new Participant(channel);
 					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
 					newParticipant.setLastChosenSurveyID("");
 
@@ -1423,7 +1423,7 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			// Get the existing participant
-			Participant currParticipant = currSurvey.findParticipant(senderEmail);
+			Participant currParticipant = currSurvey.findParticipant(channel);
 			if(currParticipant.getChannel() == null){
 				currParticipant.setChannel(channel);
 				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
