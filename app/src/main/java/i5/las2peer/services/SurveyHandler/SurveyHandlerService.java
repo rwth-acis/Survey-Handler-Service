@@ -1291,7 +1291,9 @@ public class SurveyHandlerService extends RESTService {
 								 @FormDataParam("intent") String intent, @FormDataParam("surveyID") String surveyID, @FormDataParam("Password") String password,
 								 @FormDataParam("NameOfUser") String nameOfUser, @FormDataParam("adminmail") String adminmail){
 		//Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
-
+		if(intent == null){
+			intent = "";
+		}
 		JSONObject response = new JSONObject();
 		JSONObject bodyInput = new JSONObject();
 		bodyInput.put("msg", msg);
