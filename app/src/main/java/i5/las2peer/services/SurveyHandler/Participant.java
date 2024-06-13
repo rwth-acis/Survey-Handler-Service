@@ -291,7 +291,7 @@ public class Participant {
         if (participantDone){
             System.out.println("participant done");
             response.put("message", completedSurvey);
-            response.put("intent", "Ende");
+            response.put("contextOn", false);
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }
@@ -379,6 +379,7 @@ public class Participant {
                     JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
                     response.put("message", msg);
                     response.put("interactiveElements", answerOptions);
+                    response.put("contextOn", true);
                 } else {
                     response.put("text", messageText);
                 }
@@ -429,6 +430,7 @@ public class Participant {
             JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
             response.put("message", msg);
             response.put("interactiveElements", answerOptions);
+            response.put("contextOn", true);
         } else {
             response.put("text", skipText + messageText);
         }
@@ -2134,7 +2136,7 @@ public class Participant {
             // No questions remaining, survey done.
             this.completedsurvey = true;
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-            response.put("intent", "Ende");
+            response.put("contextOn", false);
             response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();

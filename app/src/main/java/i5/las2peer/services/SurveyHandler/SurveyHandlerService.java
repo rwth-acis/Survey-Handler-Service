@@ -1363,7 +1363,7 @@ public class SurveyHandlerService extends RESTService {
 				if (Objects.isNull(currSurvey) || !setUp){
 					deleteSurvey(surveyID);
 					System.out.println("ERROR: Could not set up survey, still null.");
-					response.put("text", "ERROR: Could not set up survey. Reason unknown.");
+					response.put("message", "ERROR: Could not set up survey. Reason unknown.");
 					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 					return Response.ok().entity(response).build();
 				}
@@ -1434,7 +1434,7 @@ public class SurveyHandlerService extends RESTService {
 				// no unfinished survey left
 				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
 				response.put("message", completedSurvey);
-				response.put("intent", "Ende");
+				response.put("contextOn", false);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
 			}
@@ -1449,7 +1449,7 @@ public class SurveyHandlerService extends RESTService {
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
-		response.put("text", "Something went wrong in Next Question try block.");
+		response.put("message", "Something went wrong in Next Question try block.");
 		return Response.ok().entity(response).build();
 	}
 
@@ -2076,7 +2076,7 @@ public class SurveyHandlerService extends RESTService {
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			if(Objects.isNull(currSurvey)){
-				response.put("text", "Please initiate the setup of the survey first.");
+				response.put("message", "Please initiate the setup of the survey first.");
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
 			}
@@ -2122,7 +2122,7 @@ public class SurveyHandlerService extends RESTService {
 						System.out.println("response id: " + pa.getSurveyResponseID());
 					} catch (Exception e){
 						System.out.println("ERROR in sending results to LimeSurvey");
-						response.put("text", surveyResponseID);
+						response.put("message", surveyResponseID);
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
 					}
