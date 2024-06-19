@@ -2040,64 +2040,23 @@ public class SurveyHandlerService extends RESTService {
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
 					message = "results sent to LimeSurvey")})
-	public Response sendResultsToLimesurvey(String input){
-		SurveyHandlerService surveyHandlerService = (SurveyHandlerService) Context.get().getService();
-		Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
+	public Response sendResultsToLimesurvey(@FormDataParam("channel") String channel, @FormDataParam("surveyID") String surveyID,
+											@FormDataParam("Password") String password, @FormDataParam("NameOfUser") String username,
+											@FormDataParam("adminmail") String adminmail){
 
 		JSONObject response = new JSONObject();
 		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
-
-		try {
-
-			JSONObject bodyInput = (JSONObject) p.parse(input);
-			String username = bodyInput.getAsString("NameOfUser");
-			String password = bodyInput.getAsString("Password");
-			String surveyID = bodyInput.getAsString("surveyID");
-			String uri = url;
-			if(bodyInput.getAsString("url") != null){
-				uri = bodyInput.getAsString("url");
-			}
-
-			String adminmail = bodyInput.getAsString("adminmail");
-
-			String senderEmail = "";
-			try{
-				senderEmail = bodyInput.getAsString("email");
-
-				if(senderEmail == null && bodyInput.containsKey("user")){
-
-					if(!bodyInput.getAsString("user").equals(adminmail)){
-						Response res = takingSurvey(input);
-						return res;
-					}
-				}
-				else if (!adminmail.equals(senderEmail)) {
-					Response res = takingSurvey(input);
-					return res;
-				}
-
-			} catch(Exception e){
-				if(bodyInput.containsKey("user")){
-					if(!bodyInput.getAsString("user").equals(bodyInput.getAsString("adminmail"))){
-						Response res = takingSurvey(input);
-						return res;
-					}
-				} else{
-					Response res = takingSurvey(input);
-					return res;
-				}
-			}
-
+		String uri = url;
+		try{
 			// find correct survey
 			Survey currSurvey = getSurveyBySurveyID(surveyID);
 
 			if(Objects.isNull(currSurvey)){
 				response.put("message", "Please initiate the setup of the survey first.");
+				response.put("channel", channel);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
 			}
-
-
 			MiniClient mini = new MiniClient();
 			mini.setConnectorEndpoint(uri);
 			HashMap<String, String> head = new HashMap<String, String>();
@@ -2110,23 +2069,19 @@ public class SurveyHandlerService extends RESTService {
 				String surveyResponseID;
 
 				String content = pa.getAnswersString(true);
-				System.out.println(content);
 
 				if(pa.getSurveyResponseID() != null){
 					// Part of the response is already at LimeSurvey, update response
 					surveyResponseID = pa.getSurveyResponseID();
-					System.out.println(surveyResponseID);
 					String contentFilled = "{" + content + ",\"id\":\"" + surveyResponseID + "\"}";
-					System.out.println(contentFilled);
 					String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					String response2 = minire2.getAsString("result");
-					System.out.println("aaaaaaaaaaaaaaresult: " + response2);
+					System.out.println("Response updated: " + response2);
 				} else{
 					// New response, add new response and save id at participant
 					String contentFilled = "{" + content + "}";
-					System.out.println(contentFilled);
 					String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
@@ -2135,126 +2090,29 @@ public class SurveyHandlerService extends RESTService {
 						Integer.parseInt(surveyResponseID);
 						pa.setSurveyResponseID(surveyResponseID);
 						SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
-						System.out.println("response id: " + pa.getSurveyResponseID());
+						System.out.println("New response added: " + pa.getSurveyResponseID());
 					} catch (Exception e){
 						System.out.println("ERROR in sending results to LimeSurvey");
 						response.put("message", surveyResponseID);
+						response.put("channel", channel);
 						Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 						return Response.ok().entity(response).build();
 					}
-
 				}
 			}
-
-
 		}
 		catch(Exception e){
 			System.out.println("exception after firstsurvey lime");
 			e.printStackTrace();
-		}
-
-
-		// again for the follow up survey
-		try {
-
-			JSONObject bodyInput = (JSONObject) p.parse(input);
-			String username = bodyInput.getAsString("NameOfUser");
-			String password = bodyInput.getAsString("Password");
-			String senderEmail = bodyInput.getAsString("email");
-			if(senderEmail != null){
-				if (!(bodyInput.getAsString("adminmail").equals(senderEmail))) {
-					Response res = takingSurvey(input);
-					return res;
-				}
-			} else{
-				Response res = takingSurvey(input);
-				return res;
-			}
-			if(bodyInput.containsKey("followupSurveyID")) {
-
-				System.out.println("has followup survey. sending results back...");
-				String surveyID = bodyInput.getAsString("followupSurveyID");
-				String uri = url;
-				if(bodyInput.getAsString("uri") != null){
-					uri = bodyInput.getAsString("uri");
-				}
-
-				// find correct survey
-				Survey currSurvey = getSurveyBySurveyID(surveyID);
-
-				if(Objects.isNull(currSurvey)){
-					response.put("text", "Please initiate the setup of the survey first.");
-					Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-					return Response.ok().entity(response).build();
-				}
-
-
-				MiniClient mini = new MiniClient();
-				mini.setConnectorEndpoint(uri);
-				HashMap<String, String> head = new HashMap<String, String>();
-
-				ClientResponse minires = mini.sendRequest("POST", uri, ("{\"method\": \"get_session_key\", \"params\": [ \"" + username + "\", \"" + password + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
-				JSONObject minire = (JSONObject) p.parse(minires.getResponse());
-				String sessionKeyString = minire.getAsString("result");
-
-				for(Participant pa : currSurvey.getParticipants()) {
-					String surveyResponseID;
-
-					String content = pa.getAnswersString(true);
-					System.out.println(content);
-
-					if(pa.getSurveyResponseID() != null){
-						// Part of the response is already at LimeSurvey, update response
-						surveyResponseID = pa.getSurveyResponseID();
-						System.out.println(surveyResponseID);
-						String contentFilled = "{" + content + ",\"id\":\"" + surveyResponseID + "\"}";
-						System.out.println(contentFilled);
-						String responseData = "{\"method\": \"update_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
-						ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
-						JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
-						String response2 = minire2.getAsString("result");
-						System.out.println(response2);
-					} else{
-						// New response, add new response and save id at participant
-						String contentFilled = "{" + content + "}";
-						System.out.println(contentFilled);
-						String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
-						ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
-						JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
-						surveyResponseID = minire2.getAsString("result");
-						try{
-							Integer.parseInt(surveyResponseID);
-							pa.setSurveyResponseID(surveyResponseID);
-							SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
-							System.out.println("response id: " + pa.getSurveyResponseID());
-						} catch (Exception e){
-							System.out.println("ERROR in sending results to LimeSurvey");
-							response.put("text", surveyResponseID);
-							Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-							return Response.ok().entity(response).build();
-						}
-					}
-				}
-
-				response.put("text", "Passed back results to LimeSurvey.");
-				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
-				return Response.ok().entity(response).build();
-			}
-
-			response.put("text", "Passed back results to LimeSurvey.");
+			response.put("message", "Something went wrong in sendResultsBackToLimesurvey try block.");
+			response.put("channel", channel);
 			Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 			return Response.ok().entity(response).build();
-
 		}
-		catch(Exception e){
-			e.printStackTrace();
-		}
-
-		response.put("text", "Something went wrong in sendResultsBackToLimesurvey try block.");
+		response.put("message", "Passed back results to LimeSurvey.");
+		response.put("channel", channel);
 		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 		return Response.ok().entity(response).build();
-
-
 	}
 
 
