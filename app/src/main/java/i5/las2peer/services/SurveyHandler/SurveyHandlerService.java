@@ -18,6 +18,7 @@ import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
 import org.glassfish.jersey.media.multipart.FormDataParam;
+import org.jetbrains.annotations.NotNull;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
@@ -1276,6 +1277,38 @@ public class SurveyHandlerService extends RESTService {
 		response.put("text", "Something went wrong in takingSurvey try block.");
 		return Response.ok().entity(response).build();
 	}
+	@NotNull
+	private static Participant getExistingParticipant(String channel, Survey currSurvey) {
+		Participant currParticipant = currSurvey.findParticipant(channel);
+		if(currParticipant.getChannel() == null){
+			currParticipant.setChannel(channel);
+			SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
+		}
+		return currParticipant;
+	}
+
+	private static void createNewParticipantWithChannel(String channel, Survey currSurvey) {
+		Participant newParticipant = new Participant(channel);
+		newParticipant.setLasttimeactive(LocalDateTime.now().toString());
+		newParticipant.setLastChosenSurveyID("");
+
+		currSurvey.addParticipant(newParticipant);
+		SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+	}
+
+	private static void deleteParticipant(Survey currSurvey, String email) {
+		Participant participant = currSurvey.findParticipant(email);
+		if(participant != null){
+			// not possible with limesurvey api to delete response (TODO)
+			for(Answer answer : participant.getGivenAnswersAl()){
+				SurveyHandlerServiceQueries.deleteAnswerFromDB(answer, database);
+			}
+			// remove participant from database
+			SurveyHandlerServiceQueries.deleteParticipantFromDB(participant, database);
+			currSurvey.deleteParticipant(participant);
+		}
+	}
+
 	@POST
 	@Path("/nextQuestion")
 	@Produces(MediaType.APPLICATION_JSON)
@@ -1289,7 +1322,6 @@ public class SurveyHandlerService extends RESTService {
 	public Response nextQuestion(@FormDataParam("msg") String msg, @FormDataParam("channel") String channel, @FormDataParam("sbfmUrl") @DefaultValue("default") String sbfmUrl,
 								 @FormDataParam("intent") String intent, @FormDataParam("surveyID") String surveyID, @FormDataParam("Password") String password,
 								 @FormDataParam("NameOfUser") String nameOfUser, @FormDataParam("adminmail") String adminmail){
-		//Context.get().monitorEvent(MonitoringEvent.MESSAGE_RECEIVED, input);
 		if(intent == null){
 			intent = "";
 		}
@@ -1381,6 +1413,8 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) {
+				response.put("channel", channel);
+				response.put("message", "Die Umfrage ist beendet.");
 				return Response.ok().entity(response).build();
 			}
 
@@ -1406,36 +1440,30 @@ public class SurveyHandlerService extends RESTService {
 
 			// Check if message was sent by someone known
 			boolean known = false;
-			if (Objects.isNull(currSurvey.findParticipant(senderEmail))){
 				if(Objects.nonNull(currSurvey.findParticipant(channel))){
+					System.out.println("participant already exist");
 					known = true;
 				}
 
 				if(!known){
 					System.out.println("participant does not exist, create a new one");
 					// participant does not exist, create a new one, channel is email
-					Participant newParticipant = new Participant(channel);
-					newParticipant.setLasttimeactive(LocalDateTime.now().toString());
-					newParticipant.setLastChosenSurveyID("");
-
-					currSurvey.addParticipant(newParticipant);
-					SurveyHandlerServiceQueries.addParticipantToDB(newParticipant, database);
+					createNewParticipantWithChannel(channel, currSurvey);
 				}
-			}
+
 
 			// Get the existing participant
-			Participant currParticipant = currSurvey.findParticipant(channel);
-			if(currParticipant.getChannel() == null){
-				currParticipant.setChannel(channel);
-				SurveyHandlerServiceQueries.updateParticipantInDB(currParticipant, database);
-			}
+			Participant currParticipant = getExistingParticipant(channel, currSurvey);
 
+			boolean isStart = false;
 			String message = bodyInput.getAsString("msg");
 			if (bodyInput.getAsString("msg").startsWith("!SurveyAnswer")) {
 				message = message.substring(message.length() - 1);
+			} else if (message.equals("!StartSurvey")) {
+				isStart = true;
 			}
 
-			// check if participant is done with survey and can choose new one
+			// check if participant is done with survey
 			if(currParticipant.isCompletedsurvey()){
 
 				System.out.println("Participant has completed survey");
@@ -1453,6 +1481,13 @@ public class SurveyHandlerService extends RESTService {
 				response.put("channel", channel);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
+			} else {
+				if (known && isStart){
+					System.out.println("Participant needs to restart survey");
+					deleteParticipant(currSurvey, channel);
+					createNewParticipantWithChannel(channel, currSurvey);
+					currParticipant = getExistingParticipant(channel, currSurvey);
+				}
 			}
 
 			//Set the time the participant answered to check later if needed to be reminded to finish survey
@@ -1466,9 +1501,9 @@ public class SurveyHandlerService extends RESTService {
 			e.printStackTrace();
 		}
 		response.put("message", "Something went wrong in Next Question try block.");
+		response.put("channel", channel);
 		return Response.ok().entity(response).build();
 	}
-
 
 	@POST
 	@Path("/adminSurvey")
@@ -1789,18 +1824,7 @@ public class SurveyHandlerService extends RESTService {
 							// email
 							email = userIdentificator;
 						}
-						Participant participant = currSurvey.findParticipant(email);
-						if(participant != null){
-							// not possible with limesurvey api to delete response (TODO)
-
-							for(Answer answer : participant.getGivenAnswersAl()){
-								// delete all answers given by the participant
-								SurveyHandlerServiceQueries.deleteAnswerFromDB(answer, database);
-							}
-							// remove participant from database
-							SurveyHandlerServiceQueries.deleteParticipantFromDB(participant, database);
-							currSurvey.deleteParticipant(participant);
-						}
+						deleteParticipant(currSurvey, email);
 
 					}
 					response.put("text", "Participant successfully deleted.");
