@@ -1479,6 +1479,7 @@ public class SurveyHandlerService extends RESTService {
 				response.put("message", completedSurvey);
 				response.put("interactiveElements", interactiveElements);
 				response.put("channel", channel);
+				response.put("closeContext", true);
 				Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 				return Response.ok().entity(response).build();
 			} else {
@@ -1502,6 +1503,7 @@ public class SurveyHandlerService extends RESTService {
 		}
 		response.put("message", "Something went wrong in Next Question try block.");
 		response.put("channel", channel);
+		response.put("closeContext", true);
 		return Response.ok().entity(response).build();
 	}
 

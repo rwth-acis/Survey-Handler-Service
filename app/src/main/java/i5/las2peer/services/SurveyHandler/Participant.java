@@ -2156,6 +2156,7 @@ public class Participant {
             interactiveElements.add(button);
             response.put("interactiveElements", interactiveElements);
             response.put("channel", channel);
+            response.put("closeContext", true);
             response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
