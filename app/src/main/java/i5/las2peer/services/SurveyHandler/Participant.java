@@ -292,7 +292,7 @@ public class Participant {
         if (participantDone){
             JSONArray interactiveElements = new JSONArray();
             JSONObject button = new JSONObject();
-            button.put("intent", "SurveyFertig");
+            button.put("intent", "Fertig");
             button.put("label", "Ende");
             button.put("description", "Ende");
             button.put("isFile", false);
@@ -300,6 +300,7 @@ public class Participant {
             response.put("interactiveElements", interactiveElements);
             System.out.println("participant done");
             response.put("message", completedSurvey);
+            response.put("closeContext", true);
             response.put("channel", channel);
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
@@ -2149,7 +2150,7 @@ public class Participant {
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
             JSONArray interactiveElements = new JSONArray();
             JSONObject button = new JSONObject();
-            button.put("intent", "SurveyFertig");
+            button.put("intent", "Fertig");
             button.put("label", "Ende");
             button.put("description", "Ende");
             button.put("isFile", false);

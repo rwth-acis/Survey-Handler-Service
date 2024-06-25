@@ -1319,7 +1319,7 @@ public class SurveyHandlerService extends RESTService {
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
 					message = "survey question request handled")})
-	public Response nextQuestion(@FormDataParam("msg") String msg, @FormDataParam("channel") String channel, @FormDataParam("sbfmUrl") @DefaultValue("default") String sbfmUrl,
+	public Response nextQuestion(@FormDataParam("msg") String msg, @FormDataParam("channel") String channel, @FormDataParam("sbfmUrl") String sbfmUrl,
 								 @FormDataParam("intent") String intent, @FormDataParam("surveyID") String surveyID, @FormDataParam("Password") String password,
 								 @FormDataParam("NameOfUser") String nameOfUser, @FormDataParam("adminmail") String adminmail){
 		if(intent == null){
@@ -1462,6 +1462,13 @@ public class SurveyHandlerService extends RESTService {
 			} else if (message.equals("!Start")) {
 				isStart = true;
 			}
+			// check if exit
+			if (message.equals("!exit") || message.equals("!welcome")){
+				response.put("message", "Nutze bitte das X im Eingabefeld, um zum Hauptmenü zu gelangen.");
+				response.put("channel", channel);
+				response.put("closeContext", true);
+				return Response.ok().entity(response).build();
+			}
 
 			// check if participant is done with survey
 			if(currParticipant.isCompletedsurvey()){
@@ -1470,7 +1477,7 @@ public class SurveyHandlerService extends RESTService {
 				// no unfinished survey left
 				JSONArray interactiveElements = new JSONArray();
 				JSONObject button = new JSONObject();
-				button.put("intent", "SurveyFertig");
+				button.put("intent", "Fertig");
 				button.put("label", "Ende");
 				button.put("description", "Ende");
 				button.put("isFile", false);
