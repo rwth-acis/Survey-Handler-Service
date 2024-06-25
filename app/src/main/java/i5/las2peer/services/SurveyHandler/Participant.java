@@ -293,8 +293,8 @@ public class Participant {
             JSONArray interactiveElements = new JSONArray();
             JSONObject button = new JSONObject();
             button.put("intent", "Fertig");
-            button.put("label", "Ende");
-            button.put("description", "Ende");
+            button.put("label", "Fertig");
+            button.put("description", "Fertig");
             button.put("isFile", false);
             interactiveElements.add(button);
             response.put("interactiveElements", interactiveElements);
@@ -2153,8 +2153,8 @@ public class Participant {
             JSONArray interactiveElements = new JSONArray();
             JSONObject button = new JSONObject();
             button.put("intent", "Fertig");
-            button.put("label", "Ende");
-            button.put("description", "Ende");
+            button.put("label", "Fertig");
+            button.put("description", "Fertig");
             button.put("isFile", false);
             interactiveElements.add(button);
             response.put("interactiveElements", interactiveElements);
