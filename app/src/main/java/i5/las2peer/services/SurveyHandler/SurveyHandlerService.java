@@ -1469,9 +1469,14 @@ public class SurveyHandlerService extends RESTService {
 			}
 			// check if exit
 			if (message.equals("!exit") || message.contains("!welcome")){
-				response.put("message", "Nutze bitte das X im Eingabefeld, um zum Hauptmenü zu gelangen.");
+				JSONObject end = new JSONObject();
+				end.put("message", "!exit");
+				end.put("channel", channel);
+				end.put("closeContext", true);
+				response.put("message", "Exit wird ausgeführt.");
 				response.put("channel", channel);
 				response.put("closeContext", true);
+				RESTcallBack(sbfmUrl, end);
 				return Response.ok().entity(response).build();
 			}
 
