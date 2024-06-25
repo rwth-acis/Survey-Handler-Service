@@ -18,9 +18,13 @@ import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
 import org.glassfish.jersey.media.multipart.FormDataParam;
+import org.glassfish.jersey.media.multipart.MultiPartFeature;
 import org.jetbrains.annotations.NotNull;
 
 import javax.ws.rs.*;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.*;
@@ -1415,6 +1419,7 @@ public class SurveyHandlerService extends RESTService {
 			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) {
 				response.put("channel", channel);
 				response.put("message", "Die Umfrage ist beendet.");
+				response.put("closeContext", true);
 				return Response.ok().entity(response).build();
 			}
 
@@ -1463,7 +1468,7 @@ public class SurveyHandlerService extends RESTService {
 				isStart = true;
 			}
 			// check if exit
-			if (message.equals("!exit") || message.equals("!welcome")){
+			if (message.equals("!exit") || message.contains("!welcome")){
 				response.put("message", "Nutze bitte das X im Eingabefeld, um zum Hauptmenü zu gelangen.");
 				response.put("channel", channel);
 				response.put("closeContext", true);
@@ -2534,6 +2539,24 @@ public class SurveyHandlerService extends RESTService {
 		}
 		catch (Exception ex){
 			ex.printStackTrace();
+		}
+	}
+	public void RESTcallBack(String callbackUrl, JSONObject body){
+		try {
+			System.out.println("Starting callback to botmanager with url: " + callbackUrl + "/AsyncMessage");
+			Client textClient = ClientBuilder.newBuilder().register(MultiPartFeature.class).build();
+			String mp = null;
+			System.out.println(body);
+			mp = body.toJSONString();
+			WebTarget target = textClient
+					.target(callbackUrl
+							+ "/AsyncMessage");
+			Response response = target.request()
+					.post(javax.ws.rs.client.Entity.entity(mp, MediaType.APPLICATION_JSON));
+			String test = response.readEntity(String.class);
+			System.out.println("Finished callback to botmanager with response: " + test);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 }
