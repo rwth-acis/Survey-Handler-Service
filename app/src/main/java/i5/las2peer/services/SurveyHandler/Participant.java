@@ -364,14 +364,11 @@ public class Participant {
             }
             this.lastquestion = nextId;
 
-            System.out.println("check requirements...");
 
             // checking if requirements to ask next questions are met
             if(!this.currentSurvey.getQuestionByQid(nextId, this.language).isRelevant(this)){
                 // requirement is not met, so skipping question
-                System.out.println("check done...");
                 if(isSurveyDone()){
-                    System.out.println("done...");
                     return surveyDone(surveyDoneString);
                 }
                 nextId = this.unaskedQuestions.get(0);
@@ -392,7 +389,6 @@ public class Participant {
                     if(!answerOptions.isEmpty())
                         response.put("interactiveElements", answerOptions);
                     response.put("channel", channel);
-                    //response.put("closeContext", false);
                 } else {
                     response.put("text", messageText);
                 }
@@ -445,7 +441,6 @@ public class Participant {
             if(!answerOptions.isEmpty())
                 response.put("interactiveElements", answerOptions);
             response.put("channel", channel);
-            //response.put("closeContext", false);
         } else {
             response.put("text", skipText + messageText);
         }
@@ -688,7 +683,6 @@ public class Participant {
         // Participant has not started the survey yet
         this.participantcontacted = true;
         SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
-        //todo: change beginning Text
         response.put("message", beginningText);
         Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
         return Response.ok().entity(response).build();
@@ -1372,7 +1366,6 @@ public class Participant {
             }
 
             if(!skipped){
-                System.out.println("not skipped");
                 if(intent.equals(buttonIntent)){
                     System.out.println("button answer recognized");
                     res = newButtonAnswer(newAnswer, lastQuestion, token, message, surveyDoneString, submitButton);
@@ -1418,7 +1411,6 @@ public class Participant {
                 return res;
             }
         }
-        System.out.println("Calculating next question...");
         // Calculate next question to ask
         res = surveyDone(surveyDoneString);
         if(res != null){
@@ -1773,7 +1765,6 @@ public class Participant {
 
         // Check if it is a text answer for button questions in rocket chat
         if(lastQuestion.isBlocksQuestion() && (SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT) || SurveyHandlerService.messenger.equals(Messenger.RESTFUL))){
-            System.out.println("handle rc");
             return handleRocketChat(newAnswer, lastQuestion, message, response, check, messageId, messageTs);
         }
 
@@ -1810,10 +1801,11 @@ public class Participant {
                 String option = answerOptionForComment();
                 if(option != null){
                     if(this.languageIsGerman()){
-                        response.put("text", "Bitte schreibe einen Kommentar fuer die ausgewaehlte Option: \"" + option + "\"");
+                        response.put("message", "Bitte schreibe einen Kommentar für die ausgewählte Option: \"" + option + "\"");
                     } else{
-                        response.put("text", "Please add a comment to your chosen option: \"" + option + "\"");
+                        response.put("message", "Please add a comment to your chosen option: \"" + option + "\"");
                     }
+                    response.put("channel", channel);
                     Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                     return Response.ok().entity(response).build();
                 } else{
@@ -1831,33 +1823,34 @@ public class Participant {
             else{
                 return Response.serverError().build();
             }
-
-
         } else{
 
             if(lastQuestion.getType().equals(Question.qType.SINGLECHOICECOMMENT.toString()) && this.currentSubquestionAnswers.isEmpty()){
                 // single choice comment requires selcted answer before comment
                 if(this.languageIsGerman()){
-                    response.put("text", "Bitte waehle erst eine Antwortmoeglichkeit aus und sende dann deinen Kommentar.");
+                    response.put("message", "Bitte waehle erst eine Antwortmoeglichkeit aus und sende dann deinen Kommentar.");
                 } else{
-                    response.put("text", "Please select an answer first, then resend your comment.");
+                    response.put("message", "Please select an answer first, then resend your comment.");
                 }
+                response.put("channel", channel);
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
             }
             if(lastQuestion.getType().equals(Question.qType.MULTIPLECHOICEWITHCOMMENT.toString()) && this.currentSubquestionAnswers.isEmpty()){
                 // single choice comment requires selcted answer before comment
                 if(this.languageIsGerman()){
-                    response.put("text", "Bitte waehle erst Antwortmoeglichkeiten aus, du wirst dann nach jeweils einen Kommentar gefragt.");
+                    response.put("message", "Bitte waehle erst Antwortmoeglichkeiten aus, du wirst dann nach jeweils einen Kommentar gefragt.");
                 } else{
-                    response.put("text", "Please select options first, then you will be asked to write your comments");
+                    response.put("message", "Please select options first, then you will be asked to write your comments");
                 }
+                response.put("channel", channel);
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
             }
 
             if(!lastQuestion.answerIsPlausible(message, check)){
-                response.put("text", lastQuestion.reasonAnswerNotPlausible());
+                response.put("message", lastQuestion.reasonAnswerNotPlausible());
+                response.put("channel", channel);
                 Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
                 return Response.ok().entity(response).build();
             }
@@ -2156,7 +2149,7 @@ public class Participant {
         System.out.println("questions left unasked: " + this.unaskedQuestions.size() + " skipped left: " + this.skippedQuestions.size());
         JSONObject response = new JSONObject();
         // Check if survey is completed
-        if (this.unaskedQuestions.size() == 0 && this.skippedQuestions.size() == 0){
+        if (isSurveyDone()){
             // No questions remaining, survey done.
             this.completedsurvey = true;
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
@@ -2171,7 +2164,7 @@ public class Participant {
             response.put("interactiveElements", interactiveElements);
             response.put("channel", channel);
             response.put("closeContext", true);
-            response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
+            response.put("message", surveyDoneString);
             return Response.ok().entity(response).build();
         }
         return null;

@@ -2145,13 +2145,14 @@ public class SurveyHandlerService extends RESTService {
 			}
 		}
 		catch(Exception e){
-			System.out.println("exception after firstsurvey lime");
+			System.out.println("Exception occured in sendResultsToLimesurvey try block.");
 			e.printStackTrace();
 			response.put("message", "Something went wrong in sendResultsBackToLimesurvey try block.");
 			response.put("channel", channel);
 			Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
 			return Response.ok().entity(response).build();
 		}
+		System.out.println("Passed back results to LimeSurvey.");
 		response.put("message", "Passed back results to LimeSurvey.");
 		response.put("channel", channel);
 		Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
