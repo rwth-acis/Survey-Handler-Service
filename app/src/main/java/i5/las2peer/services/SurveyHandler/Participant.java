@@ -290,6 +290,7 @@ public class Participant {
         // check if participant has completed the survey
         boolean participantDone = this.completedsurvey;
         if (participantDone){
+            System.out.println("participant done");
             JSONArray interactiveElements = new JSONArray();
             JSONObject button = new JSONObject();
             button.put("intent", "Fertig");
@@ -302,7 +303,6 @@ public class Participant {
             response.put("message", completedSurvey);
             response.put("closeContext", true);
             response.put("channel", channel);
-            Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }
 
@@ -383,9 +383,6 @@ public class Participant {
             else{
                 if(SurveyHandlerService.messenger.equals(Messenger.RESTFUL)) {
                     String msg = messageText;
-                    if(firstMessage){
-                        msg = "Super, danke für das Teilnehmen an der Umfrage! Hier kommt deine erste Frage:\n" + messageText;
-                    }
                     JSONArray answerOptions = this.currentSurvey.getQuestionByQid(nextId, this.language).getAnswerOptionsForRest();
                     response.put("message", msg);
                     if(!answerOptions.isEmpty())
@@ -2152,6 +2149,7 @@ public class Participant {
             SurveyHandlerServiceQueries.updateParticipantInDB(this, this.currentSurvey.database);
             JSONArray interactiveElements = new JSONArray();
             JSONObject button = new JSONObject();
+            System.out.println("participant done");
             button.put("intent", "Fertig");
             button.put("label", "Fertig");
             button.put("description", "Fertig");
@@ -2161,7 +2159,6 @@ public class Participant {
             response.put("channel", channel);
             response.put("closeContext", true);
             response.put("message", surveyDoneString); //+ currParticipant.getEmail() + currParticipant.getUnaskedQuestions() + currParticipant.getSkippedQuestions()
-            Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }
         return null;
