@@ -364,10 +364,14 @@ public class Participant {
             }
             this.lastquestion = nextId;
 
+            System.out.println("check requirements...");
+
             // checking if requirements to ask next questions are met
             if(!this.currentSurvey.getQuestionByQid(nextId, this.language).isRelevant(this)){
                 // requirement is not met, so skipping question
+                System.out.println("check done...");
                 if(isSurveyDone()){
+                    System.out.println("done...");
                     return surveyDone(surveyDoneString);
                 }
                 nextId = this.unaskedQuestions.get(0);
@@ -1400,6 +1404,7 @@ public class Participant {
                 return res;
             }
             else if(res == Response.noContent().build()){
+                System.out.println("Waiting for comment for single choice question...");
                 // waiting for comment for single choice question
                 return res;
             }
@@ -1408,7 +1413,7 @@ public class Participant {
                 return res;
             }
         }
-
+        System.out.println("Calculating next question...");
         // Calculate next question to ask
         res = surveyDone(surveyDoneString);
         if(res != null){
