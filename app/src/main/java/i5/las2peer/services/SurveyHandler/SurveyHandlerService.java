@@ -1375,7 +1375,7 @@ public class SurveyHandlerService extends RESTService {
 			boolean ls = bodyInput.containsKey("NameOfUser");
 
 			// This intent is needed to check if the message received was send by clicking on a button as an answer
-			String buttonIntent = "";
+			String buttonIntent = "ButtonIntent";
 
 			try{
 				senderEmail = bodyInput.getAsString("channel");
