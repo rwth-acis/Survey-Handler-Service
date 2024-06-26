@@ -389,7 +389,6 @@ public class Participant {
                     if(!answerOptions.isEmpty())
                         response.put("interactiveElements", answerOptions);
                     response.put("channel", channel);
-                    response.put("closeContext", false);
                 } else {
                     response.put("text", messageText);
                 }
@@ -442,7 +441,6 @@ public class Participant {
             if(!answerOptions.isEmpty())
                 response.put("interactiveElements", answerOptions);
             response.put("channel", channel);
-            response.put("closeContext", false);
         } else {
             response.put("text", skipText + messageText);
         }
