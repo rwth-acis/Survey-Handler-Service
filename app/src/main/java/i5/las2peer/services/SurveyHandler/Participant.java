@@ -1372,7 +1372,9 @@ public class Participant {
             }
 
             if(!skipped){
+                System.out.println("not skipped");
                 if(intent.equals(buttonIntent)){
+                    System.out.println("button answer recognized");
                     res = newButtonAnswer(newAnswer, lastQuestion, token, message, surveyDoneString, submitButton);
                 }
                 else if(lastQuestion.isBlocksQuestion() && SurveyHandlerService.messenger.equals(Messenger.TELEGRAM)){
@@ -1394,6 +1396,7 @@ public class Participant {
                         res = newButtonAnswer(newAnswer, lastQuestion, token, message, surveyDoneString, submitButton);
                     }
                 } else {
+                    System.out.println("text answer recognized");
                     res = newTextAnswer(newAnswer, lastQuestion, message);
                 }
             }
@@ -1409,6 +1412,8 @@ public class Participant {
                 return res;
             }
             else if(res != null){
+                System.out.println("not asking next question, but send specific response");
+                System.out.println(res);
                 // not asking next question, but send specific response
                 return res;
             }
@@ -1768,6 +1773,7 @@ public class Participant {
 
         // Check if it is a text answer for button questions in rocket chat
         if(lastQuestion.isBlocksQuestion() && (SurveyHandlerService.messenger.equals(Messenger.ROCKETCHAT) || SurveyHandlerService.messenger.equals(Messenger.RESTFUL))){
+            System.out.println("handle rc");
             return handleRocketChat(newAnswer, lastQuestion, message, response, check, messageId, messageTs);
         }
 
@@ -1880,10 +1886,12 @@ public class Participant {
                 // remove "."
                 message = message.substring(0,1);
             } catch (Exception e){
+                System.out.println("Error parsing");
             }
         }
         if(!lastQuestion.answerIsPlausible(message, check)){
             response.put("message", lastQuestion.reasonAnswerNotPlausible());
+            response.put("channel", channel);
             Context.get().monitorEvent(MonitoringEvent.RESPONSE_SENDING.toString());
             return Response.ok().entity(response).build();
         }
