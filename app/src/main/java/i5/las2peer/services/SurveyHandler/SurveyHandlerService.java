@@ -2074,7 +2074,6 @@ public class SurveyHandlerService extends RESTService {
 
 	@POST
 	@Path("/sendResultsToLimesurvey")
-	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(
 			value = "Sends the saved answers to LimeSurvey.",
