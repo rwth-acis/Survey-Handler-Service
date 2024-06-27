@@ -1313,6 +1313,16 @@ public class SurveyHandlerService extends RESTService {
 		}
 	}
 
+	@NotNull
+	private static JSONObject getDoneButton() {
+		JSONObject button = new JSONObject();
+		button.put("intent", "Fertig");
+		button.put("label", "Fertig");
+		button.put("description", "Fertig");
+		button.put("isFile", false);
+		return button;
+	}
+
 	@POST
 	@Path("/nextQuestion")
 	@Produces(MediaType.APPLICATION_JSON)
@@ -1341,24 +1351,14 @@ public class SurveyHandlerService extends RESTService {
 		bodyInput.put("adminmail", adminmail);
 
 		String input = bodyInput.toString();
-		JSONParser p = new JSONParser(JSONParser.MODE_PERMISSIVE);
-
 		try{
 			LocalDate dateNow = LocalDate.now();
 			LocalTime timeNow = LocalTime.now();
 
-			System.out.println("received message: " + bodyInput);
+			//System.out.println("received message: " + bodyInput);
 
 			String beginningTextEN = "";
 			String beginningTextDE = "";
-			if(bodyInput.containsKey("beginningText")){
-				System.out.println("has beginningText");
-				beginningTextEN = bodyInput.getAsString("beginningText");
-				beginningTextDE = bodyInput.getAsString("beginningText");
-			} else if(bodyInput.containsKey("beginningTextDE") && bodyInput.containsKey("beginningTextEN")){
-				beginningTextEN = bodyInput.getAsString("beginningTextEN");
-				beginningTextDE = bodyInput.getAsString("beginningTextDE");
-			}
 			String senderEmail = "";
 
 			messenger = Messenger.RESTFUL;
@@ -1417,20 +1417,17 @@ public class SurveyHandlerService extends RESTService {
 			}
 
 			if (isExpired(response, dateNow, timeNow, ls, currSurvey)) {
+				JSONObject doneButton = getDoneButton();
 				response.put("channel", channel);
 				response.put("message", "Die Umfrage ist beendet.");
 				response.put("closeContext", true);
+				response.put("interactiveElements", doneButton);
 				return Response.ok().entity(response).build();
 			}
 
 			String messageId = bodyInput.getAsString("message_id");
 			JSONObject currMessage = new JSONObject();
 			JSONObject prevMessage = new JSONObject();
-
-			if(bodyInput.containsKey("currMessage") && bodyInput.containsKey("previousMessage")){
-				currMessage = (JSONObject) p.parse(bodyInput.getAsString("currMessage"));
-				prevMessage = (JSONObject) p.parse(bodyInput.getAsString("previousMessage"));
-			}
 
 			// Check if message was sent by someone we only knew the channel of, but now also the email
 			if(Objects.nonNull(currSurvey.findParticipant(channel))){
@@ -1484,13 +1481,8 @@ public class SurveyHandlerService extends RESTService {
 			if(currParticipant.isCompletedsurvey()){
 
 				System.out.println("Participant has completed survey");
-				// no unfinished survey left
 				JSONArray interactiveElements = new JSONArray();
-				JSONObject button = new JSONObject();
-				button.put("intent", "Fertig");
-				button.put("label", "Fertig");
-				button.put("description", "Fertig");
-				button.put("isFile", false);
+				JSONObject button = getDoneButton();
 				interactiveElements.add(button);
 				String completedSurvey = SurveyHandlerService.texts.get("completedSurveyDE");
 				response.put("message", completedSurvey);
@@ -1515,7 +1507,7 @@ public class SurveyHandlerService extends RESTService {
 			// Get the next action
 			return currParticipant.calculateNextAction(intent, message, messageId, buttonIntent, messageTs, currMessage, prevMessage, token, false, beginningTextEN, beginningTextDE, channel);
 
-		} catch (ParseException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		response.put("message", "Something went wrong in Next Question try block.");
@@ -2120,7 +2112,7 @@ public class SurveyHandlerService extends RESTService {
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					String response2 = minire2.getAsString("result");
-					System.out.println("Response updated: " + response2);
+					//System.out.println("Response updated: " + response2);
 				} else{
 					// New response, add new response and save id at participant
 					String contentFilled = "{" + content + "}";
@@ -2132,7 +2124,7 @@ public class SurveyHandlerService extends RESTService {
 						Integer.parseInt(surveyResponseID);
 						pa.setSurveyResponseID(surveyResponseID);
 						SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
-						System.out.println("New response added: " + pa.getSurveyResponseID());
+						//System.out.println("New response added: " + pa.getSurveyResponseID());
 					} catch (Exception e){
 						System.out.println("ERROR in sending results to LimeSurvey");
 						response.put("message", surveyResponseID);
