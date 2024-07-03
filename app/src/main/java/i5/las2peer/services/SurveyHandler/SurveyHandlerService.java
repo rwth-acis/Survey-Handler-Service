@@ -2073,7 +2073,7 @@ public class SurveyHandlerService extends RESTService {
 	@ApiResponses(
 			value = {@ApiResponse(
 					code = HttpURLConnection.HTTP_OK,
-					message = "results sent to LimeSurvey")})
+					message = "result sent to LimeSurvey")})
 	public Response sendResultsToLimesurvey(@FormDataParam("channel") String channel, @FormDataParam("surveyID") String surveyID,
 											@FormDataParam("Password") String password, @FormDataParam("NameOfUser") String username,
 											@FormDataParam("adminmail") String adminmail){
@@ -2098,8 +2098,8 @@ public class SurveyHandlerService extends RESTService {
 			ClientResponse minires = mini.sendRequest("POST", uri, ("{\"method\": \"get_session_key\", \"params\": [ \"" + username + "\", \"" + password + "\"], \"id\": 1}"), MediaType.APPLICATION_JSON, "", head);
 			JSONObject minire = (JSONObject) p.parse(minires.getResponse());
 			String sessionKeyString = minire.getAsString("result");
-
-			for(Participant pa : currSurvey.getParticipants()) {
+			Participant pa = currSurvey.findParticipant(channel);
+			if (pa != null){
 				String surveyResponseID;
 
 				String content = pa.getAnswersString(true);
@@ -2112,20 +2112,18 @@ public class SurveyHandlerService extends RESTService {
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					String response2 = minire2.getAsString("result");
-					//System.out.println("Response updated: " + response2);
-				} else{
+				} else {
 					// New response, add new response and save id at participant
 					String contentFilled = "{" + content + "}";
 					String responseData = "{\"method\": \"add_response\", \"params\": [\"" + sessionKeyString + "\",\"" + surveyID + "\"," + contentFilled + "], \"id\": 1}";
 					ClientResponse minires2 = mini.sendRequest("POST", uri, responseData, MediaType.APPLICATION_JSON, "", head);
 					JSONObject minire2 = (JSONObject) p.parse(minires2.getResponse());
 					surveyResponseID = minire2.getAsString("result");
-					try{
+					try {
 						Integer.parseInt(surveyResponseID);
 						pa.setSurveyResponseID(surveyResponseID);
 						SurveyHandlerServiceQueries.updateParticipantInDB(pa, currSurvey.database);
-						//System.out.println("New response added: " + pa.getSurveyResponseID());
-					} catch (Exception e){
+					} catch (Exception e) {
 						System.out.println("ERROR in sending results to LimeSurvey");
 						response.put("message", surveyResponseID);
 						response.put("channel", channel);
